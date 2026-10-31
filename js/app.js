@@ -6,7 +6,7 @@ import { meta } from './db.js';
 import { startAutoSync, scheduleSync } from './sync.js';
 import { runOcrQueue } from './ocr.js';
 import { isWide, toast } from './util.js';
-import { closeAllSheets, passphraseSheet } from './ui.js';
+import { closeAllSheets, passphraseSheet, closePopover } from './ui.js';
 import { renderShell, refreshChrome } from './views/shell.js';
 import { renderUnlock, renderOnboarding } from './views/gate.js';
 import { openCapture } from './views/capture.js';
@@ -17,9 +17,16 @@ import * as NoteView from './views/note.js';
 import * as AskView from './views/ask.js';
 import * as ReviewView from './views/review.js';
 import * as SettingsView from './views/settings.js';
+import * as TodayView from './views/today.js';
+import * as TasksView from './views/tasks.js';
+import * as LabelsView from './views/labels.js';
+import * as NotebooksView from './views/notebooks.js';
 
 const root = document.getElementById('app');
-const VIEWS = { map: MapView, inbox: InboxView, notes: NotesView, note: NoteView, ask: AskView, review: ReviewView, settings: SettingsView };
+const NotebookView = { mount: NotebooksView.mountNotebook };
+const VIEWS = { today: TodayView, map: MapView, inbox: InboxView, notes: NotesView, note: NoteView, notebooks: NotebooksView, notebook: NotebookView, tasks: TasksView, labels: LabelsView, ask: AskView, review: ReviewView, settings: SettingsView };
+// Which tab or sidebar item lights up for each screen.
+const CHROME = { note: 'notes', notebook: 'notebooks' };
 
 let current = { name: null, key: null, inst: null };
 let panel = { id: null, inst: null };
@@ -31,9 +38,9 @@ function parseHash() {
   const [path, qs] = h.split('?');
   const parts = path.split('/').filter(Boolean);
   const params = Object.fromEntries(new URLSearchParams(qs || ''));
-  let name = parts[0] || 'map';
-  if (name === 'note') params.id = decodeURIComponent(parts[1] || 'new');
-  if (!VIEWS[name]) name = 'map';
+  let name = parts[0] || 'today';
+  if (name === 'note' || name === 'notebook') params.id = decodeURIComponent(parts[1] || (name === 'note' ? 'new' : ''));
+  if (!VIEWS[name]) name = 'today';
   return { name, params };
 }
 
@@ -49,7 +56,7 @@ const ctx = {
     }
   },
   back() {
-    if (navDepth > 0) { navDepth--; history.back(); } else ctx.navigate('#/map', { replace: true });
+    if (navDepth > 0) { navDepth--; history.back(); } else ctx.navigate('#/today', { replace: true });
   },
   openCapture: (opts = {}) => openCapture(opts, ctx),
   runOcr: () => runOcrQueue().catch(() => {}),
@@ -77,14 +84,25 @@ const ctx = {
   },
 };
 
+let chrome = 'today';
+function currentChrome(name, params) {
+  if (name === 'note') {
+    const n = state.notes.get(params.id);
+    if (n?.notebook || params.notebook || params.kind === 'ink') return 'notebooks';
+    if (n?.daily) return 'today';
+  }
+  return CHROME[name] || name;
+}
+
 function route() {
   if (state.status !== 'unlocked') return;
   if (silentHash && location.hash === silentHash) { silentHash = null; return; }
   silentHash = null;
+  closePopover();
   const { name, params } = parseHash();
   const main = document.getElementById('main');
   if (!main) return;
-  const key = name === 'note' ? `note:${params.id}` : name;
+  const key = name === 'note' ? `note:${params.id}` : name === 'notebook' ? `notebook:${params.id}` : name;
   if (current.name === name && current.inst?.update && (name !== 'note' || current.key === key || params.id !== 'new')) {
     current.inst.update(params);
     current.key = key;
@@ -94,7 +112,8 @@ function route() {
     current = { name, key, inst: VIEWS[name].mount(main, params, ctx) || {} };
     if (name !== 'map') window.scrollTo(0, 0);
   }
-  refreshChrome(name === 'note' ? 'notes' : name);
+  chrome = currentChrome(name, params);
+  refreshChrome(chrome);
 }
 
 function startUnlocked() {
@@ -116,7 +135,7 @@ async function boot() {
     current.inst?.onEvent?.(evt);
     panel.inst?.onEvent?.(evt);
     if (['note', 'delete', 'remote', 'sealed', 'config', 'sync'].includes(evt.type)) {
-      refreshChrome(current.name === 'note' ? 'notes' : current.name);
+      refreshChrome(chrome);
     }
     if (evt.type === 'remote') runOcrQueue().catch(() => {});
   });

@@ -39,15 +39,31 @@ Every sync is one commit, so the data repo's history doubles as version history.
 
 ## Everyday use
 
-- **Capture** (the + button): a thought, screenshots or photos, and/or a link. It lands in the **Inbox**. Several screenshots without text become one note each; with text they're saved together.
-- **Inbox**: tap a "File in" chip to move a capture into a region. Suggestions come from the text and from Claude.
+- **Today** is home: your week, what's due (late ones flagged), a quick "add a task", today's note (type straight into it), and everything you captured that day. Tap another day to look back or ahead.
+- **Capture** (the + button): a thought, screenshots or photos, and/or a link, which land in the **Inbox**. From the same sheet you can start a **typed note** or a **handwritten note**.
+- **Notebooks**: a shelf of notebooks, each in a region, with a cover from the library (or your own photo, or a plain colour). Inside: sections, notes, and sub-notes under notes. On iPad the open note sits beside the notebook.
+- **Typed notes**
+  - Styles: Title, Heading, Subheading, body text, bulleted, numbered and checklist lists, quote, callout with a label, post-it, divider. Type `/` anywhere for the style menu, or use shortcuts as you type: `#`, `##`, `###`, `-`, `1.`, `[ ]`, `>`, `!`, `---`.
+  - Formatting: bold, italic, underline, strikethrough, text colour and highlight, seven fonts, sizes, alignment, tables with shading, images, stickers, label chips and due dates.
+  - Links: `[[` links to another note.
+  - On iPad, headings make an outline beside the note.
+- **Handwritten notes** (Apple Pencil writes, fingers scroll and pinch to zoom)
+  - Pens: fountain, ballpoint, brush, pencil, marker, calligraphy. Also highlighter, eraser (whole strokes or precise), lasso (move, resize, recolour, copy, save as a sticker), shapes that snap when you hold, text boxes with full formatting, photos, and undo.
+  - Paper: ruled, narrow, grid, dotted, Cornell or blank, in white, ivory or night.
+  - Pages: add, reorder, bookmark. **Import a PDF** to write on it, or a photo of paper.
+- **Stickers and post-its**: label tags, marks, planner, washi tape, chart and botanical packs, and "Mine" (your own ink or photos). Post-its fold away to a small square.
+- **Labels**: every label you've stuck anywhere, with a preview of the spot. Edit names and colours in Settings or on the Labels screen.
+- **Tasks**: checklists from every note, typed or handwritten, by date or by note. Tick them here and the note updates.
+- **Connections** (at the end of a typed note): links in both directions, mentions that aren't linked yet, related notes worked out on this device, and sub-notes.
+- **Version history**: every sync is a commit, so each note (and each handwritten page) can be compared with earlier versions and restored.
+- **Export**: a note or notebook as PDF or Markdown, or everything as a Markdown zip (Settings).
 - **Map**: each region is a territory; notes cluster around it, links are lines, dashed amber lines are suggested links. Tap a dot to open the note (on iPad it opens beside the map). Drag screenshots onto the map on iPad or a computer to capture them.
-- **Notes**: Markdown, with `[[Note title]]` to link notes. Types like Highlight and Decision come with a template.
 - **Ask Claude**
   - **Sweep my Claude chats** copies a request that asks Claude to go through your chats since the last sweep and keep only what's worth keeping (decisions, ideas, open questions, wins), skipping lookups and one-off tasks.
   - **Ask about your notes** copies your question plus the regions you choose.
   - Paste into any Claude chat, then **Import Claude's reply**. You review every new note, update and skipped chat before anything is saved.
-- **Settings**: sync, auto-lock, passphrase, sealed notes, regions, encrypted backup download.
+  - Handwritten notes share only their text boxes and post-its. Sealed notes and notebooks are never included.
+- **Settings**: sync, auto-lock, passphrase, sealed notes, regions, labels, encrypted backup, Markdown export.
 
 ## Editing the app
 
@@ -55,7 +71,8 @@ Plain HTML, CSS and JavaScript modules, no build step. Edit on GitHub or locally
 
 ```
 index.html            app shell and security policy
-css/app.css           the whole look (light and night-chart themes)
+css/app.css           the core look (light and night-chart themes)
+css/notes.css         notebooks, editors, stickers, Today, Tasks, Labels
 js/app.js             routing, lock state
 js/vault.js           encrypted storage and note operations
 js/crypto.js          encryption
@@ -63,16 +80,25 @@ js/sync.js            GitHub sync (Git Data API)
 js/graph.js           the map
 js/claude.js          Ask Claude requests and reply import
 js/ocr.js             on-device text reading
-js/model.js           regions, note types, templates, search
+js/model.js           regions, note types, notebooks, pages, labels, search
+js/doc.js             reading typed notes without the editor (Markdown, tasks, labels)
+js/notework.js        tasks, daily notes, handwritten-note summaries
+js/editor/rich.js     the typed-note editor (Tiptap)
+js/editor/toolbar.js  formatting bar and the / menu
+js/editor/ink.js      the handwriting surface
+js/editor/inkdraw.js  drawing pages, pens and stickers
+js/stickers.js        the sticker library
+js/covers.js          notebook covers
+js/export.js, pdf.js  PDF and Markdown export, PDF import
 js/views/*.js         one file per screen
 sw.js                 offline cache
 vendor/, fonts/       bundled libraries and typefaces
 ```
 
-When you change any file, bump `VERSION` in `sw.js` (e.g. `sb-v2`) so installed copies pick up the update on their next launch.
+When you change any file, bump `VERSION` in `sw.js` (e.g. `sb-v3`) so installed copies pick up the update on their next launch.
 
 To try it locally: `python3 -m http.server` in this folder, then open `http://localhost:8000`.
 
 ## Bundled software
 
-force-graph (MIT), marked (MIT), DOMPurify (Apache-2.0 / MPL-2.0), tesseract.js and tesseract.js-core (Apache-2.0), Tesseract English data (Apache-2.0), Overpass and Spectral typefaces (SIL Open Font License 1.1).
+force-graph (MIT), marked (MIT), DOMPurify (Apache-2.0 / MPL-2.0), tesseract.js and tesseract.js-core (Apache-2.0), Tesseract English data (Apache-2.0), Tiptap and ProseMirror (MIT), perfect-freehand (MIT), PDF.js (Apache-2.0), pdf-lib (MIT), fflate (MIT). Typefaces under the SIL Open Font License 1.1: Overpass, Spectral, Fraunces, Nunito, Atkinson Hyperlegible, JetBrains Mono, Caveat.

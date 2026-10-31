@@ -24,3 +24,8 @@ export function renderMarkdown(md, resolveTitle) {
   });
   return DOMPurify.sanitize(marked.parse(withLinks), { ADD_ATTR: ['target'] });
 }
+
+// Sanitised HTML for Markdown, leaving [[links]] as text (the editor styles them).
+export function mdToHtml(md) {
+  return DOMPurify.sanitize(marked.parse(String(md || '')));
+}

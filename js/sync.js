@@ -4,10 +4,11 @@
 // Each sync is one commit, so the repo history doubles as version history.
 
 import { meta, records, files } from './db.js';
-import { state, emit, applyRemoteRecord, forgetNote, decryptEnv, saveNote, CONFIG_ID } from './vault.js';
+import { state, emit, applyRemoteRecord, forgetNote, decryptEnv, saveNote, saveNotebook, CONFIG_ID, forgetPageCache, decodePageBytes, encodePageBytes } from './vault.js';
+import * as C from './crypto.js';
 import { textToB64, b64ToText, bytesToB64, b64ToBytes, debounce } from './util.js';
 // (bytesToB64 / b64ToBytes carry encrypted file payloads.)
-import { normNote, displayTitle } from './model.js';
+import { normNote, normNotebook, displayTitle } from './model.js';
 
 const apiBase = () => 'https://api.github.com';
 
@@ -204,6 +205,7 @@ async function attemptSync(gh) {
   const pushes = [];
   const deletes = [];
   const conflicts = [];
+  const fileConflicts = [];
   const localGone = [];
   const seen = new Set();
 
@@ -221,6 +223,7 @@ async function attemptSync(gh) {
       if (rs) {
         if (rs !== r.remoteSha) {
           if (r.dirty && kind === 'notes') conflicts.push({ rec: r, sha: rs });
+          else if (r.dirty && kind === 'files' && r.type === 'application/x-ink') fileConflicts.push({ rec: r, sha: rs });
           else if (r.dirty) pushes.push({ kind, rec: r });
           else pulls.push({ kind, id: r.id, sha: rs });
         } else if (r.dirty) pushes.push({ kind, rec: r });
@@ -249,7 +252,31 @@ async function attemptSync(gh) {
   await pool(pulls.filter((p) => p.kind === 'files'), 3, async (p) => {
     const { k, data } = unpackFile(b64ToBytes((await gh.getBlob(p.sha)).content));
     await files.put({ id: p.id, k, type: fileType(p.id), data, rev: 1, dirty: false, deleted: false, remoteSha: p.sha });
+    forgetPageCache(p.id);
+    emit({ type: 'page', id: p.id });
   });
+
+  // ---- Handwritten pages edited on two devices: keep both sets of ink.
+  for (const { rec, sha } of fileConflicts) {
+    try {
+      const { k, data } = unpackFile(b64ToBytes((await gh.getBlob(sha)).content));
+      const key = state.keys[k];
+      const mine = state.keys[rec.k];
+      if (!key || !mine) { pushes.push({ kind: 'files', rec }); continue; }
+      const theirs = await decodePageBytes(await C.decryptBytes(key, rec.id, data));
+      const ours = await decodePageBytes(await C.decryptBytes(mine, rec.id, rec.data));
+      const merged = mergePageData(ours, theirs);
+      const enc = await C.encryptBytes(mine, rec.id, await encodePageBytes(merged));
+      const next = { ...rec, data: enc, rev: (rec.rev || 0) + 1, dirty: true, remoteSha: sha };
+      await files.put(next);
+      forgetPageCache(rec.id);
+      emit({ type: 'page', id: rec.id });
+      pushes.push({ kind: 'files', rec: next });
+    } catch (e) {
+      console.warn('page merge failed', e);
+      pushes.push({ kind: 'files', rec });
+    }
+  }
 
   // ---- Conflicts. If only OCR results differ, merge quietly. Otherwise the
   // newer version wins and the other is kept as a copy in the inbox.
@@ -257,9 +284,19 @@ async function attemptSync(gh) {
     const env = JSON.parse(b64ToText((await gh.getBlob(sha)).content));
     if (rec.id === CONFIG_ID) { pushes.push({ kind: 'notes', rec: { ...rec, remoteSha: sha } }); continue; }
     const remoteNote = await decryptEnv(rec.id, env).catch(() => null);
-    const localNote = state.notes.get(rec.id) || (await decryptEnv(rec.id, rec.env).catch(() => null));
+    const localNote = state.notes.get(rec.id) || state.notebooks.get(rec.id) || (await decryptEnv(rec.id, rec.env).catch(() => null));
     if (!remoteNote || !localNote) {
       pushes.push({ kind: 'notes', rec: { ...rec, remoteSha: sha } }); // can't compare: keep ours
+      continue;
+    }
+    // Notebooks and handwritten notes merge instead of making copies: their
+    // content lives in page files, which merge on their own.
+    if (remoteNote.kind === 'notebook' || localNote.kind === 'notebook' || (remoteNote.kind === 'ink' && localNote.kind === 'ink')) {
+      await records.put({ ...rec, remoteSha: sha });
+      const merged = remoteNote.kind === 'notebook' || localNote.kind === 'notebook'
+        ? await saveNotebook(mergeNotebook(localNote, remoteNote), { touch: false })
+        : await saveNote(mergeInk(localNote, remoteNote), { touch: false });
+      pushes.push({ kind: 'notes', rec: await records.get(merged.id) });
       continue;
     }
     if (sameContent(localNote, remoteNote)) {
@@ -355,7 +392,7 @@ async function attemptSync(gh) {
   return true;
 }
 
-const CONTENT_KEYS = ['body', 'type', 'region', 'inbox', 'sealed', 'tags', 'links', 'url', 'chat', 'suggestedRegion', 'dismissed'];
+const CONTENT_KEYS = ['body', 'doc', 'font', 'kind', 'notebook', 'section', 'parent', 'daily', 'type', 'region', 'inbox', 'sealed', 'tags', 'links', 'url', 'chat', 'suggestedRegion', 'dismissed'];
 function sameContent(a, b) {
   const pick = (n) => {
     const o = Object.fromEntries(CONTENT_KEYS.map((k) => [k, n[k]]));
@@ -375,6 +412,37 @@ function mergeOcr(local, remote) {
   return { ...local, files, title, suggested, updatedAt: Math.max(local.updatedAt, remote.updatedAt) };
 }
 
+function newerFirst(a, b) { return (a.updatedAt || 0) >= (b.updatedAt || 0) ? [a, b] : [b, a]; }
+function unionBy(list, key) {
+  const seen = new Set();
+  return list.filter((x) => { const k = key(x); if (seen.has(k)) return false; seen.add(k); return true; });
+}
+function mergeNotebook(a, b) {
+  const [win, lose] = newerFirst(normNotebook(a), normNotebook(b));
+  return { ...win, sections: unionBy([...win.sections, ...lose.sections], (s) => s.id) };
+}
+function mergeInk(a, b) {
+  const [win, lose] = newerFirst(a, b);
+  const tomb = [...new Set([...(win.pageTomb || []), ...(lose.pageTomb || [])])];
+  const pages = unionBy([...win.pages, ...lose.pages], (p) => p.id).filter((p) => !tomb.includes(p.id));
+  return { ...win, pages, pageTomb: tomb, links: [...new Set([...win.links, ...lose.links])] };
+}
+// Union of two versions of a page: strokes are never edited in place (a moved
+// stroke gets a new id), erased ones are remembered, and for stickers and text
+// boxes the most recently changed copy wins.
+export function mergePageData(a, b) {
+  const tomb = [...new Set([...(a.tomb || []), ...(b.tomb || [])])];
+  const dead = new Set(tomb);
+  const strokes = unionBy([...(a.strokes || []), ...(b.strokes || [])], (s) => s.id).filter((s) => !dead.has(s.id));
+  const objs = new Map();
+  for (const o of [...(a.objects || []), ...(b.objects || [])]) {
+    if (dead.has(o.id)) continue;
+    const cur = objs.get(o.id);
+    if (!cur || (o.t || 0) > (cur.t || 0)) objs.set(o.id, o);
+  }
+  return { ...a, strokes, objects: [...objs.values()], tomb, at: Math.max(a.at || 0, b.at || 0) };
+}
+
 // Remote file layout: one byte naming the key ('m' main, 's' sealed), then iv||ciphertext.
 function packFile(rec) {
   const out = new Uint8Array(1 + rec.data.byteLength);
@@ -386,6 +454,7 @@ function unpackFile(bytes) {
   return { k: bytes[0] === 0x73 ? 's' : 'm', data: bytes.slice(1) };
 }
 function fileType(fileId) {
+  if (fileId.startsWith('p_')) return 'application/x-ink';
   for (const n of state.notes.values()) {
     const f = n.files.find((x) => x.id === fileId);
     if (f?.type) return f.type;
@@ -423,4 +492,35 @@ export async function probe(cfg) {
   await gh.repoInfo();
   const r = await fetchRemoteKeyring(gh);
   return { remoteKeyring: r?.keyring || null, sha: r?.sha || null };
+}
+
+// ---- Version history ------------------------------------------------------------
+// Every sync is a commit, so the commits that touched a note's file are its
+// versions. GitHub only has ciphertext; each version is decrypted here.
+
+export async function fileVersions(path, { limit = 40 } = {}) {
+  const gh = ghFromDevice();
+  if (!gh) return null;
+  const list = await gh.req('GET', `/commits?path=${encodeURIComponent(path)}&sha=${encodeURIComponent(gh.branch)}&per_page=${limit}`);
+  return (list || []).map((c) => ({ sha: c.sha, date: Date.parse(c.commit?.committer?.date || c.commit?.author?.date || '') || 0 }));
+}
+
+async function bytesAt(path, ref) {
+  const gh = ghFromDevice();
+  if (!gh) throw new Error('Sync is off.');
+  const meta = await gh.req('GET', `/contents/${path}?ref=${encodeURIComponent(ref)}`);
+  const b64 = meta?.content ? meta.content.replace(/\s+/g, '') : (await gh.getBlob(meta.sha)).content;
+  return b64ToBytes(b64);
+}
+
+export async function noteAt(id, ref) {
+  const env = JSON.parse(new TextDecoder().decode(await bytesAt(`notes/${id}.json`, ref)));
+  return decryptEnv(id, env);
+}
+
+export async function pageAt(pageId, ref) {
+  const { k, data } = unpackFile(await bytesAt(`files/${pageId}.bin`, ref));
+  const key = state.keys[k];
+  if (!key) throw new Error('Unlock sealed notes to see this version.');
+  return decodePageBytes(await C.decryptBytes(key, pageId, data));
 }

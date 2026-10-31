@@ -15,6 +15,7 @@ export function openCapture({ files = [], text = '' } = {}, ctx) {
 
   const s = openSheet(`${html`<form id="cap" novalidate style="display:flex;flex-direction:column;gap:18px">
     <div class="sheet-head"><button type="button" class="btn btn-ghost side" data-cancel style="justify-content:flex-start;padding:0">Cancel</button><h2>Capture</h2><span class="side"></span></div>
+    <div class="cap-kinds"><button type="button" class="btn" data-kind="note">${icons.lines({ size: 18 })}Typed note</button><button type="button" class="btn" data-kind="ink">${icons.pen({ size: 18 })}Handwritten</button></div>
     <div class="field"><label class="sr-only" for="cap-text">Thought</label>
       <textarea id="cap-text" class="serif" rows="4" placeholder="What’s on your mind?">${text}</textarea></div>
     <div class="field" style="gap:10px">
@@ -82,6 +83,13 @@ export function openCapture({ files = [], text = '' } = {}, ctx) {
     $('#cap-save', el).textContent = r ? `Save to ${r.name}` : 'Save to inbox';
   };
   el.querySelector('[data-cancel]').onclick = () => s.close();
+  el.querySelectorAll('[data-kind]').forEach((b) => {
+    b.onclick = () => {
+      s.close();
+      const r = dest ? `region=${dest}` : '';
+      ctx.navigate(b.dataset.kind === 'ink' ? `#/note/new?kind=ink${r ? `&${r}` : ''}` : `#/note/new${r ? `?${r}` : ''}`);
+    };
+  });
 
   // Paste images or text straight into the sheet (desktop / iPad keyboard).
   el.addEventListener('paste', (e) => {

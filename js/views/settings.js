@@ -105,10 +105,19 @@ export function mount(main, params, ctx) {
         <div class="btn-row"><button type="button" class="btn btn-sm" data-act="add-region">${icons.plus({ size: 16 })}Add region</button></div>
       </section>
 
+      <section aria-labelledby="s-labels">
+        <h2 id="s-labels">Labels</h2>
+        <p class="hint">The label stickers you can put on pages and notes, and find again on the Labels screen.</p>
+        <div class="chips">${(state.config.labels || []).map((l) => html`<span class="chip static"><span class="dot" style="background:${l.color}"></span>${l.name}</span>`)}</div>
+        <div class="btn-row"><button type="button" class="btn btn-sm" data-act="labels">Edit labels</button></div>
+      </section>
+
       <section aria-labelledby="s-backup">
         <h2 id="s-backup">Backup</h2>
         <p class="hint">Download everything as one encrypted file. You’ll need your passphrase to restore it.</p>
         <div class="btn-row"><button type="button" class="btn" data-act="backup">Download encrypted backup</button></div>
+        <p class="hint">Or take your notes anywhere: every note as a Markdown file, with images and handwritten pages as pictures, in one zip. This copy is <strong>not</strong> encrypted, so keep it somewhere safe.</p>
+        <div class="btn-row"><button type="button" class="btn" data-act="export-md">Export everything as Markdown</button></div>
       </section>
 
       <section aria-labelledby="s-about">
@@ -234,6 +243,18 @@ export function mount(main, params, ctx) {
       await draw();
       const inputs = main.querySelectorAll('[data-name]');
       inputs[inputs.length - 1]?.select();
+    });
+    on('[data-act=labels]', async () => { const { manageLabels } = await import('./labels.js'); manageLabels(); });
+    on('[data-act=export-md]', async (b) => {
+      b.disabled = true;
+      b.textContent = 'Exporting…';
+      try {
+        const { exportAllMarkdown } = await import('../export.js');
+        const n = await exportAllMarkdown();
+        toast(`Exported ${n} notes`);
+      } catch (e) { console.error(e); toast('Couldn’t make the export.'); }
+      b.disabled = false;
+      b.textContent = 'Export everything as Markdown';
     });
     on('[data-act=backup]', async () => {
       downloadText(`second-brain-backup-${isoDay()}.json`, await V.exportBackup(), 'application/json');

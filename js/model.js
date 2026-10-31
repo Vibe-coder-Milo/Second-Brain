@@ -1,6 +1,7 @@
 // Note shape, regions, templates, links and search.
 
 import { uid, firstLine } from './util.js';
+import { docTasks, mdTasks } from './doc.js';
 
 // Region colours: a dot/line colour and a darker (or lighter, at night) text colour
 // that passes contrast on the map background.
@@ -51,12 +52,28 @@ export const TEMPLATES = {
   question: '## The question\n\n\n## What I know so far\n\n',
 };
 
+// Labels are stickers you can search by. Colours match the sticker library.
+export const DEFAULT_LABELS = [
+  { id: 'important', name: 'Important', color: '#B0413E' },
+  { id: 'follow-up', name: 'Follow up', color: '#C0802F' },
+  { id: 'idea', name: 'Idea', color: '#8C67B0' },
+  { id: 'decision', name: 'Decision', color: '#1B2A38' },
+  { id: 'question', name: 'Question', color: '#2B5684' },
+  { id: 'deadline', name: 'Deadline', color: '#D0452F' },
+  { id: 'done', name: 'Done', color: '#2F8A72' },
+  { id: 'waiting', name: 'Waiting', color: '#6B7A85' },
+];
+export const LABEL_COLORS = ['#B0413E', '#D0452F', '#C0802F', '#E0A526', '#7C8A2F', '#2F8A72', '#2A8C9C', '#4277B5', '#2B5684', '#8C67B0', '#B8578E', '#6B7A85', '#1B2A38'];
+export const labelMap = (config) => new Map((config?.labels || []).map((l) => [l.id, l]));
+
 export const SOURCE_LABEL = {
   thought: 'Thought',
   screenshot: 'Screenshot',
   photo: 'Photo',
   link: 'Link',
   chat: 'From a Claude chat',
+  pdf: 'Imported PDF',
+  daily: 'Daily note',
   claude: 'From Claude',
   conflict: 'Sync conflict copy',
 };
@@ -67,8 +84,10 @@ export function newNote(fields = {}) {
 }
 
 export function normNote(n) {
+  const kind = n.kind === 'ink' ? 'ink' : 'note';
   return {
     id: n.id,
+    kind,
     title: n.title || '',
     titleAuto: n.titleAuto ?? !n.title,
     body: n.body || '',
@@ -86,9 +105,89 @@ export function normNote(n) {
     url: n.url || null,
     chat: n.chat || null,
     sealSuggested: !!n.sealSuggested,
+    doc: n.doc && typeof n.doc === 'object' ? n.doc : null,
+    font: n.font || null,
+    notebook: n.notebook || null,
+    section: n.section || null,
+    parent: n.parent || null,
+    order: Number.isFinite(n.order) ? n.order : (n.createdAt || 0),
+    pages: kind === 'ink' && Array.isArray(n.pages) ? n.pages.map(normPage) : [],
+    pageTomb: kind === 'ink' && Array.isArray(n.pageTomb) ? n.pageTomb : [],
+    labels: Array.isArray(n.labels) ? n.labels : [],
+    tasks: kind === 'ink' && Array.isArray(n.tasks) ? n.tasks : [],
+    daily: n.daily || null,
+    pdfText: kind === 'ink' && n.pdfText ? String(n.pdfText) : '',
+    editedOn: n.editedOn || null,
     createdAt: n.createdAt || Date.now(),
     updatedAt: n.updatedAt || Date.now(),
   };
+}
+
+export const PAPERS = [
+  { id: 'blank', name: 'Blank' },
+  { id: 'ruled', name: 'Ruled' },
+  { id: 'narrow', name: 'Narrow ruled' },
+  { id: 'grid', name: 'Grid' },
+  { id: 'dotted', name: 'Dotted' },
+  { id: 'cornell', name: 'Cornell' },
+];
+export const PAPER_COLORS = [
+  { id: 'white', name: 'White', bg: '#FFFFFF', line: '#C9D6E3', margin: '#E6A6A6' },
+  { id: 'ivory', name: 'Ivory', bg: '#FBF6E9', line: '#D9CDB1', margin: '#E3A88F' },
+  { id: 'night', name: 'Night', bg: '#1B2A38', line: '#33485C', margin: '#7A4B52' },
+];
+export const PAGE_W = 1000;
+export const A4_H = 1414;
+
+export function normPage(p) {
+  return {
+    id: p.id,
+    paper: PAPERS.some((x) => x.id === p.paper) ? p.paper : 'ruled',
+    color: PAPER_COLORS.some((x) => x.id === p.color) ? p.color : 'white',
+    h: Number(p.h) > 100 ? Number(p.h) : A4_H,
+    bg: p.bg || null,
+    bookmark: !!p.bookmark,
+  };
+}
+export const newPage = (fields = {}) => normPage({ id: uid('p'), ...fields });
+
+export function normNotebook(b) {
+  return {
+    id: b.id,
+    kind: 'notebook',
+    title: b.title || 'Untitled notebook',
+    region: b.region || null,
+    cover: { style: 'contour', color: '#2B5684', photo: null, titleStyle: 'printed', ...(b.cover || {}) },
+    paper: b.paper || 'ruled',
+    paperColor: b.paperColor || 'white',
+    sealed: !!b.sealed,
+    sections: Array.isArray(b.sections) && b.sections.length ? b.sections : [{ id: 's_notes', name: 'Notes' }],
+    order: Number.isFinite(b.order) ? b.order : (b.createdAt || 0),
+    createdAt: b.createdAt || Date.now(),
+    updatedAt: b.updatedAt || Date.now(),
+  };
+}
+export const newNotebook = (fields = {}) => {
+  const now = Date.now();
+  return normNotebook({ id: uid('b'), createdAt: now, updatedAt: now, sections: [{ id: uid('s'), name: 'Notes' }], ...fields });
+};
+
+// Every task in a note: typed checklists, Markdown checkboxes, and checklists in
+// text boxes on handwritten pages (summarised on the note when the page saves).
+export function noteTasks(n) {
+  if (n.kind === 'ink') return n.tasks || [];
+  if (n.doc) return docTasks(n.doc);
+  return mdTasks(n.body);
+}
+
+export function deviceLabel() {
+  const ua = navigator.userAgent || '';
+  if (/iPad/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1)) return 'iPad';
+  if (/iPhone/.test(ua)) return 'iPhone';
+  if (/Android/.test(ua)) return 'Android';
+  if (/Macintosh/.test(ua)) return 'Mac';
+  if (/Windows/.test(ua)) return 'Windows PC';
+  return 'Computer';
 }
 
 export function displayTitle(n) {
@@ -97,6 +196,7 @@ export function displayTitle(n) {
   if (fromBody) return fromBody;
   const ocr = n.files?.find((f) => f.ocr)?.ocr;
   if (ocr) return firstLine(ocr);
+  if (n.kind === 'ink') return 'Handwritten note';
   return `${SOURCE_LABEL[n.source] || 'Note'}`;
 }
 
@@ -196,7 +296,7 @@ export function searchNotes(notes, q, limit = 200) {
 }
 
 export function defaultConfig() {
-  return { regions: DEFAULT_REGIONS.map((r) => ({ ...r })), lastSweepAt: null, createdAt: Date.now() };
+  return { regions: DEFAULT_REGIONS.map((r) => ({ ...r })), labels: DEFAULT_LABELS.map((l) => ({ ...l })), myStickers: [], favColors: null, lastSweepAt: null, createdAt: Date.now() };
 }
 export function normConfig(c) {
   const d = defaultConfig();
@@ -204,5 +304,7 @@ export function normConfig(c) {
     ...d,
     ...c,
     regions: Array.isArray(c?.regions) && c.regions.length ? c.regions : d.regions,
+    labels: Array.isArray(c?.labels) ? c.labels : d.labels,
+    myStickers: Array.isArray(c?.myStickers) ? c.myStickers : [],
   };
 }

@@ -2,22 +2,34 @@
 // your notes live in encrypted on-device storage, not in this cache.
 // Bump VERSION whenever app files change.
 
-const VERSION = 'sb-v1';
+const VERSION = 'sb-v2';
 const SHELL = [
   './',
   './index.html',
   './manifest.webmanifest',
   './css/app.css',
+  './css/notes.css',
   './js/app.js',
   './js/claude.js',
+  './js/connections.js',
+  './js/covers.js',
   './js/crypto.js',
   './js/db.js',
+  './js/doc.js',
+  './js/editor/ink.js',
+  './js/editor/inkdraw.js',
+  './js/editor/rich.js',
+  './js/editor/toolbar.js',
+  './js/export.js',
   './js/graph.js',
   './js/icons.js',
   './js/images.js',
   './js/markdown.js',
   './js/model.js',
+  './js/notework.js',
   './js/ocr.js',
+  './js/pdf.js',
+  './js/stickers.js',
   './js/sync.js',
   './js/ui.js',
   './js/util.js',
@@ -25,24 +37,43 @@ const SHELL = [
   './js/views/ask.js',
   './js/views/capture.js',
   './js/views/gate.js',
+  './js/views/history.js',
   './js/views/inbox.js',
+  './js/views/inknote.js',
+  './js/views/labels.js',
   './js/views/map.js',
   './js/views/note.js',
+  './js/views/notebooks.js',
   './js/views/notes.js',
   './js/views/review.js',
   './js/views/settings.js',
   './js/views/shell.js',
+  './js/views/tasks.js',
+  './js/views/today.js',
   './vendor/force-graph.min.js',
   './vendor/marked.esm.js',
   './vendor/purify.es.mjs',
+  './vendor/editor.bundle.js',
+  './vendor/freehand.js',
+  './vendor/fflate.min.js',
+  './fonts/atkinson-hyperlegible-latin-400-normal.woff2',
+  './fonts/atkinson-hyperlegible-latin-700-normal.woff2',
+  './fonts/caveat-latin-400-normal.woff2',
+  './fonts/caveat-latin-700-normal.woff2',
+  './fonts/fraunces-latin-400-normal.woff2',
+  './fonts/fraunces-latin-700-normal.woff2',
+  './fonts/jetbrains-mono-latin-400-normal.woff2',
+  './fonts/jetbrains-mono-latin-700-normal.woff2',
+  './fonts/nunito-latin-400-normal.woff2',
+  './fonts/nunito-latin-700-normal.woff2',
   './fonts/overpass-latin-400-normal.woff2',
   './fonts/overpass-latin-500-normal.woff2',
   './fonts/overpass-latin-600-normal.woff2',
   './fonts/overpass-latin-700-normal.woff2',
-  './fonts/spectral-latin-400-normal.woff2',
-  './fonts/spectral-latin-500-normal.woff2',
   './fonts/spectral-latin-400-italic.woff2',
+  './fonts/spectral-latin-400-normal.woff2',
   './fonts/spectral-latin-500-italic.woff2',
+  './fonts/spectral-latin-500-normal.woff2',
   './icons/icon-192.png',
   './icons/apple-touch-icon.png',
 ];
@@ -64,8 +95,8 @@ self.addEventListener('fetch', (e) => {
   const url = new URL(req.url);
   if (req.method !== 'GET' || url.origin !== self.location.origin) return; // never touch GitHub API calls
 
-  // The OCR engine is large and never changes for a given version: cache on first use.
-  if (url.pathname.includes('/vendor/tesseract/')) {
+  // The OCR engine and the PDF libraries are large and rarely change: cache on first use.
+  if (url.pathname.includes('/vendor/tesseract/') || url.pathname.includes('/vendor/pdfjs/') || url.pathname.endsWith('/vendor/pdf-lib.esm.min.js')) {
     e.respondWith(caches.open('sb-ocr').then(async (c) => {
       const hit = await c.match(req);
       if (hit) return hit;

@@ -292,7 +292,17 @@ export async function applyReply(reply, choices) {
     if (u.setType) next.type = u.setType;
     if (u.appendBody) {
       const src = u.chat?.title ? `\n\n_From chat: ${u.chat.url ? `[${u.chat.title}](${u.chat.url})` : u.chat.title}_` : '';
-      next.body = `${n.body.trimEnd()}${n.body.trim() ? '\n\n' : ''}${u.appendBody.trim()}${src}`;
+      const add = `${u.appendBody.trim()}${src}`;
+      if (n.kind === 'ink') {
+        // Handwritten notes keep their words on the pages, so the addition
+        // becomes a typed sub-note beside them.
+        await saveNote(newNote({ title: `Added from Claude, ${new Date().toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}`, titleAuto: false, body: add, source: 'claude', parent: n.id, notebook: n.notebook, section: n.section, region: n.region, inbox: n.inbox, sealed: n.sealed }));
+      } else if (n.doc) {
+        const { appendMarkdown } = await import('./editor/rich.js');
+        Object.assign(next, appendMarkdown(n, add));
+      } else {
+        next.body = `${n.body.trimEnd()}${n.body.trim() ? '\n\n' : ''}${add}`;
+      }
     }
     if (u.addTags.length) next.tags = [...new Set([...n.tags, ...u.addTags])];
     if (u.addLinks.length) next.links = [...new Set([...n.links, ...u.addLinks.filter((x) => x !== n.id)])];

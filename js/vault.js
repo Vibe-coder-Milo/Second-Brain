@@ -2,8 +2,8 @@
 
 import * as C from './crypto.js';
 import { meta, records, files, wipeAll } from './db.js';
-import { uid, bytesToB64, b64ToBytes } from './util.js';
-import { normNote, normConfig, defaultConfig } from './model.js';
+import { uid, bytesToB64, b64ToBytes, utf8, fromUtf8 } from './util.js';
+import { normNote, normNotebook, normConfig, defaultConfig, deviceLabel } from './model.js';
 
 export const CONFIG_ID = '__config';
 
@@ -13,6 +13,7 @@ export const state = {
   keyring: null,
   keys: { m: null, s: null },
   notes: new Map(),
+  notebooks: new Map(),
   config: null,
   device: null,
   hiddenSealed: 0,
@@ -58,11 +59,28 @@ export async function updateDevice(patch) {
 
 export async function saveConfig(patch = {}) {
   state.config = normConfig({ ...state.config, ...patch, updatedAt: Date.now() });
-  const env = await C.encryptJSON(state.keys.m, 'm', CONFIG_ID, state.config);
-  const prev = await records.get(CONFIG_ID);
-  await records.put({ id: CONFIG_ID, env, rev: (prev?.rev || 0) + 1, dirty: true, deleted: false, remoteSha: prev?.remoteSha || null });
+  await writeRecord(CONFIG_ID, state.config, 'm');
   emit({ type: 'config' });
   changed();
+}
+
+async function writeRecord(id, obj, kid) {
+  const key = state.keys[kid];
+  if (!key) throw new Error('Unlock sealed notes first.');
+  const env = await C.encryptJSON(key, kid, id, obj);
+  const prev = await records.get(id);
+  await records.put({ id, env, rev: (prev?.rev || 0) + 1, dirty: true, deleted: false, remoteSha: prev?.remoteSha || null });
+}
+
+// Records hold either a note or a notebook; put each in the right map.
+function place(id, obj) {
+  if (obj?.kind === 'notebook') {
+    state.notebooks.set(id, normNotebook(obj));
+    state.notes.delete(id);
+  } else {
+    state.notes.set(id, normNote(obj));
+    state.notebooks.delete(id);
+  }
 }
 
 export async function createVault(passphrase) {
@@ -73,6 +91,7 @@ export async function createVault(passphrase) {
   state.keyring = keyring;
   state.keys.m = key;
   state.notes = new Map();
+  state.notebooks = new Map();
   state.device = defaultDevice();
   await saveDevice();
   state.config = defaultConfig();
@@ -111,7 +130,8 @@ export async function unlock(passphrase) {
 
 export async function loadAll() {
   const recs = await records.all();
-  const notes = new Map();
+  state.notes = new Map();
+  state.notebooks = new Map();
   let hidden = 0;
   let config = null;
   for (const r of recs) {
@@ -123,12 +143,11 @@ export async function loadAll() {
     const key = state.keys[r.env.k];
     if (!key) { hidden++; continue; }
     try {
-      notes.set(r.id, normNote(await C.decryptJSON(key, r.id, r.env)));
+      place(r.id, await C.decryptJSON(key, r.id, r.env));
     } catch (e) {
       console.warn('Could not decrypt', r.id, e);
     }
   }
-  state.notes = notes;
   state.hiddenSealed = hidden;
   state.config = config || state.config || defaultConfig();
   const dev = await meta.get('device');
@@ -146,26 +165,32 @@ export async function applyRemoteRecord(rec) {
   const key = state.keys[rec.env.k];
   if (!key) {
     state.notes.delete(rec.id);
+    state.notebooks.delete(rec.id);
     state.hiddenSealed++;
     return;
   }
   try {
-    state.notes.set(rec.id, normNote(await C.decryptJSON(key, rec.id, rec.env)));
+    place(rec.id, await C.decryptJSON(key, rec.id, rec.env));
+    pageCacheDropStale();
   } catch (e) { console.warn('Could not decrypt synced note', rec.id, e); }
 }
 export function forgetNote(id) {
   state.notes.delete(id);
+  state.notebooks.delete(id);
 }
 export async function decryptEnv(id, env) {
   const key = state.keys[env.k];
   if (!key) return null;
-  return normNote(await C.decryptJSON(key, id, env));
+  const obj = await C.decryptJSON(key, id, env);
+  return obj?.kind === 'notebook' ? normNotebook(obj) : normNote(obj);
 }
 
 export function lock() {
   state.keys.m = null;
   state.keys.s = null;
   state.notes = new Map();
+  state.notebooks = new Map();
+  pageCache.clear();
   location.reload();
 }
 
@@ -181,13 +206,8 @@ export async function changePassphrase(oldPass, newPass) {
 
 export async function saveNote(note, { touch = true } = {}) {
   const n = normNote(note);
-  if (touch) n.updatedAt = Date.now();
-  const kid = n.sealed ? 's' : 'm';
-  const key = state.keys[kid];
-  if (!key) throw new Error('Unlock sealed notes first.');
-  const env = await C.encryptJSON(key, kid, n.id, n);
-  const prev = await records.get(n.id);
-  await records.put({ id: n.id, env, rev: (prev?.rev || 0) + 1, dirty: true, deleted: false, remoteSha: prev?.remoteSha || null });
+  if (touch) { n.updatedAt = Date.now(); n.editedOn = deviceLabel(); }
+  await writeRecord(n.id, n, n.sealed ? 's' : 'm');
   state.notes.set(n.id, n);
   emit({ type: 'note', id: n.id });
   changed();
@@ -204,6 +224,12 @@ export async function deleteNote(id) {
   const n = state.notes.get(id);
   if (!n) return;
   for (const f of n.files || []) await deleteFile(f.id);
+  for (const fid of await pageFileIds(n)) await deleteFile(fid);
+  for (const p of n.pages || []) pageCache.delete(p.id);
+  // Sub-notes move up a level rather than vanishing with their parent.
+  for (const child of [...state.notes.values()].filter((c) => c.parent === id)) {
+    await saveNote({ ...child, parent: n.parent || null }, { touch: false });
+  }
   const prev = await records.get(id);
   if (prev?.remoteSha) await records.put({ ...prev, deleted: true, dirty: true, rev: (prev.rev || 0) + 1 });
   else await records.del(id);
@@ -291,7 +317,7 @@ export async function deleteFile(id) {
   changed();
 }
 
-async function reencryptFile(id, toKid) {
+export async function reencryptFile(id, toKid) {
   const rec = await files.get(id);
   if (!rec || rec.deleted || rec.k === toKid) return;
   const fromKey = state.keys[rec.k];
@@ -307,7 +333,129 @@ export async function setSealed(id, sealed) {
   if (!n || n.sealed === sealed) return n;
   if (!state.keys.s) throw new Error('Set up and unlock sealed notes first.');
   for (const f of n.files) await reencryptFile(f.id, sealed ? 's' : 'm');
+  for (const fid of await pageFileIds(n)) await reencryptFile(fid, sealed ? 's' : 'm');
+  for (const p of n.pages || []) pageCache.delete(p.id);
   return saveNote({ ...n, sealed, sealSuggested: false });
+}
+
+// ---- Notebooks ---------------------------------------------------------------
+
+export async function saveNotebook(nb, { touch = true } = {}) {
+  const b = normNotebook(nb);
+  if (touch) b.updatedAt = Date.now();
+  await writeRecord(b.id, b, b.sealed ? 's' : 'm');
+  state.notebooks.set(b.id, b);
+  emit({ type: 'notebook', id: b.id });
+  changed();
+  return b;
+}
+
+export const notesIn = (notebookId) => [...state.notes.values()].filter((n) => n.notebook === notebookId);
+
+export async function deleteNotebook(id) {
+  const b = state.notebooks.get(id);
+  if (!b) return;
+  for (const n of notesIn(id)) await deleteNote(n.id);
+  if (b.cover?.photo) await deleteFile(b.cover.photo);
+  const prev = await records.get(id);
+  if (prev?.remoteSha) await records.put({ ...prev, deleted: true, dirty: true, rev: (prev.rev || 0) + 1 });
+  else await records.del(id);
+  state.notebooks.delete(id);
+  emit({ type: 'delete', id });
+  changed();
+}
+
+// Sealing a notebook seals every note in it, and the notebook itself.
+export async function setNotebookSealed(id, sealed) {
+  const b = state.notebooks.get(id);
+  if (!b) return null;
+  if (!state.keys.s) throw new Error('Set up and unlock sealed notes first.');
+  for (const n of notesIn(id)) await setSealed(n.id, sealed);
+  if (b.cover?.photo) await reencryptFile(b.cover.photo, sealed ? 's' : 'm');
+  return saveNotebook({ ...b, sealed });
+}
+
+// Move a notebook to another region: its notes move with it.
+export async function moveNotebook(id, region) {
+  const b = state.notebooks.get(id);
+  if (!b) return;
+  for (const n of notesIn(id)) await saveNote({ ...n, region, inbox: !region, suggestedRegion: null }, { touch: false });
+  await saveNotebook({ ...b, region });
+}
+
+// ---- Handwritten pages ------------------------------------------------------
+// Each page's ink, stickers and text boxes live in their own encrypted file
+// (files/<pageId>.bin), so only the page you touched is re-uploaded.
+
+const pageCache = new Map();
+function pageCacheDropStale() { /* pages are re-read when a remote file arrives */ }
+export function forgetPageCache(id) { if (id) pageCache.delete(id); else pageCache.clear(); }
+
+async function gzip(bytes) {
+  if (typeof CompressionStream === 'function') {
+    const cs = new Blob([bytes]).stream().pipeThrough(new CompressionStream('gzip'));
+    return new Uint8Array(await new Response(cs).arrayBuffer());
+  }
+  const { gzipSync } = await import('../vendor/fflate.min.js');
+  return gzipSync(bytes);
+}
+async function gunzip(bytes) {
+  if (typeof DecompressionStream === 'function') {
+    const ds = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'));
+    return new Uint8Array(await new Response(ds).arrayBuffer());
+  }
+  const { gunzipSync } = await import('../vendor/fflate.min.js');
+  return gunzipSync(bytes);
+}
+
+export const emptyPageData = () => ({ v: 1, strokes: [], objects: [], tomb: [], at: 0 });
+
+export async function decodePageBytes(bytes) {
+  const raw = bytes[0] === 0x1f && bytes[1] === 0x8b ? await gunzip(bytes) : bytes;
+  const data = JSON.parse(fromUtf8(raw));
+  return { ...emptyPageData(), ...data };
+}
+
+export async function loadPage(pageId) {
+  if (pageCache.has(pageId)) return pageCache.get(pageId);
+  const rec = await files.get(pageId);
+  if (rec && !rec.deleted && !state.keys[rec.k]) throw new Error('Unlock sealed notes first.');
+  const f = await fileBytes(pageId);
+  const data = f ? await decodePageBytes(f.bytes) : emptyPageData();
+  pageCache.set(pageId, data);
+  return data;
+}
+
+export async function encodePageBytes(data) {
+  return gzip(utf8(JSON.stringify(data)));
+}
+
+export async function savePage(pageId, data, { sealed = false } = {}) {
+  const kid = sealed ? 's' : 'm';
+  const key = state.keys[kid];
+  if (!key) throw new Error('Unlock sealed notes first.');
+  const stamped = { ...data, at: Date.now() };
+  const enc = await C.encryptBytes(key, pageId, await encodePageBytes(stamped));
+  const prev = await files.get(pageId);
+  await files.put({ id: pageId, k: kid, type: 'application/x-ink', data: enc, rev: (prev?.rev || 0) + 1, dirty: true, deleted: false, remoteSha: prev?.remoteSha || null });
+  pageCache.set(pageId, stamped);
+  changed();
+  return stamped;
+}
+
+// Every file a handwritten note owns: page ink, page backgrounds, and photos
+// placed on pages.
+export async function pageFileIds(n) {
+  const out = [];
+  for (const p of n.pages || []) {
+    out.push(p.id);
+    if (p.bg) out.push(p.bg);
+    try {
+      const d = await loadPage(p.id);
+      for (const o of d.objects || []) if (o.fileId) out.push(o.fileId);
+    } catch { /* page not downloaded yet */ }
+  }
+  return out;
 }
 
 export function revokeFileURLs() {
@@ -334,9 +482,10 @@ export async function unlockSealed(passphrase) {
   state.keys.s = await C.unwrapKey(state.keyring.sealed, passphrase);
   for (const r of await records.all()) {
     if (r.deleted || r.env?.k !== 's') continue;
-    try { state.notes.set(r.id, normNote(await C.decryptJSON(state.keys.s, r.id, r.env))); } catch { /* skip */ }
+    try { place(r.id, await C.decryptJSON(state.keys.s, r.id, r.env)); } catch { /* skip */ }
   }
   state.hiddenSealed = 0;
+  pageCache.clear();
   emit({ type: 'sealed' });
 }
 
@@ -344,8 +493,9 @@ export function lockSealed() {
   state.keys.s = null;
   let hidden = 0;
   for (const n of [...state.notes.values()]) {
-    if (n.sealed) { state.notes.delete(n.id); hidden++; }
+    if (n.sealed) { state.notes.delete(n.id); hidden++; for (const p of n.pages) pageCache.delete(p.id); }
   }
+  for (const b of [...state.notebooks.values()]) if (b.sealed) state.notebooks.delete(b.id);
   state.hiddenSealed += hidden;
   revokeFileURLs();
   emit({ type: 'sealed' });
