@@ -885,7 +885,7 @@ td.tv-tags, td.tv-select { min-width: 150px; }
 .ink-bars .ink-tools { margin: 0; }
 .ink-props {
   display: flex; align-items: center; gap: 6px; padding: 4px 8px; max-width: calc(100% - 20px); overflow-x: auto; scrollbar-width: none;
-  background: var(--surface); border: 1px solid var(--field); border-radius: 14px; min-height: 44px;
+  background: var(--surface); border: 1px solid var(--field); border-radius: 14px; box-sizing: border-box; height: 48px; /* one height for every tool, so the page never jumps */
 }
 .ink-props[hidden] { display: none; }
 .ink-props::-webkit-scrollbar { display: none; }
@@ -908,5 +908,5 @@ td.tv-tags, td.tv-select { min-width: 150px; }
 .tbl-preview > div { border: 1.5px solid #4A6E8C; border-radius: 3px; overflow: hidden; }
 .tbl-preview span { height: 16px; border-right: 1px solid #4A6E8C; border-bottom: 1px solid #4A6E8C; margin: 0 -1px -1px 0; }
 .tbl-preview span.h { background: rgba(74, 110, 140, 0.14); }
-@media (max-width: 699px) { .ink-bars { margin: 2px 8px 6px; gap: 4px; } .ink-props { min-height: 40px; } }
+@media (max-width: 699px) { .ink-bars { margin: 2px 8px 6px; gap: 4px; } .ink-props { height: 46px; } }
 @media (max-width: 699px) { .ink-tools .tool { width: 40px; height: 40px; } .ink-tools { padding: 4px 6px; } .ink-tools .tg { padding: 0 2px; } }
