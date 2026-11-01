@@ -10,6 +10,7 @@ import { probe, syncNow, explainError } from '../sync.js';
 import { confirmSheet } from '../ui.js';
 import { syncFields, readSyncFields } from './gate.js';
 import { icons } from '../icons.js';
+import { themePref, applyTheme } from '../theme.js';
 
 const COLOR_NAMES = { ochre: 'Ochre', sea: 'Sea green', chart: 'Chart blue', plum: 'Plum', brick: 'Brick', olive: 'Olive', teal: 'Teal', rose: 'Rose' };
 
@@ -61,6 +62,14 @@ export function mount(main, params, ctx) {
             </div>
           </form>`}
         ${sync && !editingSync ? html`<button type="button" class="link-btn" data-act="disconnect" style="align-self:flex-start">Stop syncing on this device</button>` : ''}
+      </section>
+
+      <section aria-labelledby="s-look">
+        <h2 id="s-look">Appearance</h2>
+        <div class="set-row"><span id="s-theme-l">Colours</span>
+          <div class="seg" role="radiogroup" aria-labelledby="s-theme-l">${[['auto', 'Match device'], ['light', 'Light'], ['dark', 'Dark']].map(([v, n]) => html`<button type="button" role="radio" data-theme-pick="${v}" aria-checked="${themePref() === v ? 'true' : 'false'}">${n}</button>`)}</div></div>
+        <label class="check"><input type="checkbox" id="s-darkpaper" ${state.device?.darkPaper !== false ? raw('checked') : ''}> In dark mode, show handwritten pages and whiteboards dark too</label>
+        <p class="hint">Easier on the eyes at night. Dark ink shows light, and colours are brightened a little. PDFs and images you export always use light paper.</p>
       </section>
 
       <section aria-labelledby="s-sec">
@@ -276,6 +285,13 @@ export function mount(main, params, ctx) {
       on('[data-act=sem-rebuild]', async () => { await S.clearIndex(); S.buildSoon(0); toast('Rebuilding'); });
     });
     $('#s-hand', main).onchange = async (e) => { await V.updateDevice({ readHand: e.target.checked }); };
+    main.querySelectorAll('[data-theme-pick]').forEach((x) => {
+      x.onclick = () => {
+        applyTheme(x.dataset.themePick);
+        main.querySelectorAll('[data-theme-pick]').forEach((y) => y.setAttribute('aria-checked', y === x ? 'true' : 'false'));
+      };
+    });
+    $('#s-darkpaper', main).onchange = async (e) => { await V.updateDevice({ darkPaper: e.target.checked }); window.dispatchEvent(new Event('sb-theme')); };
     on('[data-act=hand-all]', async (b) => {
       const st = $('#s-hand-status', main);
       if (state.device?.readHand === false) { toast('Turn on reading handwriting first.'); return; }

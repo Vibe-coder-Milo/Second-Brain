@@ -6,6 +6,7 @@ import { meta } from './db.js';
 import { startAutoSync, scheduleSync } from './sync.js';
 import { runOcrQueue } from './ocr.js';
 import { isWide, toast } from './util.js';
+import { applyTheme } from './theme.js';
 import { closeAllSheets, passphraseSheet, closePopover } from './ui.js';
 import { renderShell, refreshChrome } from './views/shell.js';
 import { renderUnlock, renderOnboarding } from './views/gate.js';
@@ -23,6 +24,7 @@ import * as LabelsView from './views/labels.js';
 import * as NotebooksView from './views/notebooks.js';
 
 const root = document.getElementById('app');
+applyTheme();
 
 // On iPhone and iPad, Safari zooms the whole app in when you tap into small
 // text (a text box on a handwritten page, say) and doesn't zoom back out, so

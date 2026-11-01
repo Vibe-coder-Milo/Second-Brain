@@ -102,32 +102,35 @@ function mountTyped(el, params, ctx) {
       el.innerHTML = `${html`<div class="${compact ? '' : 'page'}" style="${compact ? 'padding:24px' : ''}"><div class="empty"><p class="serif">This note isn’t here</p><p style="margin:0">It may have been deleted, or it’s sealed and locked.</p><a class="btn" href="#/today">Back to Today</a></div></div>`}`;
       return;
     }
+    const wideBar = !compact && (isWide() || window.innerWidth >= 700);
     el.innerHTML = `${html`<div class="${compact ? 'note-panel' : 'page note-page'}" id="np">
+      <div class="note-sticky" id="n-sticky">
       <div class="topbar note-top">
         ${compact
           ? html`<button type="button" class="icon-btn bare" data-act="close" aria-label="Close note">${icons.close()}</button>`
           : html`<button type="button" class="back" data-act="back">${icons.back()}Back</button>`}
         <span class="save-state" id="n-save" aria-live="polite"></span>
         <div class="top-actions">
-          <button type="button" class="icon-btn bare rec-tool" data-act="record" aria-label="Record audio" aria-pressed="false">${icons.mic()}</button>
+          ${wideBar ? '' : html`<button type="button" class="icon-btn bare" data-act="h-undo" aria-label="Undo">${icons.undo()}</button><button type="button" class="icon-btn bare" data-act="h-redo" aria-label="Redo">${icons.redo()}</button>`}
           <button type="button" class="icon-btn bare" data-act="link" aria-label="Link to another note">${icons.link()}</button>
           ${compact ? html`<a class="icon-btn bare" href="#/note/${n.id}" aria-label="Open full note">${icons.external()}</a>` : ''}
           <button type="button" class="icon-btn bare" data-act="more" aria-label="More actions">${icons.more()}</button>
           <button type="button" class="btn btn-sm ${editing ? 'btn-primary' : ''}" id="n-edit" data-act="toggle-edit">${editing ? 'Done' : 'Edit'}</button>
         </div>
       </div>
+      <div class="ink-bars note-bars"><div class="ink-tools" role="toolbar" aria-label="Writing tools" id="n-tools"></div><div class="ink-props" role="toolbar" aria-label="Text settings" id="n-fprops" hidden></div></div>
+      </div>
       <article class="note">
         <div id="n-head"></div>
-        <dl id="n-props" class="note-props" hidden></dl>
         <div id="n-figs" class="note-figs"></div>
         <div class="rich-host" id="n-rich"></div>
         <section id="n-recs" class="note-recs" aria-label="Recordings" hidden></section>
         <div id="n-extra"></div>
+        <div id="n-props" hidden></div>
         <div id="n-details"></div>
         <div id="n-conn"></div>
       </article>
     </div>
-    <div class="fmtbar" id="n-bar" role="toolbar" aria-label="Formatting" hidden></div>
     <aside class="outline-panel" id="n-outline" aria-label="Outline" hidden></aside>`}`;
     bindTop();
     drawHead();
@@ -146,7 +149,8 @@ function mountTyped(el, params, ctx) {
     on('[data-act=close]', async () => { await flush(); ctx.navigate('#/map', { replace: true }); });
     on('[data-act=toggle-edit]', () => (editing ? stopEditing() : startEditing()));
     on('[data-act=link]', () => linkTo());
-    on('[data-act=record]', () => record());
+    on('[data-act=h-undo]', () => { if (!editing) startEditing(); editor?.chain().focus().undo().run(); });
+    on('[data-act=h-redo]', () => { if (!editing) startEditing(); editor?.chain().focus().redo().run(); });
     on('[data-act=more]', () => more());
   }
 
@@ -181,7 +185,8 @@ function mountTyped(el, params, ctx) {
     ${n.sealSuggested && !n.sealed && !editing ? html`<div class="seal-box"><span class="flag">This looks personal. Consider sealing it.</span><button type="button" class="btn btn-sm" data-act="seal">Seal</button></div>` : ''}`}`;
     const t = $('#n-title', box);
     if (t) {
-      const fit = () => { t.style.height = 'auto'; t.style.height = `${t.scrollHeight}px`; };
+      // Same height as the title shown while reading, so the text below doesn't shift.
+      const fit = () => { t.style.height = 'auto'; const lh = parseFloat(getComputedStyle(t).lineHeight) || 36; t.style.height = `${Math.max(1, Math.round(t.scrollHeight / lh)) * lh}px`; };
       requestAnimationFrame(fit);
       t.addEventListener('input', () => { fit(); markDirty(); });
       t.addEventListener('keydown', (e) => {
@@ -246,7 +251,7 @@ function mountTyped(el, params, ctx) {
     if (!editing) { box.innerHTML = ''; return; }
     const regions = state.config.regions;
     const sealedMode = V.sealedState();
-    box.innerHTML = `${html`<details class="note-details" ${id === 'new' && !n.notebook ? raw('open') : ''}>
+    box.innerHTML = `${html`<details class="note-details">
       <summary>Details: region, type, tags, link, images</summary>
       <div class="details-body">
         ${n.notebook ? html`<p class="hint">In the notebook ${state.notebooks.get(n.notebook)?.title || ''}. Its region comes from the notebook.</p>` : html`<div class="row2">
@@ -311,6 +316,7 @@ function mountTyped(el, params, ctx) {
   }
 
   // ---------- Properties (when its notebook section is a table) ----------
+  let fieldsOpen = false;
   function drawProps() {
     const box = $('#n-props', el);
     const n = note();
@@ -319,7 +325,18 @@ function mountTyped(el, params, ctx) {
     const fields = nb?.sections.find((s) => s.id === n.section)?.fields || [];
     if (!fields.length || id === 'new') { box.hidden = true; box.innerHTML = ''; return; }
     box.hidden = false;
-    box.innerHTML = `${html`${fields.map((f) => html`<dt>${f.name}</dt><dd><button type="button" class="tv-cell" data-prop="${f.id}" aria-label="${f.name}: ${fmtVal(f, n.props[f.id]) || 'empty'}. Edit">${valHtml(f, n.props[f.id])}</button></dd>`)}`}`;
+    // Folded away below the text, so they never sit between the title and
+    // what you're writing. The summary shows what's filled in.
+    const filled = fields.filter((f) => fmtVal(f, n.props[f.id]));
+    const summary = filled.length
+      ? `${filled.slice(0, 3).map((f) => `${f.name}: ${fmtVal(f, n.props[f.id])}`).join('\u2002·\u2002')}${filled.length > 3 ? ' …' : ''}`
+      : fields.map((f) => f.name).join(', ');
+    box.innerHTML = `${html`<details class="note-details note-fields" ${fieldsOpen ? raw('open') : ''}>
+      <summary><span class="nf-k">Fields</span><span class="nf-v">${summary}</span>${icons.chevron({ size: 16 })}</summary>
+      <dl class="note-props">${fields.map((f) => html`<dt>${f.name}</dt><dd><button type="button" class="tv-cell" data-prop="${f.id}" aria-label="${f.name}: ${fmtVal(f, n.props[f.id]) || 'empty'}. Edit">${valHtml(f, n.props[f.id])}</button></dd>`)}</dl>
+    </details>`}`;
+    const det = box.querySelector('details');
+    det.ontoggle = () => { fieldsOpen = det.open; };
     box.querySelectorAll('[data-prop]').forEach((b) => {
       b.onclick = () => {
         const cur = note();
@@ -441,41 +458,50 @@ function mountTyped(el, params, ctx) {
       const pos = editor.view.posAtCoords({ left: e.clientX, top: e.clientY });
       startEditing(pos?.pos);
     });
+    setupBar();
     if (editing) {
-      setupBar();
+      document.body.classList.add('editing');
       if (focusWhenReady) { focusWhenReady = false; editor.commands.focus('start'); } else if (id === 'new' && !n.title) setTimeout(() => $('#n-title', el)?.focus(), 50);
     }
     drawOutline();
   }
 
+  // The toolbar is always there (reading or editing), so nothing jumps when
+  // you start typing; using it starts editing.
+  let barFor = null;
   function setupBar() {
-    const b = $('#n-bar', el);
-    if (!b || !editor) return;
-    b.hidden = false;
-    const phone = !isWide();
-    b.classList.toggle('phone', phone);
-    document.body.classList.add('editing');
-    import('../editor/toolbar.js').then((T) => {
-      if (!editor) return;
-      bar = T.mountFormatBar(b, editor, {
-        compact: false,
-        hideKeyboard: phone,
+    const tools = $('#n-tools', el);
+    const props = $('#n-fprops', el);
+    if (!tools || !props || !editor || barFor === editor) return;
+    barFor = editor;
+    const ed = editor;
+    const wide = !compact && (isWide() || window.innerWidth >= 700);
+    Promise.all([import('../editor/toolbar.js'), import('../editor/inkdraw.js'), import('../theme.js')]).then(([T, D, TH]) => {
+      if (editor !== ed) return;
+      bar = T.mountNoteBars(tools, props, editor, {
+        wide,
+        hideKeyboard: !isWide(),
+        dark: () => TH.isDarkUI(),
+        tone: D.darkInk,
+        ensureEditing: () => { if (!editing) startEditing(); },
+        onRecord: () => record(),
+        onHideKeyboard: () => {},
         sealed: () => !!note()?.sealed,
         noteFont: () => note()?.font,
         setNoteFont: (f) => { patch({ font: f }); $('#n-rich', el)?.style.setProperty('--note-font', rich.fontCss(f)); },
       });
       suggest = T.attachSuggest(editor, { noteId: () => id, sealed: () => !!note()?.sealed });
-      vvHandler = T.floatBar(b);
+      const sticky = $('#n-sticky', el);
+      if (sticky) vvHandler = T.pinTop(sticky);
     });
   }
 
   function teardownBar() {
     bar?.destroy();
     bar = null;
+    barFor = null;
     suggest?.close();
     suggest = null;
-    const b = $('#n-bar', el);
-    if (b) { b.hidden = true; b.innerHTML = ''; }
     document.body.classList.remove('editing');
     vvHandler?.();
     vvHandler = null;
@@ -526,6 +552,7 @@ function mountTyped(el, params, ctx) {
     drawDetails();
     drawConnections();
     setupBar();
+    document.body.classList.add('editing');
     if (editor) {
       if (typeof pos === 'number') editor.chain().focus().setTextSelection(pos).run();
       else editor.commands.focus('end');
@@ -536,7 +563,7 @@ function mountTyped(el, params, ctx) {
     await flush(true);
     if (id === 'new') { ctx.back(); return; }
     editing = false;
-    teardownBar();
+    document.body.classList.remove('editing');
     editor?.setEditable(false);
     $('#n-edit', el).textContent = 'Edit';
     $('#n-edit', el).classList.remove('btn-primary');

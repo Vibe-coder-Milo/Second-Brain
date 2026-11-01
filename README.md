@@ -45,8 +45,10 @@ Every sync is one commit, so the data repo's history doubles as version history.
 - **Notebooks**: a shelf of notebooks, each in a region, with a cover from the library (or your own photo, or a plain colour). Inside: sections, notes, and sub-notes under notes. On iPad the open note sits beside the notebook.
 - **Typed notes**
   - Styles: Title, Heading, Subheading, body text, bulleted, numbered and checklist lists, quote, callout box, post-it, divider. Type `/` anywhere for the style menu, or use shortcuts as you type: `#`, `##`, `###`, `-`, `1.`, `[ ]`, `>`, `!`, `---`.
+  - **Toolbar**: the same two rows at the top as handwritten notes. The top row: undo and redo, text style, bold, lists, the tag button (adds a label) and **Insert** (+). The row below: font, size, colours and the rest. It's there while reading too, so nothing jumps when you start typing.
   - Formatting: bold, italic, underline, strikethrough, text colour and highlight, seven fonts, sizes and alignment.
-  - **Insert** (the + button on the formatting bar, or `/`): tables with shading, images, stickers, post-its, label chips and due dates. The tag button adds a label straight away.
+  - **Insert** (the + button, or `/`): tables with shading, images, stickers, post-its, due dates and links to notes.
+  - **Fields** from a section's table view (dates, impact, people and so on) are folded away below the text; tap **Fields** to see or change them.
   - Links: `[[` links to another note.
   - On iPad, headings make an outline beside the note.
 - **Handwritten notes** (Apple Pencil writes, fingers scroll and pinch to zoom)
@@ -57,14 +59,14 @@ Every sync is one commit, so the data repo's history doubles as version history.
   - Pens: fountain, ballpoint, brush, pencil, marker, calligraphy, each with any colour and thickness, smoothing (off to high) and pressure on or off. **Save as favourite** keeps a pen exactly as set, one tap away in the toolbar. Also highlighter, eraser (whole strokes or precise), lasso (move, resize, recolour, copy, save as a sticker), shapes that snap when you hold, text boxes with full formatting, photos, and undo.
   - **Handwriting is read on your device** a few seconds after you stop writing, so it shows up in search, links, Ask Claude and search by meaning. Lasso some writing and choose **Convert to text** to see what it reads as, fix it, then copy it or replace the ink with typed text. Neat writing reads best; joined-up writing usually works, but check what it read.
   - **Layout**: A4 pages, or **endless scroll**: one long page that grows as you write (PDF export prints it as A4 pieces).
-  - Paper: ruled, narrow, grid, dotted, Cornell or blank, in white, ivory or night.
+  - **Paper**: dot grid (the default), lined, narrow lined, squared, Cornell or blank, in white, ivory or dark. Change it under All pages: it changes every page of the note and becomes the paper for new notes.
   - Pages: add, reorder, bookmark. **Import a PDF** to write on it, a photo of paper, or **scan** pages straight in.
   - **Layers**: Ink, Highlights and your own (say "Review notes"). Hide or lock a layer, pick which one you're writing on, move a selection to another layer, and export only the visible layers.
   - **Zoom** opens the writing window: write large in the strip at the bottom and it lands small in the dashed box on the page. Lift the Pencil in the shaded end to move along; it wraps to the next line by itself.
 - **Recordings**: tap the microphone on any note to record (pause and resume as you like). On a handwritten note, the headphones replay the audio with your writing: what you wrote later fades in as it plays, and tapping a word jumps to that moment. **Transcribe on this device** turns a recording into text you can search and tap to jump to.
 - **Scanning**: take or choose photos of paper; the edges are found for you (drag a corner to adjust), then pick colour, greyscale or black and white. The text is read on your device so the scan is searchable.
 - **Whiteboards**: an open board for thinking things through. Add cards for notes you already have (or a new one), sticky notes, text, shapes, frames that carry what's inside them, photos, arrows that stay attached as you move things, and a pen. Pan with a finger or trackpad, pinch to zoom, and use the overview in the corner to jump around. Notes on a board show it among their connections. Export as PDF or an image.
-- **Table views**: open any notebook section as a table, cards, a timeline or a board, with columns like dates, choices, tags, people, numbers and links. Start from a preset (Wins, Projects, Reading, People) or blank; filter, sort and group by year or month. On a board, drag cards between columns (on a phone, press and hold first). The same fields show at the top of each note.
+- **Table views**: open any notebook section as a table, cards, a timeline or a board, with columns like dates, choices, tags, people, numbers and links. Start from a preset (Wins, Projects, Reading, People) or blank; filter, sort and group by year or month. On a board, drag cards between columns (on a phone, press and hold first). The same fields are folded away below the text of each note.
 - **Stickers and post-its** are decoration: marks, planner, washi tape, chart and botanical packs, and "Mine" (your own ink or photos). Post-its fold away to a small square. To mark something you want to find later, use a label instead.
 - **Labels** are for finding things again: every label you've stuck anywhere, with a preview of the spot. Edit names and colours in Settings or on the Labels screen.
 - **Tasks**: checklists from every note, typed or handwritten, by date or by note. Tick them here and the note updates.
@@ -78,7 +80,8 @@ Every sync is one commit, so the data repo's history doubles as version history.
   - **Ask about your notes** copies your question plus the regions you choose, or just the notes closest in meaning to your question.
   - Paste into any Claude chat, then **Import Claude's reply**. You review every new note, update and skipped chat before anything is saved.
   - Handwritten notes share their text boxes, post-its and the handwriting read on your device, whiteboards share an outline of what's on them, and recordings share their transcripts. Sealed notes and notebooks are never included.
-- **Settings**: sync, auto-lock, passphrase, sealed notes, regions, labels, encrypted backup, Markdown export.
+- **Appearance** (Settings): match the device, or always light or dark. In dark mode, handwritten pages and whiteboards go dark too, with dark ink shown light and colours brightened, so there's no bright white page in a dark app. PDFs and images you export always use light paper. You can keep pages light in dark mode if you prefer.
+- **Settings**: sync, appearance, auto-lock, passphrase, sealed notes, regions, labels, encrypted backup, Markdown export.
 
 ## Editing the app
 

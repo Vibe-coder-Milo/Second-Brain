@@ -13,7 +13,8 @@ import { InkSurface, penExtras } from '../editor/ink.js';
 import { ZoomStrip } from '../editor/zoomstrip.js';
 import { startRecording, stopRecording, isRecording, recordingTime } from '../recorder.js';
 import { mountPlayer } from './recordings.js';
-import { PENS, HL, INK_COLORS, HL_COLORS, DEFAULT_FAVS, mm, renderPageCanvas, layerView, noteLayers, layerOf, drawStroke, SMOOTHING, strokeBox } from '../editor/inkdraw.js';
+import { PENS, HL, INK_COLORS, HL_COLORS, DEFAULT_FAVS, mm, renderPageCanvas, layerView, noteLayers, layerOf, drawStroke, drawPaper, SMOOTHING, strokeBox, setInkTone, pageDark, darkInk } from '../editor/inkdraw.js';
+import { isDarkUI } from '../theme.js';
 import { linkedWith, mentions, related, subNotes } from '../connections.js';
 import { notebookPicker, textSheet } from './notebooks.js';
 
@@ -41,7 +42,7 @@ export function mount(el, params, ctx) {
     const nb = params.notebook ? state.notebooks.get(params.notebook) : null;
     const par = params.parent ? state.notes.get(params.parent) : null;
     const nbx = nb || (par?.notebook ? state.notebooks.get(par.notebook) : null);
-    const page = newPage({ paper: nbx?.paper || 'ruled', color: nbx?.paperColor || 'white' });
+    const page = newPage({ paper: nbx?.paper || state.device?.paper || 'dotted', color: nbx?.paperColor || state.device?.paperColor || 'white' });
     const n = newNote({
       kind: 'ink',
       title: `Notes, ${fmtDate(Date.now())}`,
@@ -106,7 +107,6 @@ export function mount(el, params, ctx) {
       <div class="ink-props" role="toolbar" aria-label="Settings for this tool" id="iv-props" hidden></div></div>
       <div class="ink-host" id="iv-host"></div>
       <div class="zs" id="iv-zs" role="region" aria-label="Writing window" hidden></div>
-      <div class="fmtbar tb-fmt" id="iv-fmt" role="toolbar" aria-label="Text box formatting" hidden></div>
     </div>`}`;
     el.querySelector('[data-act=back]').onclick = () => leave();
     el.querySelector('[data-act=rename]').onclick = () => rename();
@@ -312,6 +312,7 @@ export function mount(el, params, ctx) {
   // Two rows: the tools (always the same, so nothing jumps around), and
   // below them the settings for the tool in hand.
   function drawTools() {
+    if (fmt) return; // a text box is being edited; its toolbar is showing
     const box = $('#iv-tools', el);
     const props = $('#iv-props', el);
     if (!box) return;
@@ -369,13 +370,16 @@ export function mount(el, params, ctx) {
     const sizes = hl ? HL.sizes : (PENS[tool.pen] || PENS.fountain).sizes;
     const curSize = hl ? tool.hlSize : tool.size;
     const curCol = hl ? tool.hlColor : tool.color;
+    // On a dark page, show colours as they'll appear there.
+    const darkPage = pageDark(note()?.pages[pageIdx]);
+    const shown = (c) => (darkPage ? darkInk(c) : c);
     const colourName = (c) => INK_COLORS.find((x) => x[1] === c)?.[0] || HL_COLORS.find((x) => x[1] === c)?.[0] || c;
     let inner = '';
     if (t === 'pen' || t === 'shapes' || hl) {
-      inner = html`<button type="button" class="pen-chip" data-act="penpanel" aria-label="${hl ? 'Highlighter settings' : 'Pen settings'}"><span class="dot" style="background:${curCol}"></span><span>${hl ? 'Highlighter' : `${PENS[tool.pen]?.name || 'Fountain'}${t === 'shapes' ? ' shapes' : ''}`}, ${mm(curSize)}</span>${raw(icons.chevron({ size: 14 }))}</button>
+      inner = html`<button type="button" class="pen-chip" data-act="penpanel" aria-label="${hl ? 'Highlighter settings' : 'Pen settings'}"><span class="dot" style="background:${shown(curCol)}"></span><span>${hl ? 'Highlighter' : `${PENS[tool.pen]?.name || 'Fountain'}${t === 'shapes' ? ' shapes' : ''}`}, ${mm(curSize)}</span>${raw(icons.chevron({ size: 14 }))}</button>
         ${!hl && savedPens().length ? html`<div class="tg pens" role="group" aria-label="Your pens">${savedPens().map((sp, i) => ({ sp, i })).slice(wide ? -4 : -2).map(({ sp, i }) => html`<button type="button" class="pen-fav" data-usepen="${i}" aria-label="Your pen: ${penLabel(sp)}" aria-pressed="${sp.pen === tool.pen && sp.color === tool.color && Math.abs(sp.size - tool.size) < 0.05 ? 'true' : 'false'}"><canvas width="44" height="20" aria-hidden="true"></canvas></button>`)}</div>` : ''}
-        <div class="tg colours" role="group" aria-label="Colours">${colours.map((c) => html`<button type="button" class="ink-swatch" data-col="${c}" style="--c:${c}" aria-label="${colourName(c)}" aria-pressed="${c === curCol ? 'true' : 'false'}"></button>`)}<button type="button" class="ink-swatch more" data-act="colours" aria-label="More colours"></button></div>
-        <div class="tg sizes" role="group" aria-label="Thickness">${sizes.map((sz, i) => html`<button type="button" class="ink-size" data-size="${sz}" aria-label="${['Fine', 'Medium', 'Bold'][i]}, ${mm(sz)}" aria-pressed="${Math.abs(sz - curSize) < 0.01 ? 'true' : 'false'}"><span style="--d:${Math.round(4 + i * 4)}px;--c:${curCol}"></span></button>`)}</div>`;
+        <div class="tg colours" role="group" aria-label="Colours">${colours.map((c) => html`<button type="button" class="ink-swatch" data-col="${c}" style="--c:${shown(c)}" aria-label="${colourName(c)}" aria-pressed="${c === curCol ? 'true' : 'false'}"></button>`)}<button type="button" class="ink-swatch more" data-act="colours" aria-label="More colours"></button></div>
+        <div class="tg sizes" role="group" aria-label="Thickness">${sizes.map((sz, i) => html`<button type="button" class="ink-size" data-size="${sz}" aria-label="${['Fine', 'Medium', 'Bold'][i]}, ${mm(sz)}" aria-pressed="${Math.abs(sz - curSize) < 0.01 ? 'true' : 'false'}"><span style="--d:${Math.round(4 + i * 4)}px;--c:${shown(curCol)}"></span></button>`)}</div>`;
     } else if (t === 'eraser') {
       inner = html`<div class="tg" role="radiogroup" aria-label="Eraser"><button type="button" class="chip sm" data-em="stroke" aria-pressed="${tool.eraserMode !== 'precise' ? 'true' : 'false'}">Whole strokes</button><button type="button" class="chip sm" data-em="precise" aria-pressed="${tool.eraserMode === 'precise' ? 'true' : 'false'}">Precise</button></div><div class="tg"><button type="button" class="chip sm" aria-pressed="${tool.hlOnly ? 'true' : 'false'}" data-act="hl-only">Only highlights</button></div>`;
     } else if (t === 'lasso') {
@@ -499,6 +503,7 @@ export function mount(el, params, ctx) {
     const ctx = canvas.getContext('2d');
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, w, h);
+    setInkTone(isDarkUI());
     const pts = [];
     const n = 40;
     for (let i = 0; i <= n; i++) {
@@ -696,23 +701,32 @@ export function mount(el, params, ctx) {
   }
 
   // ---------- Text box formatting ----------
+  // Typing in a text box: the toolbar becomes the typed-note toolbar, in the
+  // same place, and comes back when you're done.
   async function textEditing(ed) {
-    const bar = $('#iv-fmt', el);
+    const had = !!fmt;
     fmt?.destroy();
     fmt = null;
     suggest?.close();
     suggest = null;
-    if (!bar) return;
     unfloat?.();
     unfloat = null;
-    if (!ed) { bar.hidden = true; bar.innerHTML = ''; document.body.classList.remove('editing'); return; }
+    if (!ed) { document.body.classList.remove('editing'); if (had) drawTools(); return; }
     const T = await import('../editor/toolbar.js');
-    bar.hidden = false;
-    bar.classList.toggle('phone', !isWide());
+    const tools = $('#iv-tools', el);
+    const props = $('#iv-props', el);
+    if (!tools || !props) return;
     document.body.classList.add('editing');
-    fmt = T.mountFormatBar(bar, ed, { compact: true, hideKeyboard: !isWide(), sealed: () => !!note()?.sealed, onHideKeyboard: () => surface?.endEdit() });
+    fmt = T.mountNoteBars(tools, props, ed, {
+      wide: isWide() || window.innerWidth >= 700,
+      hideKeyboard: !isWide(),
+      dark: () => !!surface?.dark,
+      tone: darkInk,
+      noteFont: () => surface?.editing?.font || 'Overpass',
+      sealed: () => !!note()?.sealed,
+      onHideKeyboard: () => surface?.endEdit(),
+    });
     suggest = T.attachSuggest(ed, { noteId: () => id });
-    unfloat = T.floatBar(bar);
   }
 
   // ---------- Pages ----------
@@ -759,7 +773,7 @@ export function mount(el, params, ctx) {
   async function addPage(fields = {}, at = pageIdx + 1) {
     const n = note();
     const cur = n.pages[pageIdx];
-    const page = newPage({ paper: cur?.bg ? 'ruled' : cur?.paper || 'ruled', color: cur?.color || 'white', ...fields });
+    const page = newPage({ paper: cur?.bg ? (state.device?.paper || 'dotted') : cur?.paper || 'dotted', color: cur?.color || 'white', ...fields });
     const pages = [...n.pages];
     pages.splice(at, 0, page);
     await V.saveNote({ ...n, pages });
@@ -769,15 +783,18 @@ export function mount(el, params, ctx) {
 
   function pagesSheet() {
     const n = note();
+    const here = n.pages[pageIdx] && !n.pages[pageIdx].bg ? n.pages[pageIdx] : n.pages.find((p) => !p.bg);
+    const curPaper = { paper: here?.paper || state.device?.paper || 'dotted', color: here?.color || state.device?.paperColor || 'white' };
     const s = openSheet(`${html`<div class="sheet-head"><span class="side"></span><h2>${displayTitle(n)}, ${n.pages.length} page${n.pages.length === 1 ? '' : 's'}</h2><span class="side"><button type="button" class="btn btn-ghost btn-sm" data-close>Done</button></span></div>
       <ul class="page-grid" id="pg-grid">${n.pages.map((p, i) => html`<li><button type="button" class="page-thumb ${i === pageIdx ? 'current' : ''}" data-i="${i}" aria-label="Page ${i + 1}${i === pageIdx ? ', current page' : ''}${p.bookmark ? ', bookmarked' : ''}"><canvas data-thumb="${i}" width="10" height="14"></canvas>${p.bookmark ? html`<span class="bm">${icons.bookmark({ size: 16 })}</span>` : ''}</button><button type="button" class="pg-more" data-pm="${i}" aria-label="Page ${i + 1} options">${i + 1} ${icons.more({ size: 16 })}</button></li>`)}
         <li><button type="button" class="page-thumb add" data-add>${icons.plus({ size: 24 })}<span>Add page</span></button></li></ul>
       <section class="paper-pick"><h3>Layout</h3>
         <div class="chips" role="radiogroup" aria-label="Layout"><button type="button" class="chip" role="radio" aria-checked="${n.layout !== 'scroll' ? 'true' : 'false'}" aria-pressed="${n.layout !== 'scroll' ? 'true' : 'false'}" data-layout="pages">A4 pages</button><button type="button" class="chip" role="radio" aria-checked="${n.layout === 'scroll' ? 'true' : 'false'}" aria-pressed="${n.layout === 'scroll' ? 'true' : 'false'}" data-layout="scroll">Endless scroll</button></div>
         <p class="hint">${n.layout === 'scroll' ? 'One long page that grows as you write. PDFs print it as A4 pieces.' : 'Fixed A4 pages. Endless scroll makes one long page that grows as you write.'}</p>
-        <h3>Paper for new pages</h3>
-        <div class="chips" role="radiogroup" aria-label="Paper">${PAPERS.map((p) => html`<button type="button" class="chip" role="radio" aria-checked="${p.id === (state.device?.paper || 'ruled')}" aria-pressed="${p.id === (state.device?.paper || 'ruled') ? 'true' : 'false'}" data-paper="${p.id}">${p.name}</button>`)}</div>
-        <div class="chips" role="radiogroup" aria-label="Paper colour">${PAPER_COLORS.map((c) => html`<button type="button" class="chip" role="radio" aria-pressed="${c.id === (state.device?.paperColor || 'white') ? 'true' : 'false'}" data-pcol="${c.id}"><span class="dot lg" style="background:${c.bg};border:1px solid var(--field)"></span>${c.name}</button>`)}</div>
+        <h3>Paper</h3>
+        <div class="paper-tiles" role="radiogroup" aria-label="Paper">${PAPERS.map((p) => html`<button type="button" class="paper-tile" role="radio" aria-checked="${p.id === curPaper.paper ? 'true' : 'false'}" data-paper="${p.id}"><canvas width="66" height="92" aria-hidden="true" data-pprev="${p.id}"></canvas><span>${p.name}</span></button>`)}</div>
+        <div class="chips" role="radiogroup" aria-label="Paper colour">${PAPER_COLORS.map((c) => html`<button type="button" class="chip" role="radio" aria-pressed="${c.id === curPaper.color ? 'true' : 'false'}" data-pcol="${c.id}"><span class="dot lg" style="background:${c.bg};border:1px solid var(--field)"></span>${c.name}</button>`)}</div>
+        <p class="hint">Changes every page of this note (except PDF and photo pages) and becomes the paper for new notes.${isDarkUI() && state.device?.darkPaper !== false ? ' In dark mode, pages show dark automatically.' : ''}</p>
         <div class="btn-row"><button type="button" class="btn btn-sm" data-add2>${icons.plus({ size: 16 })}Add after page ${pageIdx + 1}</button>
           <label class="btn btn-sm">${icons.pdf({ size: 16 })}Import PDF<input type="file" accept="application/pdf" class="sr-only" data-pdf></label>
           <button type="button" class="btn btn-sm" data-scan>${icons.scan({ size: 16 })}Scan paper</button></div>
@@ -785,11 +802,36 @@ export function mount(el, params, ctx) {
     s.el.classList.add('wide-sheet');
     s.el.querySelector('[data-close]').onclick = () => s.close();
     s.el.querySelectorAll('[data-i]').forEach((b) => { b.onclick = () => { s.close(); showPage(Number(b.dataset.i)); }; });
-    const pick = () => ({ paper: state.device?.paper || 'ruled', color: state.device?.paperColor || 'white' });
+    const pick = () => ({ paper: curPaper.paper, color: curPaper.color });
     s.el.querySelector('[data-add]').onclick = async () => { s.close(); await addPage(pick(), note().pages.length); };
     s.el.querySelector('[data-add2]').onclick = async () => { s.close(); await addPage(pick()); };
-    s.el.querySelectorAll('[data-paper]').forEach((b) => { b.onclick = async () => { await V.updateDevice({ paper: b.dataset.paper }); s.el.querySelectorAll('[data-paper]').forEach((x) => x.setAttribute('aria-pressed', x === b ? 'true' : 'false')); }; });
-    s.el.querySelectorAll('[data-pcol]').forEach((b) => { b.onclick = async () => { await V.updateDevice({ paperColor: b.dataset.pcol }); s.el.querySelectorAll('[data-pcol]').forEach((x) => x.setAttribute('aria-pressed', x === b ? 'true' : 'false')); }; });
+    // Paper: the whole note changes, and new notes use it too.
+    const setPaper = async (patch) => {
+      Object.assign(curPaper, patch);
+      const cur = note();
+      const pages = cur.pages.map((p) => (p.bg ? p : { ...p, paper: curPaper.paper, color: curPaper.color }));
+      await V.saveNote({ ...cur, pages });
+      await V.updateDevice({ paper: curPaper.paper, paperColor: curPaper.color });
+      if (cur.notebook) { const nb = state.notebooks.get(cur.notebook); if (nb && (nb.paper !== curPaper.paper || nb.paperColor !== curPaper.color)) await V.saveNotebook({ ...nb, paper: curPaper.paper, paperColor: curPaper.color }); }
+      s.el.querySelectorAll('[data-paper]').forEach((x) => x.setAttribute('aria-checked', x.dataset.paper === curPaper.paper ? 'true' : 'false'));
+      s.el.querySelectorAll('[data-pcol]').forEach((x) => x.setAttribute('aria-pressed', x.dataset.pcol === curPaper.color ? 'true' : 'false'));
+      paintPaperTiles();
+      await showPage(pageIdx);
+    };
+    s.el.querySelectorAll('[data-paper]').forEach((b) => { b.onclick = () => setPaper({ paper: b.dataset.paper }); });
+    s.el.querySelectorAll('[data-pcol]').forEach((b) => { b.onclick = () => setPaper({ color: b.dataset.pcol }); });
+    const paintPaperTiles = () => s.el.querySelectorAll('[data-pprev]').forEach((c) => {
+      const dpr = window.devicePixelRatio || 1;
+      c.width = 66 * dpr; c.height = 92 * dpr;
+      const ctx = c.getContext('2d');
+      const k = (66 * dpr) / 330;
+      ctx.setTransform(k, 0, 0, k, 0, 0);
+      const pg = { paper: c.dataset.pprev, color: curPaper.color, h: 460, bg: null };
+      setInkTone(pageDark(pg));
+      drawPaper(ctx, pg, k / dpr);
+      setInkTone(false);
+    });
+    paintPaperTiles();
     s.el.querySelectorAll('[data-layout]').forEach((b) => { b.onclick = async () => { await setLayout(b.dataset.layout); s.close(); }; });
     s.el.querySelector('[data-pdf]').onchange = async (e) => { const f = e.target.files?.[0]; if (!f) return; s.close(); await importPdf(f); };
     s.el.querySelector('[data-scan]').onclick = async () => { s.close(); await scanPages(); };
@@ -798,7 +840,7 @@ export function mount(el, params, ctx) {
     n.pages.forEach(async (p, i) => {
       try {
         const data = await V.loadPage(p.id);
-        const c = await renderPageCanvas(p, data, 220, { ...layerView(note()), crop: { x: 0, y: 0, w: PAGE_W, h: Math.min(p.h, A4_H) } });
+        const c = await renderPageCanvas(p, data, 220, { ...layerView(note()), crop: { x: 0, y: 0, w: PAGE_W, h: Math.min(p.h, A4_H) }, dark: pageDark(p) });
         const slot = s.el.querySelector(`[data-thumb="${i}"]`);
         if (slot) slot.replaceWith(Object.assign(c, { className: 'thumb-canvas' }));
       } catch { /* not downloaded yet */ }
@@ -1102,6 +1144,9 @@ export function mount(el, params, ctx) {
 
   const onResize = () => drawTools();
   window.addEventListener('resize', onResize);
+  // Dark mode on or off: the swatches show colours as they'll look on the page.
+  const onThemeChange = () => { drawTools(); zoom?.render(); };
+  window.addEventListener('sb-theme', onThemeChange);
 
   return {
     update(p) {
@@ -1136,6 +1181,7 @@ export function mount(el, params, ctx) {
       zoom?.destroy();
       zoom = null;
       window.removeEventListener('resize', onResize);
+      window.removeEventListener('sb-theme', onThemeChange);
       exitReplay();
       surface?.endEdit();
       flush().then(() => discardIfEmpty());

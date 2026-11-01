@@ -185,7 +185,7 @@ export async function openHistory(n, ctx, { page = null } = {}) {
     if (pv) {
       const x = versions[Number(pv.dataset.prev)];
       (board ? import('../boarddraw.js') : import('../editor/inkdraw.js')).then(async (m) => {
-        const c = board ? await m.renderBoardCanvas(x.data, { widthPx: 1040 }) : await m.renderPageCanvas(page, x.data, 520);
+        const c = board ? await m.renderBoardCanvas(x.data, { widthPx: 1040 }) : await m.renderPageCanvas(page, x.data, 520, { dark: m.pageDark(page) });
         c.className = 'vh-canvas';
         c.setAttribute('role', 'img');
         c.setAttribute('aria-label', board ? 'This version of the board' : 'This version of the page');

@@ -10,7 +10,8 @@ import { icons } from '../icons.js';
 import { openSheet, menuSheet, confirmSheet, notePicker, passphraseSheet, popover, closePopover, tooltips } from '../ui.js';
 import { compressImage } from '../images.js';
 import { notebookPicker } from './notebooks.js';
-import { PENS, HL, HL_COLORS, INK_COLORS } from '../editor/inkdraw.js';
+import { PENS, HL, HL_COLORS, INK_COLORS, darkInk } from '../editor/inkdraw.js';
+import { isDarkUI } from '../theme.js';
 import * as B from '../boarddraw.js';
 
 const TOOLS = [
@@ -221,7 +222,7 @@ export function mount(el, params, ctx) {
   function drawOpts() {
     const box = $('#bd-opts', el);
     if (!box) return;
-    const sw = (c, on, attr = 'data-col') => html`<button type="button" class="ink-swatch" ${raw(attr)}="${c}" style="--c:${c}" aria-label="${colourName(c)}" aria-pressed="${on ? 'true' : 'false'}"></button>`;
+    const sw = (c, on, attr = 'data-col') => html`<button type="button" class="ink-swatch" ${raw(attr)}="${c}" style="--c:${tone(c)}" aria-label="${colourName(c)}" aria-pressed="${on ? 'true' : 'false'}"></button>`;
     let inner = '';
     if (tool === 'pen') {
       const pk = PEN_KINDS.find((k) => k.id === opts.pen) || PEN_KINDS[0];
@@ -344,6 +345,9 @@ export function mount(el, params, ctx) {
   }
 
   // ---------- Rendering ----------
+  // In dark mode the board goes dark too; dark ink shows light.
+  function boardDark() { return isDarkUI() && state.device?.darkPaper !== false; }
+  function tone(c) { return boardDark() ? darkInk(c) : c; }
   function objHtml(o) {
     const s = sel.has(o.id) ? 'sel' : '';
     const pos = `left:${o.x}px;top:${o.y}px;width:${o.w}px;z-index:${o.type === 'frame' ? 0 : 10 + (o.z || 0)}`;
@@ -358,10 +362,10 @@ export function mount(el, params, ctx) {
       return html`<div class="bo bo-sticky ${s}" data-id="${o.id}" tabindex="0" role="button" aria-label="Sticky note: ${o.text || 'empty'}" style="${pos};height:${o.h}px;background:${B.stickyBg(o.color)};--rot:${o.rot || 0}deg"><div class="bt">${o.text || ''}</div></div>`;
     }
     if (o.type === 'text') {
-      return html`<div class="bo bo-text ${s} ${o.font === 'serif' ? 'serif' : ''}" data-id="${o.id}" tabindex="0" role="button" aria-label="Text: ${o.text || 'empty'}" style="${pos};font-size:${B.textPx(o)}px;color:${o.color || B.PAPER.ink};font-weight:${o.bold ? 700 : 400}"><div class="bt">${o.text || ''}</div></div>`;
+      return html`<div class="bo bo-text ${s} ${o.font === 'serif' ? 'serif' : ''}" data-id="${o.id}" tabindex="0" role="button" aria-label="Text: ${o.text || 'empty'}" style="${pos};font-size:${B.textPx(o)}px;color:${tone(o.color || B.PAPER.ink)};font-weight:${o.bold ? 700 : 400}"><div class="bt">${o.text || ''}</div></div>`;
     }
     if (o.type === 'shape') {
-      const c = o.color || B.PAPER.ink;
+      const c = tone(o.color || B.PAPER.ink);
       const fill = o.fill ? `${c}1F` : 'none';
       const g = o.shape === 'ellipse' ? html`<ellipse cx="50" cy="50" rx="49" ry="49" />` : o.shape === 'diamond' ? html`<polygon points="50,1 99,50 50,99 1,50" />` : html`<rect x="1" y="1" width="98" height="98" rx="${Math.min(10, 1000 / Math.max(o.w, 1))}" />`;
       return html`<div class="bo bo-shape ${s}" data-id="${o.id}" tabindex="0" role="button" aria-label="${B.SHAPES.find((x) => x.id === o.shape)?.name || 'Shape'}${o.text ? `: ${o.text}` : ''}" style="${pos};height:${o.h}px"><svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true" style="stroke:${c};fill:${fill}">${g}</svg><div class="bt">${o.text || ''}</div></div>`;
@@ -377,6 +381,7 @@ export function mount(el, params, ctx) {
 
   function render() {
     if (!objsEl || !data) return;
+    stage.classList.toggle('dark', boardDark());
     const objs = B.live(data);
     const frames = objs.filter((o) => o.type === 'frame');
     const rest = objs.filter((o) => o.type !== 'frame' && o.type !== 'arrow');
@@ -423,11 +428,11 @@ export function mount(el, params, ctx) {
     arrowsG.innerHTML = arrows.map((a) => {
       const g = B.arrowGeom(a, boxOf);
       const d = B.arrowD(g);
-      const c = a.color || B.PAPER.ink;
+      const c = tone(a.color || B.PAPER.ink);
       const h = B.arrowHead(g).map((p) => p.map((v) => v.toFixed(1)).join(',')).join(' ');
       return String(html`<g class="ba ${sel.has(a.id) ? 'sel' : ''}" data-aid="${a.id}"><path class="ba-under" d="${d}"/><path class="ba-line" d="${d}" style="stroke:${c}" ${a.dash ? raw('stroke-dasharray="7 6"') : ''}/><polygon points="${h}" style="fill:${c}"/>${a.label ? html`<text x="${g.mid[0].toFixed(1)}" y="${g.mid[1].toFixed(1)}" class="ba-label" style="fill:${c}">${a.label}</text>` : ''}</g>`);
     }).join('');
-    strokesG.innerHTML = data.strokes.map((s) => String(html`<path data-sid="${s.id}" d="${B.strokeD(s)}" style="fill:${s.c};opacity:${s.t === 'hl' ? HL.alpha : (PENS[s.pen]?.alpha || 1)}"/>`)).join('');
+    strokesG.innerHTML = data.strokes.map((s) => String(html`<path data-sid="${s.id}" d="${B.strokeD(s)}" style="fill:${tone(s.c)};opacity:${s.t === 'hl' ? (boardDark() ? HL.alphaDark : HL.alpha) : (PENS[s.pen]?.alpha || 1)}"/>`)).join('');
     // Box around selected strokes
     const ss = [...sel].filter((k) => k.startsWith('s:')).map((k) => stroke(k.slice(2))).filter(Boolean);
     if (ss.length) {
@@ -550,10 +555,10 @@ export function mount(el, params, ctx) {
     for (const o of B.live(data)) {
       if (o.type === 'arrow') continue;
       const bb = boxOf(o.id);
-      c.fillStyle = o.type === 'frame' ? 'rgba(201,212,209,0.35)' : o.type === 'sticky' ? B.stickyBg(o.color) : '#D5DEDB';
+      c.fillStyle = o.type === 'frame' ? (boardDark() ? 'rgba(120,145,165,0.18)' : 'rgba(201,212,209,0.35)') : o.type === 'sticky' ? B.stickyBg(o.color) : (boardDark() ? '#3A4E60' : '#D5DEDB');
       c.fillRect(bb.x * k + ox, bb.y * k + oy, Math.max(2, bb.w * k), Math.max(2, bb.h * k));
     }
-    c.fillStyle = '#B9C7C3';
+    c.fillStyle = boardDark() ? '#56707F' : '#B9C7C3';
     for (const s of data.strokes) { const sb = B.strokeBounds(s); c.fillRect(sb.x * k + ox, sb.y * k + oy, Math.max(1.5, sb.w * k), Math.max(1.5, sb.h * k)); }
     c.strokeStyle = getComputedStyle(el).getPropertyValue('--ink') || '#1B2A38';
     c.lineWidth = 1.5;
@@ -1003,7 +1008,7 @@ export function mount(el, params, ctx) {
     const g = gesture;
     if (!g || g.type !== 'ink') return;
     const s = liveStroke(g);
-    liveG.innerHTML = String(html`<path d="${B.strokeD({ ...s, pts: [...g.pts] })}" style="fill:${s.c};opacity:${s.t === 'hl' ? HL.alpha : 1}"/>`);
+    liveG.innerHTML = String(html`<path d="${B.strokeD({ ...s, pts: [...g.pts] })}" style="fill:${tone(s.c)};opacity:${s.t === 'hl' ? (boardDark() ? HL.alphaDark : HL.alpha) : 1}"/>`);
   }
   function finishInk(g) {
     cancelAnimationFrame(g.raf);
@@ -1599,6 +1604,8 @@ export function mount(el, params, ctx) {
 
   const onResize = () => { drawOpts(); applyView(); };
   window.addEventListener('resize', onResize);
+  const onThemeChange = () => render();
+  window.addEventListener('sb-theme', onThemeChange);
   const rerender = debounce(() => { if (!gesture && !editing && !destroyed) render(); }, 250);
 
   return {
@@ -1629,6 +1636,7 @@ export function mount(el, params, ctx) {
     destroy() {
       destroyed = true;
       window.removeEventListener('resize', onResize);
+      window.removeEventListener('sb-theme', onThemeChange);
       window.removeEventListener('keyup', onKeyUp);
       if (editing) endEdit();
       flush().then(() => discardIfEmpty());

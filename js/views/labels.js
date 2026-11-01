@@ -73,13 +73,13 @@ export function mount(el, params, ctx) {
       if (!slot) return;
       try {
         const data = await V.loadPage(o.page.id);
-        const { renderPageCanvas } = await import('../editor/inkdraw.js');
+        const { renderPageCanvas, pageDark } = await import('../editor/inkdraw.js');
         const b = o.box;
         const w = Math.min(PAGE_W, Math.max(360, b.w + 260));
         const h = w * 0.5;
         const x = Math.max(0, Math.min(PAGE_W - w, b.x + b.w / 2 - w / 2));
         const y = Math.max(0, Math.min(o.page.h - h, b.y + b.h / 2 - h / 2));
-        const c = await renderPageCanvas(o.page, data, 240, { crop: { x, y, w, h } });
+        const c = await renderPageCanvas(o.page, data, 240, { crop: { x, y, w, h }, dark: pageDark(o.page) });
         c.className = 'lh-canvas';
         c.setAttribute('aria-hidden', 'true');
         slot.replaceChildren(c);

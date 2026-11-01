@@ -2,6 +2,7 @@
 
 import { uid, firstLine } from './util.js';
 import { docTasks, mdTasks } from './doc.js';
+import { isDarkUI } from './theme.js';
 
 // Region colours: a dot/line colour and a darker (or lighter, at night) text colour
 // that passes contrast on the map background.
@@ -17,7 +18,7 @@ export const PALETTE = {
 };
 export const UNSORTED = { light: ['#8A96A1', '#51606C'], dark: ['#7D8C99', '#A7B4B0'] };
 
-export const isDark = () => window.matchMedia('(prefers-color-scheme: dark)').matches;
+export const isDark = () => isDarkUI();
 export function regionColors(region) {
   const p = (region && PALETTE[region.color]) || UNSORTED;
   const [dot, text] = isDark() ? p.dark : p.light;
@@ -132,17 +133,17 @@ export function normNote(n) {
 }
 
 export const PAPERS = [
-  { id: 'blank', name: 'Blank' },
-  { id: 'ruled', name: 'Ruled' },
-  { id: 'narrow', name: 'Narrow ruled' },
-  { id: 'grid', name: 'Grid' },
-  { id: 'dotted', name: 'Dotted' },
+  { id: 'dotted', name: 'Dot grid' },
+  { id: 'ruled', name: 'Lined' },
+  { id: 'narrow', name: 'Narrow lined' },
+  { id: 'grid', name: 'Squared' },
   { id: 'cornell', name: 'Cornell' },
+  { id: 'blank', name: 'Blank' },
 ];
 export const PAPER_COLORS = [
-  { id: 'white', name: 'White', bg: '#FFFFFF', line: '#C9D6E3', margin: '#E6A6A6' },
-  { id: 'ivory', name: 'Ivory', bg: '#FBF6E9', line: '#D9CDB1', margin: '#E3A88F' },
-  { id: 'night', name: 'Night', bg: '#1B2A38', line: '#33485C', margin: '#7A4B52' },
+  { id: 'white', name: 'White', bg: '#FFFFFF', line: '#DCE3E9', dot: '#B9C4CE', strong: '#C3CDD6' },
+  { id: 'ivory', name: 'Ivory', bg: '#FBF7EF', line: '#E7DECD', dot: '#CDBFA7', strong: '#D6C8AF' },
+  { id: 'night', name: 'Dark', bg: '#1E2B38', line: '#2D3D4C', dot: '#3F5163', strong: '#3B4D5E' },
 ];
 export const PAGE_W = 1000;
 export const A4_H = 1414;
@@ -150,7 +151,7 @@ export const A4_H = 1414;
 export function normPage(p) {
   return {
     id: p.id,
-    paper: PAPERS.some((x) => x.id === p.paper) ? p.paper : 'ruled',
+    paper: PAPERS.some((x) => x.id === p.paper) ? p.paper : 'dotted',
     color: PAPER_COLORS.some((x) => x.id === p.color) ? p.color : 'white',
     h: Number(p.h) > 100 ? Number(p.h) : A4_H,
     bg: p.bg || null,
@@ -166,7 +167,7 @@ export function normNotebook(b) {
     title: b.title || 'Untitled notebook',
     region: b.region || null,
     cover: { style: 'contour', color: '#2B5684', photo: null, titleStyle: 'printed', ...(b.cover || {}) },
-    paper: b.paper || 'ruled',
+    paper: b.paper || 'dotted',
     paperColor: b.paperColor || 'white',
     sealed: !!b.sealed,
     sections: Array.isArray(b.sections) && b.sections.length ? b.sections : [{ id: 's_notes', name: 'Notes' }],

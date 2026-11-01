@@ -5,10 +5,10 @@
 import { html, raw, uid, toast } from '../util.js';
 import { PAGE_W } from '../model.js';
 import { icons } from '../icons.js';
-import { drawPaper, drawContent, drawStroke, fileImage, paperColor } from './inkdraw.js';
+import { drawPaper, drawContent, drawStroke, fileImage, setInkTone, pageDark } from './inkdraw.js';
 import { penExtras } from './ink.js';
 
-const GAP = { ruled: 36, cornell: 36, narrow: 28, grid: 25, dotted: 25, blank: 36 };
+const GAP = { ruled: 36, cornell: 36, narrow: 28, grid: 37.5, dotted: 37.5, blank: 36 };
 const TOP = { ruled: 120, cornell: 120, narrow: 120, grid: 25, dotted: 25, blank: 120 };
 const ADVANCE = 0.84; // lifting the pen beyond this part of the strip moves on
 
@@ -123,18 +123,19 @@ export class ZoomStrip {
     if (!this.box || !this.page || !this.s.data) return;
     const c = this.ctx();
     const b = this.box;
+    const dk = pageDark(this.page);
+    setInkTone(dk);
     c.save();
     c.beginPath(); c.rect(b.x, b.y, b.w, b.h); c.clip();
     if (this.s.layers?.paperHidden) drawPaper(c, { ...this.page, paper: 'blank', bg: null }, this.k, null);
     else drawPaper(c, this.page, this.k, this.page.bg ? fileImage(this.page.bg, () => this.render()) : null);
     // The baseline, stronger than the paper's own lines.
-    c.strokeStyle = 'rgba(43,86,132,0.35)';
+    c.strokeStyle = dk ? 'rgba(169,198,234,0.4)' : 'rgba(43,86,132,0.35)';
     c.lineWidth = 1.2 / this.k;
     c.beginPath(); c.moveTo(b.x, b.base); c.lineTo(b.x + b.w, b.base); c.stroke();
     drawContent(c, this.s.data, { redraw: () => this.render(), visible: this.s.visible });
     if (wet) drawStroke(c, wet);
     c.restore();
-    void paperColor;
   }
 
   wetStroke(d) { return { ...d.stroke, pts: d.pts.flat() }; }

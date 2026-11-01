@@ -159,7 +159,7 @@ async function inkCanvases(n) {
 }
 
 async function typedCanvases(n) {
-  const { drawRichText, fileImageReady } = await import('./editor/inkdraw.js');
+  const { drawRichText, fileImageReady, setInkTone } = await import('./editor/inkdraw.js');
   const { noteDoc } = await import('./editor/rich.js');
   const doc = noteDoc(n);
   const M = 80;
@@ -193,6 +193,7 @@ async function typedCanvases(n) {
       ctx.drawImage(img, M, y, w, h);
       y += h + 24;
     }
+    setInkTone(false);
     y += drawRichText(ctx, doc, M, y, width, { size: 20, font: fontId });
     return y + M;
   };

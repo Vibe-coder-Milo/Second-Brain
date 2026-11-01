@@ -228,6 +228,135 @@ export function mountFormatBar(bar, editor, opts = {}) {
   return { refresh, destroy() { editor.off('selectionUpdate', refresh); editor.off('transaction', refresh); } };
 }
 
+// ---- The typed-note toolbar ---------------------------------------------------------
+// Two rows, shaped and placed like the handwritten-note toolbar: the top row
+// holds the tools and never changes (undo, style, bold, lists, label, insert,
+// record), the row below holds the text settings (font, size, colour, more).
+// It's always there, so the text never jumps when you start typing.
+
+const QUICK_COLOURS = ['#2B5684', '#B0413E', '#2F8A72', '#C0802F', '#8C67B0'];
+
+export function mountNoteBars(tools, props, editor, opts = {}) {
+  const wide = !!opts.wide;
+  const T = (act, ic, label, toggle = false) => html`<button type="button" class="tool" data-act="${act}" aria-label="${label}" ${toggle ? raw('aria-pressed="false"') : ''}>${raw(icons[ic]({ size: 22 }))}</button>`;
+  tools.innerHTML = `${html`
+    ${wide ? html`<div class="tg">${T('undo', 'undo', 'Undo')}${T('redo', 'redo', 'Redo')}</div>` : ''}
+    <div class="tg"><button type="button" class="tool style-chip" data-act="style" aria-label="Text style: headings, lists, quote, callout"><span id="fb-style">Body</span>${raw(icons.chevron({ size: 14 }))}</button>${T('bold', 'bold', 'Bold', true)}${wide ? html`${T('italic', 'italic', 'Italic', true)}${T('underline', 'underline', 'Underline', true)}` : ''}</div>
+    <div class="tg">${T('bullets', 'bullets', 'Bulleted list', true)}${wide ? T('numbers', 'numbers', 'Numbered list', true) : ''}${T('checklist', 'checklist', 'Checklist', true)}</div>
+    <div class="tg">${T('label', 'tag', 'Add a label you can search for')}${T('insert', 'plus', 'Insert: table, image, sticker, post-it, due date, link')}</div>
+    ${wide && opts.onRecord ? html`<div class="tg">${T('record', 'mic', 'Record audio', true)}</div>` : ''}`}`;
+  const dark = opts.dark?.() || false;
+  props.innerHTML = `${html`
+    <button type="button" class="pen-chip" data-act="font" aria-label="Font"><span class="fc-aa">Aa</span><span id="fb-font">Spectral</span>${raw(icons.chevron({ size: 14 }))}</button>
+    <div class="tg fb-size" role="group" aria-label="Text size"><button type="button" class="tool sm" data-act="smaller" aria-label="Smaller text">−</button><span id="fb-size">18</span><button type="button" class="tool sm" data-act="larger" aria-label="Larger text">+</button></div>
+    <div class="tg colours" role="group" aria-label="Text colour"><button type="button" class="ink-swatch" data-tcol="" style="--c:var(--ink)" aria-label="Default colour"></button>${QUICK_COLOURS.slice(0, wide ? 5 : 3).map((c) => html`<button type="button" class="ink-swatch" data-tcol="${c}" style="--c:${dark ? opts.tone(c) : c}" aria-label="Text colour ${c}"></button>`)}<button type="button" class="ink-swatch more" data-act="colour" aria-label="More colours and highlight"></button></div>
+    <div class="tg">${wide ? '' : html`${T('italic', 'italic', 'Italic', true)}${T('underline', 'underline', 'Underline', true)}`}${T('strike', 'strike', 'Strikethrough', true)}${wide ? '' : T('numbers', 'numbers', 'Numbered list', true)}${T('outdent', 'outdent', 'Indent less')}${T('indent', 'indent', 'Indent more')}${T('align', 'align', 'Alignment')}</div>
+    ${opts.hideKeyboard ? html`<div class="tg">${T('hidekb', 'keyboardDown', 'Hide keyboard')}</div>` : ''}`}`;
+  props.hidden = false;
+
+  const onDown = (e) => { if (e.target.closest('button')) e.preventDefault(); };
+  const onClick = async (e) => {
+    const b = e.target.closest('button');
+    if (!b) return;
+    const act = b.dataset.act;
+    if (act === 'record') { opts.onRecord?.(); return; }
+    if (act === 'undo' || act === 'redo') { opts.ensureEditing?.(); editor.chain().focus()[act]().run(); refresh(); return; }
+    opts.ensureEditing?.();
+    const ch = () => editor.chain().focus();
+    if (b.dataset.tcol !== undefined) {
+      const c = b.dataset.tcol;
+      (c ? ch().setColor(c) : ch().unsetColor()).run();
+      refresh();
+      return;
+    }
+    switch (act) {
+      case 'style': {
+        const p = popover(b, `${styleMenuHtml(editor, STYLES)}<p class="hint" style="padding:6px 10px 8px">Type / anywhere to open this menu</p>`, { label: 'Text styles', width: 290 });
+        p.el.querySelectorAll('[data-style]').forEach((x) => { x.onclick = () => { p.close(); runAction(editor, x.dataset.style, b, opts); }; });
+        break;
+      }
+      case 'insert': {
+        const items = EXTRA.filter((x) => x.id !== 'label').map((x) => (x.id === 'table' && editor.isActive('table') ? { ...x, name: 'Table options' } : x));
+        const rec = !wide && opts.onRecord;
+        const p = popover(b, `${html`<div class="pop-head">Insert</div>${items.map((x) => html`<button type="button" class="pop-item" data-ins="${x.id}">${raw(icons[x.icon]({ size: 20 }))}${x.name}</button>`)}${rec ? html`<div class="pop-head">More</div><button type="button" class="pop-item" data-ins="record">${raw(icons.mic({ size: 20 }))}Record audio</button>` : ''}`}`, { label: 'Insert', width: 260 });
+        p.el.querySelectorAll('[data-ins]').forEach((x) => { x.onclick = () => { p.close(); if (x.dataset.ins === 'record') opts.onRecord?.(); else runAction(editor, x.dataset.ins, b, opts); }; });
+        break;
+      }
+      case 'font': fontMenu(editor, b, opts); break;
+      case 'smaller': ch().setFontSize(`${Math.max(12, sizeOf(editor) - 2)}px`).run(); break;
+      case 'larger': ch().setFontSize(`${Math.min(48, sizeOf(editor) + 2)}px`).run(); break;
+      case 'bold': ch().toggleBold().run(); break;
+      case 'italic': ch().toggleItalic().run(); break;
+      case 'underline': ch().toggleUnderline().run(); break;
+      case 'strike': ch().toggleStrike().run(); break;
+      case 'colour': colourMenu(editor, b); break;
+      case 'bullets': ch().toggleBulletList().run(); break;
+      case 'numbers': ch().toggleOrderedList().run(); break;
+      case 'checklist': ch().toggleTaskList().run(); break;
+      case 'indent': if (!ch().sinkListItem('listItem').run()) ch().sinkListItem('taskItem').run(); break;
+      case 'outdent': if (!ch().liftListItem('listItem').run()) ch().liftListItem('taskItem').run(); break;
+      case 'align': {
+        const order = ['left', 'center', 'right'];
+        const cur = order.find((a) => editor.isActive({ textAlign: a })) || 'left';
+        ch().setTextAlign(order[(order.indexOf(cur) + 1) % 3]).run();
+        break;
+      }
+      case 'hidekb': editor.commands.blur(); opts.onHideKeyboard?.(); break;
+      default: if (act) await runAction(editor, act, b, opts);
+    }
+    refresh();
+  };
+  for (const bar of [tools, props]) {
+    bar.addEventListener('pointerdown', onDown);
+    bar.addEventListener('click', onClick);
+    tooltips(bar);
+  }
+
+  const refresh = () => {
+    const name = STYLES.slice(0, 3).find((s) => s.active(editor))?.name
+      || (editor.isActive('bulletList') ? 'Bullets' : editor.isActive('orderedList') ? 'Numbers' : editor.isActive('taskList') ? 'Checklist' : editor.isActive('callout') ? 'Callout' : editor.isActive('blockquote') ? 'Quote' : 'Body');
+    const st = tools.querySelector('#fb-style');
+    if (st) st.textContent = name;
+    const sz = props.querySelector('#fb-size');
+    if (sz) sz.textContent = String(sizeOf(editor));
+    const fn = props.querySelector('#fb-font');
+    if (fn) fn.textContent = FONTS.find((f) => f.id === (editor.getAttributes('textStyle').fontFamily || opts.noteFont?.() || 'Spectral'))?.name || 'Spectral';
+    const press = { bold: 'bold', italic: 'italic', underline: 'underline', strike: 'strike', bullets: 'bulletList', numbers: 'orderedList', checklist: 'taskList' };
+    for (const [act, mark] of Object.entries(press)) for (const bar of [tools, props]) bar.querySelector(`[data-act=${act}]`)?.setAttribute('aria-pressed', editor.isActive(mark) ? 'true' : 'false');
+    const col = editor.getAttributes('textStyle').color || '';
+    props.querySelectorAll('[data-tcol]').forEach((x) => x.setAttribute('aria-pressed', x.dataset.tcol.toLowerCase() === col.toLowerCase() ? 'true' : 'false'));
+    const ins = tools.querySelector('[data-act=insert]');
+    if (ins) ins.setAttribute('aria-label', editor.isActive('table') ? 'Insert, or change this table' : 'Insert: table, image, sticker, post-it, due date, link');
+  };
+  editor.on('selectionUpdate', refresh);
+  editor.on('transaction', refresh);
+  refresh();
+  return {
+    refresh,
+    setRecording(on) { tools.querySelector('[data-act=record]')?.setAttribute('aria-pressed', on ? 'true' : 'false'); },
+    destroy() {
+      editor.off('selectionUpdate', refresh);
+      editor.off('transaction', refresh);
+      for (const bar of [tools, props]) { bar.removeEventListener('pointerdown', onDown); bar.removeEventListener('click', onClick); bar.innerHTML = ''; }
+    },
+  };
+}
+
+// On iPhone, keep the toolbar in view at the top while the keyboard is up
+// (Safari otherwise slides the page up under it). Returns a cleanup.
+export function pinTop(elm) {
+  if (isWide() || !window.visualViewport) return () => {};
+  const vv = window.visualViewport;
+  const place = () => {
+    const off = Math.max(0, Math.round(vv.offsetTop));
+    elm.style.transform = off > 1 ? `translateY(${off}px)` : '';
+  };
+  vv.addEventListener('resize', place);
+  vv.addEventListener('scroll', place);
+  place();
+  return () => { vv.removeEventListener('resize', place); vv.removeEventListener('scroll', place); elm.style.transform = ''; };
+}
+
 // ---- "/" menu and [[ autocomplete -------------------------------------------------
 
 export function attachSuggest(editor, opts = {}) {

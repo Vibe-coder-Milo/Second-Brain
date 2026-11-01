@@ -126,6 +126,19 @@ export async function unlock(passphrase) {
   await loadAll();
   state.status = 'unlocked';
   emit({ type: 'unlock' });
+  migrateDefaults().catch((e) => console.warn('migrate', e));
+}
+
+// One-off changes to defaults. Lined paper was the default for new pages;
+// dot grid is now. Notebooks still on the old default switch (pages already
+// written keep their paper).
+async function migrateDefaults() {
+  if (state.config?.paperV2) return;
+  for (const nb of [...state.notebooks.values()]) {
+    if (nb.paper === 'ruled' && (!nb.sealed || state.keys.s)) await saveNotebook({ ...nb, paper: 'dotted' }, { touch: false });
+  }
+  if (state.device?.paper === 'ruled') await updateDevice({ paper: 'dotted' });
+  await saveConfig({ paperV2: true });
 }
 
 export async function loadAll() {

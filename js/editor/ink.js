@@ -6,7 +6,8 @@ import { PAGE_W } from '../model.js';
 import { uid, html, raw, toast } from '../util.js';
 import { state } from '../vault.js';
 import * as V from '../vault.js';
-import { PENS, HL, strokePath, strokeBox, drawStroke, drawPaper, drawContent, fileImage, drawRichText, renderPageCanvas, layerOf } from './inkdraw.js';
+import { PENS, HL, strokePath, strokeBox, drawStroke, drawPaper, drawContent, fileImage, drawRichText, renderPageCanvas, layerOf, setInkTone, pageDark, darkInk, paperColor } from './inkdraw.js';
+import { onTheme } from '../theme.js';
 import { getStroke } from '../../vendor/freehand.js';
 import { labelDef, POSTIT_COLORS, postitColor, stickerDef } from '../stickers.js';
 import { icons } from '../icons.js';
@@ -161,6 +162,8 @@ export class InkSurface {
     this.bind();
     this.ro = new ResizeObserver(() => this.layout());
     this.ro.observe(this.scroll);
+    // Dark mode switched on or off: redraw in the new colours.
+    this.offTheme = onTheme(() => { if (this.page) this.layout(); });
     // Only the part of the page near the screen has canvas pixels, so long
     // pages and deep zoom stay sharp. Scrolling moves that window along.
     this.onScroll = () => {
@@ -376,6 +379,10 @@ export class InkSurface {
     const bgImg = this.page.bg ? fileImage(this.page.bg, () => this.render()) : null;
     const b = this.ctxFor(this.bg);
     b.clearRect(0, 0, PAGE_W, this.page.h);
+    this.dark = pageDark(this.page);
+    this.host.classList.toggle('paper-dark', this.dark);
+    setInkTone(this.dark);
+    this.pageEl.style.background = this.page.bg ? '#FFFFFF' : paperColor(this.page).bg;
     if (this.layers.paperHidden) drawPaper(b, { ...this.page, paper: 'blank', bg: null }, this.scale, null, this.area);
     else drawPaper(b, this.page, this.scale, bgImg, this.area);
     this.renderMain();
@@ -383,6 +390,7 @@ export class InkSurface {
   }
 
   renderMain() {
+    setInkTone(this.dark);
     const m = this.ctxFor(this.main);
     m.clearRect(0, 0, PAGE_W, this.page.h);
     const skip = new Set();
@@ -682,11 +690,12 @@ export class InkSurface {
     const w = this.ctxFor(this.wet);
     w.clearRect(0, 0, PAGE_W, this.page.h);
     if (!d || d.kind !== 'stroke') return;
+    setInkTone(this.dark);
     const s = this.wetStroke(d);
     if (s.t === 'hl') {
       w.save();
-      w.globalAlpha = HL.alpha;
-      w.fillStyle = s.c;
+      w.globalAlpha = this.dark ? HL.alphaDark : HL.alpha;
+      w.fillStyle = this.dark ? darkInk(s.c) : s.c;
       const outline = getStroke(d.pts, { size: s.s, thinning: 0, smoothing: 0.5, streamline: 0.55, simulatePressure: false, last: false });
       const p = new Path2D();
       if (outline.length) { p.moveTo(outline[0][0], outline[0][1]); for (const q of outline) p.lineTo(q[0], q[1]); p.closePath(); }
@@ -1047,6 +1056,7 @@ export class InkSurface {
       w.scale(d.k, d.k);
       w.translate(-b.x, -b.y);
     }
+    setInkTone(this.dark);
     drawContent(w, {
       strokes: this.data.strokes.filter((s) => this.sel.strokes.has(s.id)),
       objects: this.data.objects.filter((o) => this.sel.objects.has(o.id)),
@@ -1130,6 +1140,7 @@ export class InkSurface {
     c.height = Math.max(1, Math.round(b.h * k));
     const ctx = c.getContext('2d');
     ctx.setTransform(k, 0, 0, k, -b.x * k, -b.y * k);
+    setInkTone(false);
     drawContent(ctx, { strokes: this.data.strokes.filter((s) => this.sel.strokes.has(s.id)), objects: this.data.objects.filter((o) => this.sel.objects.has(o.id)) });
     const blob = await new Promise((r) => c.toBlob(r, 'image/png'));
     const fileId = await V.addFile(new Uint8Array(await blob.arrayBuffer()), { type: 'image/png' });
@@ -1221,9 +1232,15 @@ export class InkSurface {
     py = Math.min(this.page.h - o.h / 2, py);
     o = { id: uid('o'), x: px - o.w / 2, y: py - o.h / 2, rot: 0, t: now, at: now, ...o };
     if (o.type === 'table') {
-      // Sit tables on the ruled lines and inside the margin.
-      o.x = Math.max(124, Math.min(PAGE_W - o.w - 30, o.x));
-      o.y = Math.max(120, 120 + Math.round((o.y - 120) / 36) * 36);
+      // Sit tables on the paper's lines or dots.
+      const paper = this.page.paper;
+      const dots = paper === 'dotted' || paper === 'grid';
+      const g = dots ? 25 : paper === 'narrow' ? 28 : 36;
+      const top = dots ? 25 : 120;
+      if (dots) { o.h = o.rows * 75; o.w = Math.round(o.w / 25) * 25; }
+      o.x = Math.max(paper === 'ruled' || paper === 'narrow' ? 124 : 50, Math.min(PAGE_W - o.w - 30, o.x));
+      if (dots) o.x = Math.round(o.x / 25) * 25;
+      o.y = Math.max(top, top + Math.round((o.y - top) / g) * g);
     }
     this.snapshot();
     this.data.objects.push(o);
@@ -1363,6 +1380,7 @@ export class InkSurface {
   }
 
   destroy() {
+    this.offTheme?.();
     this.scroll.removeEventListener('scroll', this.onScroll);
     this.endEdit();
     this.ro.disconnect();

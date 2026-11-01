@@ -8,6 +8,63 @@ import { state } from '../vault.js';
 import * as V from '../vault.js';
 import { stickerDef, stickerSVG, svgImage, labelDef, tapePattern, postitColor } from '../stickers.js';
 import { labelMap } from '../model.js';
+import { isDarkUI } from '../theme.js';
+
+// ---- Dark pages -------------------------------------------------------------------
+// In dark mode pages are drawn on dark paper, with dark ink shown light and
+// colours brightened a little, so the page sits calmly in the dark app.
+// Exports and anything saved as a file always use the real colours.
+
+let dark = false;
+export function setInkTone(on) { dark = !!on; }
+export const inkTone = () => dark;
+// Should this page be shown dark right now? (Pages with a PDF or photo
+// behind them stay light: the background is light.)
+export function pageDark(page) {
+  if (!page || page.bg) return false;
+  return page.color === 'night' || (isDarkUI() && state.device?.darkPaper !== false);
+}
+
+const toneCache = new Map();
+export function darkInk(c) {
+  if (typeof c !== 'string' || c[0] !== '#') return c;
+  const hit = toneCache.get(c);
+  if (hit) return hit;
+  let hex = c.slice(1);
+  if (hex.length === 3) hex = [...hex].map((x) => x + x).join('');
+  if (hex.length !== 6 && hex.length !== 8) return c;
+  const alpha = hex.length === 8 ? hex.slice(6) : '';
+  const [r, g, b] = [0, 2, 4].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  let h = 0;
+  let sat = 0;
+  if (max !== min) {
+    const d = max - min;
+    sat = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    h = max === r ? (g - b) / d + (g < b ? 6 : 0) : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+    h /= 6;
+  }
+  let L = l;
+  let S = sat;
+  if (sat < 0.25 || l < 0.22) {
+    // Black, greys and near-black navy read as soft white.
+    if (l < 0.6) { L = 0.9 - l * 0.3; S = Math.min(sat, 0.18); }
+  } else if (l < 0.66) {
+    L = 0.62 + l * 0.18;
+    S = Math.min(sat, 0.72);
+  }
+  const f = (n) => {
+    const k = (n + h * 12) % 12;
+    const a = S * Math.min(L, 1 - L);
+    return Math.round((L - a * Math.max(-1, Math.min(k - 3, 9 - k, 1))) * 255).toString(16).padStart(2, '0');
+  };
+  const out = `#${f(0)}${f(8)}${f(4)}${alpha}`.toUpperCase();
+  toneCache.set(c, out);
+  return out;
+}
+const tint = (c) => (dark ? darkInk(c) : c);
 
 // ---- Pens -------------------------------------------------------------------------
 
@@ -19,7 +76,7 @@ export const PENS = {
   marker: { name: 'Marker', sizes: [4, 6.5, 10], o: { thinning: 0, smoothing: 0.55, streamline: 0.5 } },
   calligraphy: { name: 'Calligraphy', sizes: [4, 6.5, 10], nib: true },
 };
-export const HL = { sizes: [12, 18, 26], alpha: 0.36 };
+export const HL = { sizes: [12, 18, 26], alpha: 0.36, alphaDark: 0.38 };
 export const mm = (units) => `${(units * 0.21).toFixed(1).replace(/\.0$/, '')} mm`;
 
 export const INK_COLORS = [
@@ -143,15 +200,15 @@ export function strokeBox(s) {
 
 export function drawStroke(ctx, s, fade = 1) {
   ctx.save();
-  ctx.fillStyle = s.c;
-  ctx.globalAlpha = (s.t === 'hl' ? HL.alpha : (PENS[s.pen]?.alpha || 1)) * fade;
+  ctx.fillStyle = tint(s.c);
+  ctx.globalAlpha = (s.t === 'hl' ? (dark ? HL.alphaDark : HL.alpha) : (PENS[s.pen]?.alpha || 1)) * fade;
   ctx.fill(strokePath(s), 'nonzero');
   ctx.restore();
 }
 
 // ---- Paper --------------------------------------------------------------------------
 
-export const paperColor = (page) => PAPER_COLORS.find((c) => c.id === page.color) || PAPER_COLORS[0];
+export const paperColor = (page) => (dark ? PAPER_COLORS.find((c) => c.id === 'night') : PAPER_COLORS.find((c) => c.id === page.color)) || PAPER_COLORS[0];
 
 export function drawPaper(ctx, page, scale, bgImage = null, area = null) {
   const h = page.h;
@@ -174,25 +231,21 @@ export function drawPaper(ctx, page, scale, bgImage = null, area = null) {
   };
   if (page.paper === 'ruled' || page.paper === 'cornell') lines(36);
   if (page.paper === 'narrow') lines(28);
-  if (page.paper === 'ruled' || page.paper === 'narrow') {
-    ctx.strokeStyle = pc.margin;
-    ctx.beginPath(); ctx.moveTo(110, 0); ctx.lineTo(110, h); ctx.stroke();
-  }
   if (page.paper === 'cornell') {
-    ctx.strokeStyle = pc.margin;
+    ctx.strokeStyle = pc.strong;
     ctx.lineWidth = lw * 1.4;
     ctx.beginPath(); ctx.moveTo(280, 84); ctx.lineTo(280, h - 280); ctx.moveTo(0, h - 280); ctx.lineTo(PAGE_W, h - 280); ctx.moveTo(0, 84); ctx.lineTo(PAGE_W, 84); ctx.stroke();
   }
   if (page.paper === 'grid') {
-    ctx.globalAlpha = 0.8;
+    ctx.globalAlpha = 0.75;
     ctx.beginPath();
     for (let x = 25; x < PAGE_W; x += 25) { ctx.moveTo(x, 0); ctx.lineTo(x, h); }
     for (let y = 25; y < h; y += 25) { ctx.moveTo(0, y); ctx.lineTo(PAGE_W, y); }
     ctx.stroke();
   }
   if (page.paper === 'dotted') {
-    ctx.fillStyle = pc.line;
-    const r = Math.max(1.6, 1.3 / scale);
+    ctx.fillStyle = pc.dot;
+    const r = Math.max(1.5, 1.2 / scale);
     const ya = area ? Math.max(25, Math.floor((area.y - 30) / 25) * 25) : 25;
     const yb = area ? Math.min(h, area.y + area.h + 30) : h;
     for (let y = ya; y < yb; y += 25) for (let x = 25; x < PAGE_W; x += 25) { ctx.beginPath(); ctx.arc(x, y, r, 0, 6.3); ctx.fill(); }
@@ -272,7 +325,7 @@ function rotated(ctx, o, fn) {
 export function drawObject(ctx, o, { redraw } = {}) {
   if (o.type === 'table') {
     rotated(ctx, o, () => {
-      const c = o.c || '#4A6E8C';
+      const c = tint(o.c || '#4A6E8C');
       const rh = o.h / o.rows;
       const cw = o.w / o.cols;
       if (o.header) { ctx.fillStyle = `${c}1F`; ctx.fillRect(0, 0, o.w, rh); }
@@ -407,7 +460,9 @@ const FONT_CSS = {
   'Atkinson Hyperlegible': "'Atkinson Hyperlegible', system-ui, sans-serif", 'JetBrains Mono': "'JetBrains Mono', ui-monospace, monospace", Caveat: "'Caveat', cursive",
 };
 
-export function drawRichText(ctx, doc, x, y, width, { size = 20, font = 'Overpass', color = '#1B2A38', redraw } = {}) {
+export function drawRichText(ctx, doc, x, y, width, { size = 20, font = 'Overpass', color: color0 = '#1B2A38', redraw } = {}) {
+  const color = tint(color0);
+  const soft = dark ? '#3A4B5B' : '#CDD9D6';
   const base = FONT_CSS[font] || FONT_CSS.Overpass;
   let cy = y;
   const lm = labelMap(state.config);
@@ -423,14 +478,14 @@ export function drawRichText(ctx, doc, x, y, width, { size = 20, font = 'Overpas
           italic: !!m.italic,
           under: !!m.underline,
           strike: !!m.strike,
-          color: m.textStyle?.color || style.color || color,
+          color: m.highlight ? (m.textStyle?.color || '#1B2A38') : tint(m.textStyle?.color || style.color || color),
           hl: m.highlight ? (m.highlight.color || '#FFF1B8') : null,
           size: m.textStyle?.fontSize ? (parseFloat(m.textStyle.fontSize) / 18) * style.size : style.size,
           family: m.textStyle?.fontFamily ? (FONT_CSS[m.textStyle.fontFamily] || base) : style.family,
         });
       } else if (c.type === 'hardBreak') runs.push({ br: true });
       else if (c.type === 'labelChip') runs.push({ label: lm.get(c.attrs?.label) || { name: c.attrs?.label, color: '#6B7A85' }, size: style.size });
-      else if (c.type === 'dueDate' && c.attrs?.date) runs.push({ text: `📅 ${new Date(`${c.attrs.date}T12:00`).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}`, size: style.size * 0.85, color: '#51606C', family: base, bold: true });
+      else if (c.type === 'dueDate' && c.attrs?.date) runs.push({ text: `📅 ${new Date(`${c.attrs.date}T12:00`).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}`, size: style.size * 0.85, color: tint('#51606C'), family: base, bold: true });
       else if (c.type === 'sticker') runs.push({ sticker: c.attrs, size: style.size });
     }
     return runs;
@@ -501,7 +556,7 @@ export function drawRichText(ctx, doc, x, y, width, { size = 20, font = 'Overpas
       case 'paragraph': cy += paragraph(runsOf(b, st), px, pw) + size * 0.25; break;
       case 'heading': {
         const lv = b.attrs?.level || 1;
-        const s2 = { ...st, size: size * [0, 1.7, 1.35, 1.12][lv], bold: true, color: lv === 3 ? '#51606C' : color };
+        const s2 = { ...st, size: size * [0, 1.7, 1.35, 1.12][lv], bold: true, color: lv === 3 ? tint('#51606C') : color };
         cy += size * 0.3;
         cy += paragraph(runsOf(b, s2), px, pw, { lineH: 1.25 }) + size * 0.2;
         break;
@@ -518,8 +573,8 @@ export function drawRichText(ctx, doc, x, y, width, { size = 20, font = 'Overpas
           if (b.type === 'orderedList') { ctx.font = `600 ${size}px ${base}`; ctx.fillText(`${n++}.`, px, top + size * 1.05); }
           if (b.type === 'taskList') {
             const bx = px + 1; const by = top + size * 0.22; const bs = size * 0.86;
-            ctx.strokeStyle = '#51606C'; ctx.lineWidth = 1.6; ctx.strokeRect(bx, by, bs, bs);
-            if (item.attrs?.checked) { ctx.strokeStyle = '#2F8A72'; ctx.lineWidth = 2.4; ctx.beginPath(); ctx.moveTo(bx + bs * 0.2, by + bs * 0.55); ctx.lineTo(bx + bs * 0.42, by + bs * 0.78); ctx.lineTo(bx + bs * 0.82, by + bs * 0.25); ctx.stroke(); }
+            ctx.strokeStyle = tint('#51606C'); ctx.lineWidth = 1.6; ctx.strokeRect(bx, by, bs, bs);
+            if (item.attrs?.checked) { ctx.strokeStyle = tint('#2F8A72'); ctx.lineWidth = 2.4; ctx.beginPath(); ctx.moveTo(bx + bs * 0.2, by + bs * 0.55); ctx.lineTo(bx + bs * 0.42, by + bs * 0.78); ctx.lineTo(bx + bs * 0.82, by + bs * 0.25); ctx.stroke(); }
           }
           for (const c of item.content || []) {
             if (c.type === 'paragraph' && item.attrs?.checked) {
@@ -535,7 +590,7 @@ export function drawRichText(ctx, doc, x, y, width, { size = 20, font = 'Overpas
       case 'blockquote': {
         const top = cy;
         for (const c of b.content || []) block(c, px + size * 0.9, pw - size * 0.9, depth);
-        ctx.fillStyle = '#CDD9D6'; ctx.fillRect(px + 2, top + 2, 3, cy - top - 6);
+        ctx.fillStyle = soft; ctx.fillRect(px + 2, top + 2, 3, cy - top - 6);
         break;
       }
       case 'callout':
@@ -559,7 +614,7 @@ export function drawRichText(ctx, doc, x, y, width, { size = 20, font = 'Overpas
         cy += size * 0.4;
         break;
       }
-      case 'horizontalRule': ctx.fillStyle = '#CDD9D6'; ctx.fillRect(px, cy + size * 0.5, pw, 1.5); cy += size * 1.1; break;
+      case 'horizontalRule': ctx.fillStyle = soft; ctx.fillRect(px, cy + size * 0.5, pw, 1.5); cy += size * 1.1; break;
       case 'table': {
         const rows = b.content || [];
         const cols = Math.max(1, ...rows.map((r) => (r.content || []).length));
@@ -576,9 +631,9 @@ export function drawRichText(ctx, doc, x, y, width, { size = 20, font = 'Overpas
             cy = save;
           });
           (r.content || []).forEach((cell, ci) => {
-            const bg = cell.attrs?.background || (cell.type === 'tableHeader' ? '#EEF2F1' : null);
+            const bg = cell.attrs?.background || (cell.type === 'tableHeader' ? (dark ? '#26384A' : '#EEF2F1') : null);
             if (bg) { ctx.save(); ctx.globalCompositeOperation = 'destination-over'; ctx.fillStyle = bg; ctx.fillRect(px + ci * cw, top, cw, rowH); ctx.restore(); }
-            ctx.strokeStyle = '#CDD9D6'; ctx.lineWidth = 1; ctx.strokeRect(px + ci * cw, top, cw, rowH);
+            ctx.strokeStyle = soft; ctx.lineWidth = 1; ctx.strokeRect(px + ci * cw, top, cw, rowH);
           });
           cy = top + rowH;
         }
@@ -632,7 +687,7 @@ export function drawContent(ctx, data, { redraw, skip = null, hidden = null, dim
 }
 
 // Render a page to a new canvas at a given pixel width (thumbnails, export, crops).
-export async function renderPageCanvas(page, data, widthPx, { crop = null, visible = null, paperHidden = false } = {}) {
+export async function renderPageCanvas(page, data, widthPx, { crop = null, visible = null, paperHidden = false, dark: darkPage = false } = {}) {
   if (paperHidden) page = { ...page, paper: 'blank', bg: null };
   const bg = page.bg ? await fileImageReady(page.bg) : null;
   for (const o of data.objects || []) {
@@ -647,7 +702,9 @@ export async function renderPageCanvas(page, data, widthPx, { crop = null, visib
   c.height = Math.max(1, Math.round(area.h * scale));
   const ctx = c.getContext('2d');
   ctx.setTransform(scale, 0, 0, scale, -area.x * scale, -area.y * scale);
+  setInkTone(darkPage);
   drawPaper(ctx, page, scale, bg);
+  setInkTone(false);
   // stickers drawn from SVG need to be decoded first
   await Promise.all((data.objects || []).filter((o) => o.type === 'sticker').map((o) => new Promise((res) => {
     const def = stickerDef(o.pack, o.key);
@@ -655,6 +712,8 @@ export async function renderPageCanvas(page, data, widthPx, { crop = null, visib
     const img = svgImage(stickerSVG(def));
     if (img.complete && img.naturalWidth) res(); else { img.addEventListener('load', res, { once: true }); img.addEventListener('error', res, { once: true }); setTimeout(res, 1500); }
   })));
+  setInkTone(darkPage);
   drawContent(ctx, data, { visible });
+  setInkTone(false);
   return c;
 }

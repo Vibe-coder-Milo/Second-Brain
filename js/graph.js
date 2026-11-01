@@ -320,9 +320,8 @@ export function createMap(el, handlers = {}) {
   ro.observe(el);
   sizeToContainer();
 
-  const mql = window.matchMedia('(prefers-color-scheme: dark)');
   const onScheme = () => { theme = readTheme(); };
-  mql.addEventListener?.('change', onScheme);
+  window.addEventListener('sb-theme', onScheme);
 
   g.graphData(build());
   // Frame the map straight away (positions come from the warm-up ticks), then
@@ -349,7 +348,7 @@ export function createMap(el, handlers = {}) {
     fit() { fitView(400); },
     destroy() {
       ro.disconnect();
-      mql.removeEventListener?.('change', onScheme);
+      window.removeEventListener('sb-theme', onScheme);
       try { g.pauseAnimation(); g._destructor?.(); } catch { /* ignore */ }
       el.innerHTML = '';
     },
