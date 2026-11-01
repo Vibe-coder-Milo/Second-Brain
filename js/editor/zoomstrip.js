@@ -6,6 +6,7 @@ import { html, raw, uid, toast } from '../util.js';
 import { PAGE_W } from '../model.js';
 import { icons } from '../icons.js';
 import { drawPaper, drawContent, drawStroke, fileImage, paperColor } from './inkdraw.js';
+import { penExtras } from './ink.js';
 
 const GAP = { ruled: 36, cornell: 36, narrow: 28, grid: 25, dotted: 25, blank: 36 };
 const TOP = { ruled: 120, cornell: 120, narrow: 120, grid: 25, dotted: 25, blank: 120 };
@@ -158,7 +159,7 @@ export class ZoomStrip {
       const hl = tool.tool === 'hl';
       this.drawing = {
         id: e.pointerId,
-        stroke: { id: uid('k'), at: Date.now(), t: hl ? 'hl' : 'pen', pen: hl ? null : tool.pen, c: hl ? tool.hlColor : tool.color, s: hl ? tool.hlSize : tool.size, sp: e.pointerType === 'pen' ? 0 : 1, pts: [] },
+        stroke: { id: uid('k'), at: Date.now(), t: hl ? 'hl' : 'pen', pen: hl ? null : tool.pen, c: hl ? tool.hlColor : tool.color, s: hl ? tool.hlSize : tool.size, sp: e.pointerType === 'pen' ? 0 : 1, pts: [], ...penExtras(tool, hl) },
         pts: [[x, y, e.pointerType === 'pen' ? (e.pressure || 0.5) : 0.5]],
         maxSx: e.offsetX,
       };

@@ -1,24 +1,25 @@
 // A handwritten note: pages you write on with Apple Pencil, with text boxes,
 // stickers, post-its, photos and imported PDF pages.
 
-import { html, raw, $, fmtDate, toast, debounce, isWide, uid } from '../util.js';
+import { html, raw, $, fmtDate, toast, debounce, isWide, uid, copyText } from '../util.js';
+import { readStrokes, readNote, handOn } from '../handwriting.js';
 import * as V from '../vault.js';
 import { state } from '../vault.js';
-import { newNote, newPage, displayTitle, PAPERS, PAPER_COLORS } from '../model.js';
+import { newNote, newPage, displayTitle, PAPERS, PAPER_COLORS, PAGE_W, A4_H } from '../model.js';
 import { refreshInkSummary } from '../notework.js';
 import { icons } from '../icons.js';
 import { openSheet, menuSheet, confirmSheet, popover, stickerDrawer, notePicker, passphraseSheet } from '../ui.js';
-import { InkSurface } from '../editor/ink.js';
+import { InkSurface, penExtras } from '../editor/ink.js';
 import { ZoomStrip } from '../editor/zoomstrip.js';
 import { startRecording, stopRecording, isRecording, recordingTime } from '../recorder.js';
 import { mountPlayer } from './recordings.js';
-import { PENS, HL, INK_COLORS, HL_COLORS, DEFAULT_FAVS, mm, renderPageCanvas, layerView, noteLayers, layerOf } from '../editor/inkdraw.js';
+import { PENS, HL, INK_COLORS, HL_COLORS, DEFAULT_FAVS, mm, renderPageCanvas, layerView, noteLayers, layerOf, drawStroke, SMOOTHING, strokeBox } from '../editor/inkdraw.js';
 import { linkedWith, mentions, related, subNotes } from '../connections.js';
 import { notebookPicker, textSheet } from './notebooks.js';
 
 const activeLayers = new Map(); // note id -> the layer you're writing on (this session)
 
-const DEFAULT_TOOL = { tool: 'pen', pen: 'fountain', color: '#1B2A38', size: 3.4, hlColor: '#F7D046', hlSize: 18, eraserMode: 'stroke', hlOnly: false, eraserSize: 16, fingerDraw: false };
+const DEFAULT_TOOL = { tool: 'pen', pen: 'fountain', color: '#1B2A38', size: 3.4, smoothing: 2, pressure: true, hlColor: '#F7D046', hlSize: 18, eraserMode: 'stroke', hlOnly: false, eraserSize: 16, fingerDraw: false };
 
 export function mount(el, params, ctx) {
   let id = params.id;
@@ -71,6 +72,8 @@ export function mount(el, params, ctx) {
     if (params.page) pageIdx = Math.max(0, n.pages.findIndex((p) => p.id === params.page));
     draw();
     document.body.classList.add('inking');
+    // Catch up on reading pages written before (or on another device).
+    if (handOn()) setTimeout(() => { if (note()) readNote(id).catch(() => {}); }, 2000);
   }
 
   function crumbs(n) {
@@ -112,8 +115,9 @@ export function mount(el, params, ctx) {
     drawTools();
     surface = new InkSurface($('#iv-host', el), {
       getTool: () => tool,
-      onChange: (data) => { queueSave(data); zoom?.render(); },
+      onChange: (data) => { queueSave(data); zoom?.render(); maybeGrow(data); },
       pickLayer: (anchor) => pickLayer(anchor),
+      readHandwriting: (strokes, box) => convertSheet(strokes, box),
       onSelection: () => {},
       onTextEditing: (ed) => textEditing(ed),
       pickColour: (anchor, cb) => colourPop(anchor, cb),
@@ -121,6 +125,38 @@ export function mount(el, params, ctx) {
     });
     applyLayers();
     showPage(pageIdx);
+  }
+
+  // ---------- Endless scroll ----------
+  // In endless layout the page gets longer as you near the bottom.
+  function maybeGrow(data) {
+    const n = note();
+    if (n?.layout !== 'scroll') return;
+    const page = n.pages[pageIdx];
+    if (!page) return;
+    let bottom = 0;
+    for (const s of data.strokes) { const b = strokeBox(s); bottom = Math.max(bottom, b.y + b.h); }
+    for (const o of data.objects) bottom = Math.max(bottom, o.y + (o.h || o._h || 40));
+    if (bottom > page.h - 450) growPage(Math.ceil((bottom + 900) / 100) * 100);
+  }
+  async function growPage(h, i = pageIdx) {
+    const n = note();
+    const page = n?.pages[i];
+    if (!page || h <= page.h) return;
+    await V.saveNote({ ...n, pages: n.pages.map((p, k) => (k === i ? { ...p, h } : p)) });
+    if (i === pageIdx) surface?.setPageHeight(h);
+    drawPageBar();
+  }
+  async function setLayout(layout) {
+    const n = note();
+    if (!n || n.layout === layout) return;
+    await V.saveNote({ ...n, layout });
+    if (layout === 'scroll') {
+      toast('Endless scroll: the page grows as you write.');
+      const d = surface?.data;
+      if (d) maybeGrow(d);
+    } else toast('A4 pages. Pages already made longer stay as they are.');
+    drawPageBar();
   }
 
   // ---------- Layers ----------
@@ -280,12 +316,18 @@ export function mount(el, params, ctx) {
       <div class="tg"><button type="button" class="tool" data-act="undo" aria-label="Undo">${icons.undo({ size: 22 })}</button><button type="button" class="tool" data-act="redo" aria-label="Redo">${icons.redo({ size: 22 })}</button><button type="button" class="tool rec-tool" data-act="record" aria-label="${isRecording() ? 'Stop recording' : 'Record audio'}" aria-pressed="${isRecording() ? 'true' : 'false'}">${icons.mic({ size: 22 })}</button></div>
       <div class="tg">${T('pen', 'pen', `Pen: ${PENS[tool.pen]?.name || 'Fountain'}`)}${T('hl', 'highlighter', 'Highlighter')}${T('eraser', 'eraser', 'Eraser')}${T('lasso', 'lasso', 'Lasso')}${T('shapes', 'shapes', 'Shapes')}${T('text', 'textbox', 'Text box')}</div>
       <div class="tg"><button type="button" class="tool" data-act="postit" aria-label="Post-it note">${icons.postit({ size: 22 })}</button><button type="button" class="tool" data-act="sticker" aria-label="Stickers">${icons.sticker({ size: 22 })}</button><label class="tool" aria-label="Insert image">${icons.image({ size: 22 })}<input type="file" accept="image/*" class="sr-only" id="iv-img"></label></div>
+      ${tool.tool === 'pen' && savedPens().length && isWide() ? html`<div class="tg pens" role="group" aria-label="Your pens">${savedPens().map((sp, i) => ({ sp, i })).slice(-4).map(({ sp, i }) => html`<button type="button" class="pen-fav" data-usepen="${i}" aria-label="${penLabel(sp)}" aria-pressed="${sp.pen === tool.pen && sp.color === tool.color && Math.abs(sp.size - tool.size) < 0.05 ? 'true' : 'false'}"><canvas width="44" height="20" aria-hidden="true"></canvas></button>`)}</div>` : ''}
       ${['pen', 'shapes', 'hl'].includes(tool.tool) ? html`<div class="tg colours" role="group" aria-label="Colours">${colours.map((c) => html`<button type="button" class="ink-swatch" data-col="${c}" style="--c:${c}" aria-label="Colour ${INK_COLORS.find((x) => x[1] === c)?.[0] || HL_COLORS.find((x) => x[1] === c)?.[0] || c}" aria-pressed="${c === curCol ? 'true' : 'false'}"></button>`)}<button type="button" class="ink-swatch more" data-act="colours" aria-label="More colours"></button></div>
       <div class="tg sizes" role="group" aria-label="Thickness">${sizes.map((s, i) => html`<button type="button" class="ink-size" data-size="${s}" aria-label="${['Fine', 'Medium', 'Bold'][i]}, ${mm(s)}" aria-pressed="${Math.abs(s - curSize) < 0.01 ? 'true' : 'false'}"><span style="--d:${Math.round(4 + i * 4)}px;--c:${curCol}"></span></button>`)}</div>` : ''}
       ${tool.tool === 'eraser' ? html`<div class="tg"><button type="button" class="chip sm" data-act="eraser-mode">${tool.eraserMode === 'precise' ? 'Precise' : 'Whole strokes'}</button><button type="button" class="chip sm" aria-pressed="${tool.hlOnly ? 'true' : 'false'}" data-act="hl-only">Only highlights</button></div>` : ''}
       ${tool.tool === 'lasso' && surface?.canPaste ? html`<div class="tg"><button type="button" class="chip sm" data-act="paste">Paste</button></div>` : ''}
       <div class="tg"><button type="button" class="tool wide" data-act="layers" aria-label="Layers">${icons.layers({ size: 20 })}<span class="hide-sm">Layers</span></button><button type="button" class="tool wide" data-act="zoomstrip" aria-label="Writing window" aria-pressed="${zoom ? 'true' : 'false'}">${icons.zoomBox({ size: 20 })}<span class="hide-sm">Zoom</span></button></div>
       <div class="tg zoom hide-sm"><button type="button" class="tool" data-act="zoom-out" aria-label="Zoom out">${icons.zoomOut({ size: 20 })}</button><button type="button" class="tool" data-act="zoom-in" aria-label="Zoom in">${icons.zoomIn({ size: 20 })}</button></div>`}`;
+    box.querySelectorAll('.pen-fav').forEach((b) => {
+      const sp = savedPens()[Number(b.dataset.usepen)];
+      requestAnimationFrame(() => penPreview(b.querySelector('canvas'), sp));
+      b.onclick = () => usePen(sp);
+    });
     const lb = box.querySelector('[data-act=layers]');
     if (lb) lb.classList.toggle('dot', noteLayers(note()).some((l) => l.hidden));
     box.querySelectorAll('[data-tool]').forEach((b) => {
@@ -327,29 +369,101 @@ export function mount(el, params, ctx) {
 
   const saveTool = debounce(() => V.updateDevice({ ink: { ...tool } }).catch(() => {}), 600);
 
+  // A small picture of a stroke with given pen settings.
+  function penPreview(canvas, settings) {
+    const dpr = window.devicePixelRatio || 1;
+    const w = canvas.clientWidth || Number(canvas.getAttribute('width')) || 60;
+    const h = canvas.clientHeight || Number(canvas.getAttribute('height')) || 24;
+    canvas.width = Math.round(w * dpr);
+    canvas.height = Math.round(h * dpr);
+    const ctx = canvas.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, w, h);
+    const pts = [];
+    const n = 40;
+    for (let i = 0; i <= n; i++) {
+      const t = i / n;
+      pts.push(6 + t * (w - 12), h / 2 + Math.sin(t * Math.PI * 2) * (h * 0.26), 0.25 + 0.65 * Math.sin(t * Math.PI));
+    }
+    const size = Math.min(settings.size, h / 3);
+    drawStroke(ctx, { id: 'preview', t: 'pen', pen: settings.pen, c: settings.color, s: size, sp: 0, pts, ...penExtras(settings) });
+  }
+
+  const savedPens = () => state.config.penFavs || [];
+  const penLabel = (p) => `${PENS[p.pen]?.name || 'Pen'}, ${INK_COLORS.find((x) => x[1] === p.color)?.[0] || p.color}, ${mm(p.size)}`;
+
   function penPop(anchor) {
     const pen = PENS[tool.pen] || PENS.fountain;
-    const p = popover(anchor, `${html`<div class="pop-head">Pen</div>
-      <div class="pen-types" role="radiogroup" aria-label="Pen type">${Object.entries(PENS).map(([k, v]) => html`<button type="button" role="radio" aria-checked="${tool.pen === k ? 'true' : 'false'}" data-pen="${k}">${v.name}</button>`)}</div>
-      <div class="pop-head">Favourites</div>
-      <div class="pop-row wrap" id="pp-favs">${favs().map((c) => html`<button type="button" class="swatch" data-c="${c}" style="background:${c}" aria-label="${INK_COLORS.find((x) => x[1] === c)?.[0] || c}" aria-pressed="${c === tool.color ? 'true' : 'false'}"></button>`)}</div>
-      <details class="all-colours"><summary>All colours</summary><div class="colour-grid">${INK_COLORS.map(([n, c]) => html`<button type="button" class="swatch sm" data-c="${c}" style="background:${c}" aria-label="${n}"></button>`)}</div></details>
-      <div class="pop-row"><label for="pp-hex" class="muted" style="font-size:13px">Colour code</label><input id="pp-hex" type="text" value="${tool.color}" maxlength="7" style="min-height:36px;padding:4px 10px;width:110px" autocapitalize="off"><button type="button" class="btn btn-sm" data-fav>${favs().includes(tool.color) ? 'Remove favourite' : 'Add to favourites'}</button></div>
-      <div class="pop-head">Thickness <span class="muted" id="pp-mm">${mm(tool.size)}</span></div>
+    const sm = Number.isInteger(tool.smoothing) ? tool.smoothing : 2;
+    const pressure = tool.pressure !== false;
+    const p = popover(anchor, `${html`<div class="pp-head"><span class="pp-title">${pen.name} pen</span><button type="button" class="btn btn-sm" data-savepen>${icons.bookmark({ size: 15 })}Save as favourite</button></div>
+      ${savedPens().length ? html`<div class="pop-head">Your pens</div><div class="pp-saved">${savedPens().map((sp, i) => html`<span class="pp-fav"><button type="button" class="pp-use" data-usepen="${i}" aria-label="Use ${penLabel(sp)}"><canvas width="64" height="22" aria-hidden="true"></canvas></button><button type="button" class="pp-x" data-delpen="${i}" aria-label="Remove ${penLabel(sp)}">${icons.close({ size: 12 })}</button></span>`)}</div>` : ''}
+      <div class="pop-head">Pen</div>
+      <div class="pen-cards" role="radiogroup" aria-label="Pen type">${Object.entries(PENS).map(([k, v]) => html`<button type="button" role="radio" aria-checked="${tool.pen === k ? 'true' : 'false'}" data-pen="${k}"><canvas width="56" height="22" aria-hidden="true" data-prev="${k}"></canvas><span>${v.name}</span></button>`)}</div>
+      <div class="pop-head">Colour</div>
+      <div class="pop-row wrap" id="pp-favs"><span class="pp-sub">Favourites</span>${favs().map((c) => html`<button type="button" class="swatch" data-c="${c}" style="background:${c}" aria-label="${INK_COLORS.find((x) => x[1] === c)?.[0] || c}" aria-pressed="${c === tool.color ? 'true' : 'false'}"></button>`)}</div>
+      <div class="colour-grid sq">${INK_COLORS.map(([n, c]) => html`<button type="button" class="swatch sm" data-c="${c}" style="background:${c}" aria-label="${n}" aria-pressed="${c === tool.color ? 'true' : 'false'}"></button>`)}</div>
+      <div class="pop-row"><label for="pp-hex" class="sr-only">Colour code</label><input id="pp-hex" type="text" value="${tool.color}" maxlength="7" style="min-height:36px;padding:4px 10px;flex:1;min-width:0" autocapitalize="off"><button type="button" class="btn btn-sm" data-fav>${favs().includes(tool.color) ? 'Remove favourite' : 'Add to favourites'}</button></div>
+      <div class="pop-head">Thickness <span id="pp-mm">${mm(tool.size)}</span></div>
       <input type="range" id="pp-size" min="1" max="${pen.sizes[2] * 2.2}" step="0.1" value="${tool.size}" aria-label="Thickness">
-      <p class="hint" style="padding:0 6px 6px">${tool.pen === 'calligraphy' ? 'A slanted nib: strokes are thick or thin by direction.' : 'Press harder with Apple Pencil for a thicker line.'}</p>`}`, { label: 'Pen settings', width: 330, keepFocus: false });
-    p.el.querySelectorAll('[data-pen]').forEach((b) => { b.onclick = () => { tool.pen = b.dataset.pen; tool.size = PENS[tool.pen].sizes[1]; if (tool.tool !== 'shapes') tool.tool = 'pen'; saveTool(); drawTools(); p.close(); penPop(el.querySelector('[data-tool=pen]')); }; });
-    p.el.querySelectorAll('[data-c]').forEach((b) => { b.onclick = () => { tool.color = b.dataset.c; $('#pp-hex', p.el).value = tool.color; saveTool(); drawTools(); p.el.querySelectorAll('#pp-favs [data-c]').forEach((x) => x.setAttribute('aria-pressed', x.dataset.c === tool.color ? 'true' : 'false')); }; });
-    $('#pp-hex', p.el).onchange = (e) => { const v = e.target.value.trim(); if (/^#[0-9a-f]{6}$/i.test(v)) { tool.color = v.toUpperCase(); saveTool(); drawTools(); } else toast('Use a colour code like #2B5684'); };
+      <canvas class="pp-line" id="pp-line" width="290" height="28" aria-hidden="true"></canvas>
+      <label class="pp-switch"><span>Pressure changes thickness</span><input type="checkbox" role="switch" id="pp-pr" ${pressure ? raw('checked') : ''}></label>
+      <div class="pp-smooth"><span id="pp-sm-l">Smoothing</span><div class="seg" role="radiogroup" aria-labelledby="pp-sm-l">${SMOOTHING.map((x, i) => html`<button type="button" role="radio" aria-checked="${i === sm ? 'true' : 'false'}" data-sm="${i}">${x.name}</button>`)}</div></div>
+      ${tool.pen === 'calligraphy' ? html`<p class="hint" style="padding:0 6px 6px">A slanted nib: strokes are thick or thin by direction.</p>` : ''}`}`, { label: 'Pen settings', width: 340, keepFocus: false, cls: 'tall' });
+    const cur = () => ({ pen: tool.pen, color: tool.color, size: tool.size, smoothing: Number.isInteger(tool.smoothing) ? tool.smoothing : 2, pressure: tool.pressure !== false });
+    const paint = () => {
+      p.el.querySelectorAll('[data-prev]').forEach((c) => penPreview(c, { ...cur(), pen: c.dataset.prev, size: (PENS[c.dataset.prev] || pen).sizes[1] }));
+      penPreview($('#pp-line', p.el), cur());
+      p.el.querySelectorAll('[data-usepen]').forEach((b) => penPreview(b.querySelector('canvas'), savedPens()[Number(b.dataset.usepen)]));
+    };
+    requestAnimationFrame(paint);
+    const reopen = () => { p.close(); penPop(el.querySelector('[data-tool=pen]') || anchor); };
+    p.el.querySelectorAll('[data-pen]').forEach((b) => { b.onclick = () => { tool.pen = b.dataset.pen; tool.size = PENS[tool.pen].sizes[1]; if (tool.tool !== 'shapes') tool.tool = 'pen'; saveTool(); drawTools(); reopen(); }; });
+    p.el.querySelectorAll('[data-c]').forEach((b) => {
+      b.onclick = () => {
+        tool.color = b.dataset.c;
+        $('#pp-hex', p.el).value = tool.color;
+        saveTool(); drawTools();
+        p.el.querySelectorAll('[data-c]').forEach((x) => x.setAttribute('aria-pressed', x.dataset.c === tool.color ? 'true' : 'false'));
+        paint();
+      };
+    });
+    $('#pp-hex', p.el).onchange = (e) => { const v = e.target.value.trim(); if (/^#[0-9a-f]{6}$/i.test(v)) { tool.color = v.toUpperCase(); saveTool(); drawTools(); paint(); } else toast('Use a colour code like #2B5684'); };
     p.el.querySelector('[data-fav]').onclick = async () => {
       const f = favs();
       const next = f.includes(tool.color) ? f.filter((c) => c !== tool.color) : [...f, tool.color].slice(-8);
       await V.saveConfig({ favColors: next });
       drawTools();
-      p.close();
+      reopen();
     };
-    $('#pp-size', p.el).oninput = (e) => { tool.size = Number(e.target.value); $('#pp-mm', p.el).textContent = mm(tool.size); saveTool(); };
+    $('#pp-size', p.el).oninput = (e) => { tool.size = Number(e.target.value); $('#pp-mm', p.el).textContent = mm(tool.size); saveTool(); paint(); };
     $('#pp-size', p.el).onchange = () => drawTools();
+    $('#pp-pr', p.el).onchange = (e) => { tool.pressure = e.target.checked; saveTool(); paint(); };
+    p.el.querySelectorAll('[data-sm]').forEach((b) => {
+      b.onclick = () => {
+        tool.smoothing = Number(b.dataset.sm);
+        saveTool();
+        p.el.querySelectorAll('[data-sm]').forEach((x) => x.setAttribute('aria-checked', x === b ? 'true' : 'false'));
+        paint();
+      };
+    });
+    p.el.querySelector('[data-savepen]').onclick = async () => {
+      const mine = cur();
+      const list = savedPens().filter((x) => !(x.pen === mine.pen && x.color === mine.color && Math.abs(x.size - mine.size) < 0.05 && x.smoothing === mine.smoothing && x.pressure === mine.pressure));
+      await V.saveConfig({ penFavs: [...list, mine].slice(-8) });
+      toast('Saved to your pens');
+      drawTools();
+      reopen();
+    };
+    p.el.querySelectorAll('[data-usepen]').forEach((b) => { b.onclick = () => { usePen(savedPens()[Number(b.dataset.usepen)]); reopen(); }; });
+    p.el.querySelectorAll('[data-delpen]').forEach((b) => { b.onclick = async () => { const list = savedPens().slice(); list.splice(Number(b.dataset.delpen), 1); await V.saveConfig({ penFavs: list }); drawTools(); reopen(); }; });
+  }
+
+  function usePen(sp) {
+    if (!sp) return;
+    Object.assign(tool, { tool: 'pen', pen: sp.pen, color: sp.color, size: sp.size, smoothing: sp.smoothing, pressure: sp.pressure });
+    saveTool();
+    drawTools();
   }
 
   function hlPop(anchor) {
@@ -507,11 +621,15 @@ export function mount(el, params, ctx) {
     scroll.querySelector('.ink-pagenav')?.remove();
     const nav = document.createElement('div');
     nav.className = 'ink-pagenav';
-    nav.innerHTML = String(html`<button type="button" class="btn btn-sm" data-pg="prev" ${pageIdx === 0 ? raw('disabled') : ''}>${icons.back({ size: 16 })}Previous</button>
-      <span class="muted">Page ${pageIdx + 1} of ${n.pages.length}</span>
-      ${pageIdx < n.pages.length - 1 ? html`<button type="button" class="btn btn-sm" data-pg="next">Next${icons.chevron({ size: 16 })}</button>` : html`<button type="button" class="btn btn-sm" data-pg="add">${icons.plus({ size: 16 })}Add page</button>`}`);
+    const endless = n.layout === 'scroll';
+    nav.innerHTML = String(html`${n.pages.length > 1 || !endless ? html`<button type="button" class="btn btn-sm" data-pg="prev" ${pageIdx === 0 ? raw('disabled') : ''}>${icons.back({ size: 16 })}Previous</button>` : ''}
+      <span class="muted">${endless && n.pages.length === 1 ? 'Endless page' : `Page ${pageIdx + 1} of ${n.pages.length}`}</span>
+      ${pageIdx < n.pages.length - 1 ? html`<button type="button" class="btn btn-sm" data-pg="next">Next${icons.chevron({ size: 16 })}</button>` : endless ? html`<button type="button" class="btn btn-sm" data-pg="more">${icons.plus({ size: 16 })}More paper</button>` : html`<button type="button" class="btn btn-sm" data-pg="add">${icons.plus({ size: 16 })}Add page</button>`}`);
     scroll.appendChild(nav);
-    nav.querySelector('[data-pg=prev]').onclick = () => showPage(pageIdx - 1);
+    const pv = nav.querySelector('[data-pg=prev]');
+    if (pv) pv.onclick = () => showPage(pageIdx - 1);
+    const mp = nav.querySelector('[data-pg=more]');
+    if (mp) mp.onclick = () => { const pg = note().pages[pageIdx]; growPage(pg.h + 707); };
     const nx = nav.querySelector('[data-pg=next]');
     if (nx) nx.onclick = () => showPage(pageIdx + 1);
     const ad = nav.querySelector('[data-pg=add]');
@@ -534,7 +652,10 @@ export function mount(el, params, ctx) {
     const s = openSheet(`${html`<div class="sheet-head"><span class="side"></span><h2>${displayTitle(n)}, ${n.pages.length} page${n.pages.length === 1 ? '' : 's'}</h2><span class="side"><button type="button" class="btn btn-ghost btn-sm" data-close>Done</button></span></div>
       <ul class="page-grid" id="pg-grid">${n.pages.map((p, i) => html`<li><button type="button" class="page-thumb ${i === pageIdx ? 'current' : ''}" data-i="${i}" aria-label="Page ${i + 1}${i === pageIdx ? ', current page' : ''}${p.bookmark ? ', bookmarked' : ''}"><canvas data-thumb="${i}" width="10" height="14"></canvas>${p.bookmark ? html`<span class="bm">${icons.bookmark({ size: 16 })}</span>` : ''}</button><button type="button" class="pg-more" data-pm="${i}" aria-label="Page ${i + 1} options">${i + 1} ${icons.more({ size: 16 })}</button></li>`)}
         <li><button type="button" class="page-thumb add" data-add>${icons.plus({ size: 24 })}<span>Add page</span></button></li></ul>
-      <section class="paper-pick"><h3>Paper for new pages</h3>
+      <section class="paper-pick"><h3>Layout</h3>
+        <div class="chips" role="radiogroup" aria-label="Layout"><button type="button" class="chip" role="radio" aria-checked="${n.layout !== 'scroll' ? 'true' : 'false'}" aria-pressed="${n.layout !== 'scroll' ? 'true' : 'false'}" data-layout="pages">A4 pages</button><button type="button" class="chip" role="radio" aria-checked="${n.layout === 'scroll' ? 'true' : 'false'}" aria-pressed="${n.layout === 'scroll' ? 'true' : 'false'}" data-layout="scroll">Endless scroll</button></div>
+        <p class="hint">${n.layout === 'scroll' ? 'One long page that grows as you write. PDFs print it as A4 pieces.' : 'Fixed A4 pages. Endless scroll makes one long page that grows as you write.'}</p>
+        <h3>Paper for new pages</h3>
         <div class="chips" role="radiogroup" aria-label="Paper">${PAPERS.map((p) => html`<button type="button" class="chip" role="radio" aria-checked="${p.id === (state.device?.paper || 'ruled')}" aria-pressed="${p.id === (state.device?.paper || 'ruled') ? 'true' : 'false'}" data-paper="${p.id}">${p.name}</button>`)}</div>
         <div class="chips" role="radiogroup" aria-label="Paper colour">${PAPER_COLORS.map((c) => html`<button type="button" class="chip" role="radio" aria-pressed="${c.id === (state.device?.paperColor || 'white') ? 'true' : 'false'}" data-pcol="${c.id}"><span class="dot lg" style="background:${c.bg};border:1px solid var(--field)"></span>${c.name}</button>`)}</div>
         <div class="btn-row"><button type="button" class="btn btn-sm" data-add2>${icons.plus({ size: 16 })}Add after page ${pageIdx + 1}</button>
@@ -549,6 +670,7 @@ export function mount(el, params, ctx) {
     s.el.querySelector('[data-add2]').onclick = async () => { s.close(); await addPage(pick()); };
     s.el.querySelectorAll('[data-paper]').forEach((b) => { b.onclick = async () => { await V.updateDevice({ paper: b.dataset.paper }); s.el.querySelectorAll('[data-paper]').forEach((x) => x.setAttribute('aria-pressed', x === b ? 'true' : 'false')); }; });
     s.el.querySelectorAll('[data-pcol]').forEach((b) => { b.onclick = async () => { await V.updateDevice({ paperColor: b.dataset.pcol }); s.el.querySelectorAll('[data-pcol]').forEach((x) => x.setAttribute('aria-pressed', x === b ? 'true' : 'false')); }; });
+    s.el.querySelectorAll('[data-layout]').forEach((b) => { b.onclick = async () => { await setLayout(b.dataset.layout); s.close(); }; });
     s.el.querySelector('[data-pdf]').onchange = async (e) => { const f = e.target.files?.[0]; if (!f) return; s.close(); await importPdf(f); };
     s.el.querySelector('[data-scan]').onclick = async () => { s.close(); await scanPages(); };
     s.el.querySelectorAll('[data-pm]').forEach((b) => { b.onclick = () => pageMenu(Number(b.dataset.pm), s); });
@@ -556,7 +678,7 @@ export function mount(el, params, ctx) {
     n.pages.forEach(async (p, i) => {
       try {
         const data = await V.loadPage(p.id);
-        const c = await renderPageCanvas(p, data, 220, layerView(note()));
+        const c = await renderPageCanvas(p, data, 220, { ...layerView(note()), crop: { x: 0, y: 0, w: PAGE_W, h: Math.min(p.h, A4_H) } });
         const slot = s.el.querySelector(`[data-thumb="${i}"]`);
         if (slot) slot.replaceWith(Object.assign(c, { className: 'thumb-canvas' }));
       } catch { /* not downloaded yet */ }
@@ -696,6 +818,50 @@ export function mount(el, params, ctx) {
   async function summarise(pdfText = null) {
     if (!note()) return;
     await refreshInkSummary(id, { pdfText });
+    readSoon();
+  }
+
+  // ---------- Reading handwriting ----------
+  // A little after you stop writing, the page is read on this device so the
+  // handwriting can be searched, linked and asked about.
+  const readSoon = debounce(() => {
+    const n = note();
+    if (!n || !handOn() || surface?.drawing) return;
+    const pg = n.pages[pageIdx]?.id;
+    if (pg) readNote(n.id, { pages: [pg] }).catch((e) => console.warn('handwriting', e));
+  }, 2500);
+
+  async function convertSheet(strokes, box) {
+    const ids = strokes.map((s) => s.id);
+    const s = openSheet(`${html`<div class="sheet-head"><span class="side"></span><h2>Convert to text</h2><span class="side"><button type="button" class="btn btn-ghost btn-sm" data-close>Cancel</button></span></div>
+      <p class="hint" id="cv-msg" aria-live="polite">Reading your writing on this device…</p>
+      <div class="field" id="cv-f" hidden><label for="cv-t">Reads as</label><textarea id="cv-t" rows="4" autocapitalize="sentences"></textarea></div>
+      <p class="hint" id="cv-fix" hidden>Fix anything it misread, then use it.</p>
+      <div class="btn-row" id="cv-b" hidden><button type="button" class="btn btn-primary" data-rep style="flex:1">Replace with text</button><button type="button" class="btn" data-copy>Copy text</button></div>`}`, { label: 'Convert to text' });
+    s.el.querySelector('[data-close]').onclick = () => s.close();
+    const msg = $('#cv-msg', s.el);
+    const { aiState } = await import('../ai.js');
+    if (aiState.hand !== 'ready') msg.textContent = 'Getting the handwriting reader ready. The first time, it downloads about 21 MB from this site…';
+    try {
+      const r = await readStrokes(strokes);
+      if (!s.el.isConnected) return;
+      const ta = $('#cv-t', s.el);
+      ta.value = r.text;
+      msg.textContent = r.text ? '' : 'Couldn’t make out any words here. Type them in if you like.';
+      msg.hidden = !!r.text;
+      ['#cv-f', '#cv-fix', '#cv-b'].forEach((q) => { $(q, s.el).hidden = false; });
+      setTimeout(() => ta.focus(), 50);
+      s.el.querySelector('[data-copy]').onclick = async () => { await copyText(ta.value.trim()); toast('Copied'); };
+      s.el.querySelector('[data-rep]').onclick = () => {
+        const t = ta.value.trim();
+        if (!t) { toast('There’s no text to use.'); return; }
+        surface?.replaceSelectionWithText(t, box, ids);
+        s.close();
+        toast('Replaced with text');
+      };
+    } catch (e) {
+      msg.textContent = e.message || 'Couldn’t read this.';
+    }
   }
 
   // ---------- Actions ----------

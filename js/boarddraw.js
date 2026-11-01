@@ -9,7 +9,7 @@
 // arrows pointing at it come back with it.
 
 import { getStroke } from '../vendor/freehand.js';
-import { PENS, HL, fileImageReady } from './editor/inkdraw.js';
+import { PENS, HL, fileImageReady, penOptions } from './editor/inkdraw.js';
 import { POSTIT_COLORS } from './stickers.js';
 import { state } from './vault.js';
 import { displayTitle, noteText, regionColors, typeName } from './model.js';
@@ -126,7 +126,7 @@ export function strokeD(s) {
   const pts = [];
   for (let i = 0; i < s.pts.length; i += 3) pts.push([s.pts[i], s.pts[i + 1], s.pts[i + 2]]);
   const pen = s.t === 'hl' ? { o: { thinning: 0, smoothing: 0.5, streamline: 0.55 } } : PENS[s.pen] || PENS.ballpoint;
-  const o = getStroke(pts, { size: s.s, ...(pen.o || PENS.ballpoint.o), simulatePressure: !!s.sp, last: true });
+  const o = getStroke(pts, { size: s.s, ...penOptions(s, pen.o || PENS.ballpoint.o), simulatePressure: !!s.sp && !s.np, last: true });
   if (!o.length) return '';
   let out = `M${o[0][0].toFixed(1)} ${o[0][1].toFixed(1)}`;
   for (let i = 1; i < o.length; i++) {

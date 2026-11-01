@@ -4,7 +4,7 @@ let worker = null;
 let seq = 0;
 const pending = new Map();
 const listeners = new Set();
-export const aiState = { embed: 'idle', asr: 'idle', progress: {} };
+export const aiState = { embed: 'idle', asr: 'idle', hand: 'idle', progress: {} };
 
 function get() {
   if (worker) return worker;
@@ -18,7 +18,7 @@ function get() {
       return;
     }
     if (m.type === 'ready') {
-      aiState[m.kind === 'embed' ? 'embed' : 'asr'] = 'ready';
+      aiState[m.kind === 'embed' || m.kind === 'hand' ? m.kind : 'asr'] = 'ready';
       listeners.forEach((f) => f({ type: 'ready', kind: m.kind }));
       return;
     }
@@ -59,6 +59,13 @@ export function transcribe(audio, { language = null } = {}) {
 }
 
 export const warm = (kind) => call('warm', { kind });
+
+// Read lines of handwriting. Each line is { w, data } (a 48-pixel-high image,
+// three channels, values from -1 to 1). Resolves with [{ text, conf }].
+export function readLines(lines) {
+  if (!lines.length) return Promise.resolve([]);
+  return call('hand', { lines }, lines.map((l) => l.data.buffer));
+}
 
 export function stopAI() {
   worker?.terminate();

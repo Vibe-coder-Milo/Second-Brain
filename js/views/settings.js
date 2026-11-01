@@ -116,10 +116,14 @@ export function mount(main, params, ctx) {
 
       <section aria-labelledby="s-ai">
         <h2 id="s-ai">On-device intelligence</h2>
-        <p class="hint">Search by meaning, related notes and transcribing recordings run on this device with small models that come with the app. Nothing you write or record is sent anywhere.</p>
+        <p class="hint">Search by meaning, related notes, reading handwriting and transcribing recordings run on this device with small models that come with the app. Nothing you write or record is sent anywhere.</p>
         <label class="check"><input type="checkbox" id="s-sem" ${state.device?.semantic !== false ? raw('checked') : ''}> Search by meaning and related notes</label>
         <p class="status-line" id="s-sem-status" aria-live="polite"></p>
         <div class="btn-row"><button type="button" class="btn btn-sm" data-act="sem-rebuild">Rebuild the index</button></div>
+        <label class="check"><input type="checkbox" id="s-hand" ${state.device?.readHand !== false ? raw('checked') : ''}> Read my handwriting, so it can be searched</label>
+        <p class="hint">Pages are read a few seconds after you stop writing. The text syncs with the note, so each page is only read once.</p>
+        <p class="status-line" id="s-hand-status" aria-live="polite"></p>
+        <div class="btn-row"><button type="button" class="btn btn-sm" data-act="hand-all">Read handwriting in all notes</button></div>
       </section>
 
       <section aria-labelledby="s-backup">
@@ -270,6 +274,18 @@ export function mount(main, params, ctx) {
         paint(S.semState);
       };
       on('[data-act=sem-rebuild]', async () => { await S.clearIndex(); S.buildSoon(0); toast('Rebuilding'); });
+    });
+    $('#s-hand', main).onchange = async (e) => { await V.updateDevice({ readHand: e.target.checked }); };
+    on('[data-act=hand-all]', async (b) => {
+      const st = $('#s-hand-status', main);
+      if (state.device?.readHand === false) { toast('Turn on reading handwriting first.'); return; }
+      b.disabled = true;
+      const { readAll } = await import('../handwriting.js');
+      try {
+        await readAll((i, n) => { if (st.isConnected) st.textContent = `Reading note ${i} of ${n}…`; });
+        if (st.isConnected) st.textContent = 'Done. Your handwriting can be searched.';
+      } catch (err) { if (st.isConnected) st.textContent = `Stopped: ${err.message}`; }
+      b.disabled = false;
     });
     on('[data-act=labels]', async () => { const { manageLabels } = await import('./labels.js'); manageLabels(); });
     on('[data-act=export-md]', async (b) => {

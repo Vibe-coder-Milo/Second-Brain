@@ -150,10 +150,10 @@ export function passphraseSheet({ title, body = '', confirmLabel = 'Unlock', che
 let openPop = null;
 export function closePopover() { openPop?.close(); }
 
-export function popover(anchor, content, { label = 'Options', width = 300, onClose, keepFocus = true, place = 'auto' } = {}) {
+export function popover(anchor, content, { label = 'Options', width = 300, onClose, keepFocus = true, place = 'auto', cls = '' } = {}) {
   closePopover();
   const el = document.createElement('div');
-  el.className = 'popover';
+  el.className = `popover ${cls}`.trim();
   el.setAttribute('role', 'dialog');
   el.setAttribute('aria-label', label);
   el.style.width = `${Math.min(width, window.innerWidth - 16)}px`;

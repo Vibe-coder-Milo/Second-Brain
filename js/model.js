@@ -123,6 +123,8 @@ export function normNote(n) {
     pdfText: kind === 'ink' && n.pdfText ? String(n.pdfText) : '',
     layers: kind === 'ink' && Array.isArray(n.layers) ? n.layers : null,
     exportAllLayers: kind === 'ink' && !!n.exportAllLayers,
+    hw: kind === 'ink' && n.hw && typeof n.hw === 'object' ? n.hw : {},
+    layout: kind === 'ink' && n.layout === 'scroll' ? 'scroll' : 'pages',
     editedOn: n.editedOn || null,
     createdAt: n.createdAt || Date.now(),
     updatedAt: n.updatedAt || Date.now(),

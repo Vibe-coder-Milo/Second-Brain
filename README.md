@@ -7,7 +7,7 @@ A private, encrypted map of your notes, screenshots and ideas. Capture on your i
 - **Encrypted on your device.** Every note and image is encrypted (AES-256-GCM) before it's stored. The key is protected by your passphrase (PBKDF2, 600,000 rounds). There is no reset: lose the passphrase and the notes can't be opened.
 - **This repo holds only the app.** Your notes never go in it. They live on your devices and, if you turn on sync, in a separate private repo as ciphertext.
 - **Text in screenshots is read on your device** (Tesseract). Nothing is uploaded for that.
-- **Search by meaning, related notes and transcription run on your device too.** The small AI models are bundled in this repo and run in your browser; your notes and recordings never leave the device for them. The meaning index is stored encrypted, and sealed notes are only indexed while they're open.
+- **Search by meaning, related notes, reading handwriting and transcription run on your device too.** The small AI models are bundled in this repo and run in your browser; your notes and recordings never leave the device for them. The meaning index is stored encrypted, and sealed notes are only indexed while they're open.
 - **No third-party requests.** Fonts and libraries are bundled here. The only network calls the app makes are to `api.github.com` for your own sync repo.
 - **Sealed notes** have their own second passphrase, stay hidden until you open them, and are never included in anything shared with Claude.
 - **Claude only sees what you copy into a chat.** The app builds the request; you paste it; you import the reply and approve every change.
@@ -49,7 +49,9 @@ Every sync is one commit, so the data repo's history doubles as version history.
   - Links: `[[` links to another note.
   - On iPad, headings make an outline beside the note.
 - **Handwritten notes** (Apple Pencil writes, fingers scroll and pinch to zoom)
-  - Pens: fountain, ballpoint, brush, pencil, marker, calligraphy. Also highlighter, eraser (whole strokes or precise), lasso (move, resize, recolour, copy, save as a sticker), shapes that snap when you hold, text boxes with full formatting, photos, and undo.
+  - Pens: fountain, ballpoint, brush, pencil, marker, calligraphy, each with any colour and thickness, smoothing (off to high) and pressure on or off. **Save as favourite** keeps a pen exactly as set, one tap away in the toolbar. Also highlighter, eraser (whole strokes or precise), lasso (move, resize, recolour, copy, save as a sticker), shapes that snap when you hold, text boxes with full formatting, photos, and undo.
+  - **Handwriting is read on your device** a few seconds after you stop writing, so it shows up in search, links, Ask Claude and search by meaning. Lasso some writing and choose **Convert to text** to see what it reads as, fix it, then copy it or replace the ink with typed text. Neat writing reads best; joined-up writing usually works, but check what it read.
+  - **Layout**: A4 pages, or **endless scroll**: one long page that grows as you write (PDF export prints it as A4 pieces).
   - Paper: ruled, narrow, grid, dotted, Cornell or blank, in white, ivory or night.
   - Pages: add, reorder, bookmark. **Import a PDF** to write on it, a photo of paper, or **scan** pages straight in.
   - **Layers**: Ink, Highlights and your own (say "Review notes"). Hide or lock a layer, pick which one you're writing on, move a selection to another layer, and export only the visible layers.
@@ -61,7 +63,7 @@ Every sync is one commit, so the data repo's history doubles as version history.
 - **Stickers and post-its**: label tags, marks, planner, washi tape, chart and botanical packs, and "Mine" (your own ink or photos). Post-its fold away to a small square.
 - **Labels**: every label you've stuck anywhere, with a preview of the spot. Edit names and colours in Settings or on the Labels screen.
 - **Tasks**: checklists from every note, typed or handwritten, by date or by note. Tick them here and the note updates.
-- **Search by meaning**: in All notes, results include notes that say the same thing in other words ("Close in meaning"), found on this device. Typed notes also show notes close in meaning among their connections. Turn it off or rebuild the index in Settings → On-device intelligence. The first search by meaning downloads its model from this site once (about 22 MB), and the first transcription another (about 44 MB); both are kept for offline use.
+- **Search by meaning**: in All notes, results include notes that say the same thing in other words ("Close in meaning"), found on this device. Typed notes also show notes close in meaning among their connections. Turn it off or rebuild the index in Settings → On-device intelligence. The first search by meaning downloads its model from this site once (about 22 MB), the first handwriting reading another (about 21 MB) and the first transcription another (about 44 MB); all are kept for offline use.
 - **Connections** (at the end of a typed note): links in both directions, mentions that aren't linked yet, related notes worked out on this device, and sub-notes.
 - **Version history**: every sync is a commit, so each note (and each handwritten page) can be compared with earlier versions and restored.
 - **Export**: a note or notebook as PDF or Markdown, or everything as a Markdown zip (Settings).
@@ -70,7 +72,7 @@ Every sync is one commit, so the data repo's history doubles as version history.
   - **Sweep my Claude chats** copies a request that asks Claude to go through your chats since the last sweep and keep only what's worth keeping (decisions, ideas, open questions, wins), skipping lookups and one-off tasks.
   - **Ask about your notes** copies your question plus the regions you choose, or just the notes closest in meaning to your question.
   - Paste into any Claude chat, then **Import Claude's reply**. You review every new note, update and skipped chat before anything is saved.
-  - Handwritten notes share only their text boxes and post-its, whiteboards share an outline of what's on them, and recordings share their transcripts. Sealed notes and notebooks are never included.
+  - Handwritten notes share their text boxes, post-its and the handwriting read on your device, whiteboards share an outline of what's on them, and recordings share their transcripts. Sealed notes and notebooks are never included.
 - **Settings**: sync, auto-lock, passphrase, sealed notes, regions, labels, encrypted backup, Markdown export.
 
 ## Editing the app
@@ -95,6 +97,7 @@ js/ai.js, ai-worker.js  on-device models (meaning search, transcription), run in
 js/semantic.js        the meaning index and related notes
 js/recorder.js        recording, playback and transcription
 js/scan.js            finding page edges, straightening and cleaning up scans
+js/handwriting.js     grouping ink into lines and reading it on this device
 js/boarddraw.js       whiteboard geometry, outline and export drawing
 js/editor/rich.js     the typed-note editor (Tiptap)
 js/editor/toolbar.js  formatting bar and the / menu
@@ -115,4 +118,4 @@ To try it locally: `python3 -m http.server` in this folder, then open `http://lo
 
 ## Bundled software
 
-force-graph (MIT), marked (MIT), DOMPurify (Apache-2.0 / MPL-2.0), tesseract.js and tesseract.js-core (Apache-2.0), Tesseract English data (Apache-2.0), Tiptap and ProseMirror (MIT), perfect-freehand (MIT), PDF.js (Apache-2.0), pdf-lib (MIT), fflate (MIT), Transformers.js (Apache-2.0), ONNX Runtime Web (MIT), all-MiniLM-L6-v2 (Apache-2.0), Whisper tiny (MIT). Typefaces under the SIL Open Font License 1.1: Overpass, Spectral, Fraunces, Nunito, Atkinson Hyperlegible, JetBrains Mono, Caveat.
+force-graph (MIT), marked (MIT), DOMPurify (Apache-2.0 / MPL-2.0), tesseract.js and tesseract.js-core (Apache-2.0), Tesseract English data (Apache-2.0), Tiptap and ProseMirror (MIT), perfect-freehand (MIT), PDF.js (Apache-2.0), pdf-lib (MIT), fflate (MIT), Transformers.js (Apache-2.0), ONNX Runtime Web (MIT), all-MiniLM-L6-v2 (Apache-2.0), Whisper tiny (MIT), PaddleOCR PP-OCRv6 text recogniser (Apache-2.0). Typefaces under the SIL Open Font License 1.1: Overpass, Spectral, Fraunces, Nunito, Atkinson Hyperlegible, JetBrains Mono, Caveat.

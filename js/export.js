@@ -44,7 +44,9 @@ export function noteToMarkdown(n, { images = [] } = {}) {
 async function pngOfPage(page, n = null) {
   const { renderPageCanvas, layerView } = await import('./editor/inkdraw.js');
   const data = await V.loadPage(page.id);
-  const c = await renderPageCanvas(page, data, 1200, layerView(n, { forExport: true }));
+  // Long pages get narrower pictures, so they stay within what phones can draw.
+  const width = Math.min(1200, Math.floor(Math.sqrt((12e6 * 1000) / Math.max(1, page.h))));
+  const c = await renderPageCanvas(page, data, width, layerView(n, { forExport: true }));
   const blob = await new Promise((r) => c.toBlob(r, 'image/png'));
   return new Uint8Array(await blob.arrayBuffer());
 }
@@ -144,11 +146,14 @@ const PX = 1240; // pixel width of a rendered page (about 150 dpi on A4)
 
 async function inkCanvases(n) {
   const { renderPageCanvas, layerView } = await import('./editor/inkdraw.js');
+  const { A4_H, PAGE_W } = await import('./model.js');
   const out = [];
   const view = layerView(n, { forExport: true });
   for (const p of n.pages) {
     const data = await V.loadPage(p.id);
-    out.push(await renderPageCanvas(p, data, PX, view));
+    if (p.h <= A4_H * 1.1) { out.push(await renderPageCanvas(p, data, PX, view)); continue; }
+    // A long (endless) page is printed as A4-sized pieces.
+    for (let y = 0; y < p.h; y += A4_H) out.push(await renderPageCanvas(p, data, PX, { ...view, crop: { x: 0, y, w: PAGE_W, h: Math.min(A4_H, p.h - y) } }));
   }
   return out;
 }

@@ -13,6 +13,8 @@ import { icons } from '../icons.js';
 import { compressImage } from '../images.js';
 
 const r2 = (v) => Math.round(v * 100) / 100;
+// A pen's smoothing and pressure settings, kept on each stroke it draws.
+export const penExtras = (tool, hl = false) => (hl ? {} : { ...(Number.isInteger(tool.smoothing) && tool.smoothing !== 2 ? { sm: tool.smoothing } : {}), ...(tool.pressure === false ? { np: 1 } : {}) });
 const MAX_PX = 8_000_000;
 let clip = null;
 
@@ -155,9 +157,22 @@ export class InkSurface {
     this.wet = host.querySelector('.ink-wet');
     this.overlay = host.querySelector('.ink-overlay');
     this.raf = 0;
+    this.view = { x: 0, y: 0, w: 1, h: 1 };
     this.bind();
     this.ro = new ResizeObserver(() => this.layout());
     this.ro.observe(this.scroll);
+    // Only the part of the page near the screen has canvas pixels, so long
+    // pages and deep zoom stay sharp. Scrolling moves that window along.
+    this.onScroll = () => {
+      if (this.scrollRaf) return;
+      this.scrollRaf = requestAnimationFrame(() => {
+        this.scrollRaf = 0;
+        if (!this.page || this.viewCovers()) return;
+        this.placeCanvases();
+        this.renderNow();
+      });
+    };
+    this.scroll.addEventListener('scroll', this.onScroll, { passive: true });
   }
 
   // ---------- Page ----------
@@ -273,6 +288,56 @@ export class InkSurface {
   }
   get scale() { return (this.baseWidth * this.zoom) / PAGE_W; }
 
+  // The window of the page (in screen pixels from its top left) to draw:
+  // what's visible plus a margin either side.
+  wantedView() {
+    const s = this.scale;
+    const W = Math.round(PAGE_W * s);
+    const Hh = Math.round(this.page.h * s);
+    const sc = this.scroll;
+    const vw = sc.clientWidth || W;
+    const vh = sc.clientHeight || Hh;
+    const visL = sc.scrollLeft - this.pageEl.offsetLeft;
+    const visT = sc.scrollTop - this.pageEl.offsetTop;
+    const mx = vw * 0.25;
+    const my = vh * 0.5;
+    const x0 = Math.max(0, Math.floor(visL - mx));
+    const y0 = Math.max(0, Math.floor(visT - my));
+    const x1 = Math.min(W, Math.ceil(visL + vw + mx));
+    const y1 = Math.min(Hh, Math.ceil(visT + vh + my));
+    if (x1 - x0 < 2 || y1 - y0 < 2) return { x: 0, y: 0, w: Math.min(W, vw), h: Math.min(Hh, vh) };
+    return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+  }
+  // Is everything on screen inside the drawn window?
+  viewCovers() {
+    const v = this.view;
+    const sc = this.scroll;
+    const s = this.scale;
+    const visL = Math.max(0, sc.scrollLeft - this.pageEl.offsetLeft);
+    const visT = Math.max(0, sc.scrollTop - this.pageEl.offsetTop);
+    const visR = Math.min(PAGE_W * s, sc.scrollLeft - this.pageEl.offsetLeft + sc.clientWidth);
+    const visB = Math.min(this.page.h * s, sc.scrollTop - this.pageEl.offsetTop + sc.clientHeight);
+    if (visR <= visL || visB <= visT) return true; // page not on screen
+    return visL >= v.x && visT >= v.y && visR <= v.x + v.w && visB <= v.y + v.h;
+  }
+  placeCanvases() {
+    const v = this.wantedView();
+    this.view = v;
+    let dpr = window.devicePixelRatio || 1;
+    if (v.w * v.h * dpr * dpr > MAX_PX) dpr = Math.sqrt(MAX_PX / (v.w * v.h));
+    this.dpr = dpr;
+    for (const c of [this.bg, this.main, this.wet]) {
+      c.width = Math.max(1, Math.round(v.w * dpr));
+      c.height = Math.max(1, Math.round(v.h * dpr));
+      Object.assign(c.style, { left: `${v.x}px`, top: `${v.y}px`, width: `${v.w}px`, height: `${v.h}px` });
+    }
+  }
+  // The drawn window in page units (for skipping what's off screen).
+  get area() {
+    const s = this.scale;
+    return { x: this.view.x / s, y: this.view.y / s, w: this.view.w / s, h: this.view.h / s };
+  }
+
   layout() {
     if (!this.page) return;
     const s = this.scale;
@@ -281,15 +346,7 @@ export class InkSurface {
     this.pageEl.style.width = `${w}px`;
     this.pageEl.style.height = `${h}px`;
     this.overlay.style.setProperty('--u', String(s));
-    let dpr = window.devicePixelRatio || 1;
-    if (w * h * dpr * dpr > MAX_PX) dpr = Math.sqrt(MAX_PX / (w * h));
-    this.dpr = dpr;
-    for (const c of [this.bg, this.main, this.wet]) {
-      c.width = Math.round(w * dpr);
-      c.height = Math.round(h * dpr);
-      c.style.width = `${w}px`;
-      c.style.height = `${h}px`;
-    }
+    this.placeCanvases();
     this.render();
     this.positionEditor();
     this.drawSelection();
@@ -299,21 +356,25 @@ export class InkSurface {
   ctxFor(c) {
     const ctx = c.getContext('2d');
     const k = this.scale * this.dpr;
-    ctx.setTransform(k, 0, 0, k, 0, 0);
+    ctx.setTransform(k, 0, 0, k, -this.view.x * this.dpr, -this.view.y * this.dpr);
     return ctx;
   }
 
   render() {
     if (!this.page) return;
     cancelAnimationFrame(this.raf);
-    this.raf = requestAnimationFrame(() => {
-      const bgImg = this.page.bg ? fileImage(this.page.bg, () => this.render()) : null;
-      const b = this.ctxFor(this.bg);
-      b.clearRect(0, 0, PAGE_W, this.page.h);
-      if (this.layers.paperHidden) drawPaper(b, { ...this.page, paper: 'blank', bg: null }, this.scale, null);
-      else drawPaper(b, this.page, this.scale, bgImg);
-      this.renderMain();
-    });
+    this.raf = requestAnimationFrame(() => this.renderNow());
+  }
+  renderNow() {
+    if (!this.page) return;
+    cancelAnimationFrame(this.raf);
+    const bgImg = this.page.bg ? fileImage(this.page.bg, () => this.render()) : null;
+    const b = this.ctxFor(this.bg);
+    b.clearRect(0, 0, PAGE_W, this.page.h);
+    if (this.layers.paperHidden) drawPaper(b, { ...this.page, paper: 'blank', bg: null }, this.scale, null, this.area);
+    else drawPaper(b, this.page, this.scale, bgImg, this.area);
+    this.renderMain();
+    if (this.drawing?.kind === 'stroke') this.drawWet();
   }
 
   renderMain() {
@@ -322,7 +383,7 @@ export class InkSurface {
     const skip = new Set();
     if (this.editing) skip.add(this.editing.id);
     if (this.sel?.moving) for (const id of this.sel.objects) skip.add(id);
-    drawContent(m, this.data, { redraw: () => this.renderMainSoon(), skip, hidden: this.sel?.moving ? this.sel.strokes : null, dim: this.dim, visible: this.visible });
+    drawContent(m, this.data, { redraw: () => this.renderMainSoon(), skip, hidden: this.sel?.moving ? this.sel.strokes : null, dim: this.dim, visible: this.visible, area: this.area });
     // Text boxes report their laid-out height; keep it for hit testing.
     for (const o of this.data.objects) if (o.type === 'text' && o._h) o.h = o._h;
   }
@@ -489,7 +550,7 @@ export class InkSurface {
       const hl = t === 'hl';
       this.drawing = {
         pointerId: e.pointerId, kind: 'stroke', t0: Date.now(),
-        stroke: { id: uid('k'), at: Date.now(), t: hl ? 'hl' : 'pen', pen: hl ? null : tool.pen, c: hl ? tool.hlColor : tool.color, s: hl ? tool.hlSize : tool.size, sp: e.pointerType === 'pen' ? 0 : 1, pts: [] },
+        stroke: { id: uid('k'), at: Date.now(), t: hl ? 'hl' : 'pen', pen: hl ? null : tool.pen, c: hl ? tool.hlColor : tool.color, s: hl ? tool.hlSize : tool.size, sp: e.pointerType === 'pen' ? 0 : 1, pts: [], ...penExtras(tool, hl) },
         pts: [[x, y, pr]], last: [x, y], still: Date.now(), shapes: t === 'shapes',
       };
       this.armHold();
@@ -774,6 +835,7 @@ export class InkSurface {
     const items = [];
     if (one?.type === 'text') items.push(['edit', 'Edit text', icons.textbox()]);
     if (one?.type === 'postit') items.push(['edit', 'Edit', icons.postit()]);
+    if (this.sel.strokes.size && this.opts.readHandwriting) items.push(['read', 'Convert to text', icons.type()]);
     if (this.sel.strokes.size) items.push(['colour', 'Colour', raw('<span class="sel-col"></span>')]);
     items.push(['copy', 'Copy', icons.copy()], ['cut', 'Cut', raw('✂︎')], ['dup', 'Duplicate', icons.plus()]);
     if (this.sel.strokes.size || one?.type === 'image') items.push(['sticker', 'Save as sticker', icons.sticker()]);
@@ -796,6 +858,7 @@ export class InkSurface {
     if (act === 'dup') { this.copySelection(); this.paste(24); return; }
     if (act === 'colour') { this.opts.pickColour?.(btn, (c) => c && this.recolour(c)); return; }
     if (act === 'layer') { const l = await this.opts.pickLayer?.(btn); if (l) this.moveToLayer(l); return; }
+    if (act === 'read') { this.opts.readHandwriting?.(this.data.strokes.filter((s) => this.sel.strokes.has(s.id)), { ...this.sel.box }); return; }
     if (act === 'sticker') { await this.saveSelectionAsSticker(); }
   }
 
@@ -831,6 +894,25 @@ export class InkSurface {
     this.clearSelection();
     this.renderMain();
     this.changed();
+  }
+
+  // Swap the selected handwriting for a text box saying the same thing.
+  replaceSelectionWithText(text, box, ids = null) {
+    if ((!this.sel && !ids) || !text.trim()) return;
+    const lines = text.split('\n');
+    const size = Math.max(14, Math.min(40, Math.round((box.h / Math.max(1, lines.length)) * 0.55)));
+    const doc = { type: 'doc', content: lines.map((l) => (l.trim() ? { type: 'paragraph', content: [{ type: 'text', text: l }] } : { type: 'paragraph' })) };
+    const now = Date.now();
+    const x = Math.max(10, box.x + 6);
+    const o = this.stamp({ id: uid('o'), at: now, t: now, type: 'text', x, y: box.y + 4, w: Math.max(160, Math.min(PAGE_W - x - 10, box.w + 40)), h: Math.max(40, box.h), size, doc });
+    this.snapshot();
+    const gone = ids ? new Set(ids) : this.sel.strokes;
+    this.data.strokes = this.data.strokes.filter((s) => { if (gone.has(s.id)) { this.data.tomb.push(s.id); return false; } return true; });
+    this.data.objects.push(o);
+    this.clearSelection();
+    this.renderMain();
+    this.changed();
+    return o;
   }
 
   // Put the selection on another layer.
@@ -1181,7 +1263,15 @@ export class InkSurface {
     this.place({ type: 'image', fileId, w: img.w / 2, h: img.h / 2 });
   }
 
+  // Make the page taller (endless scroll), keeping your place.
+  setPageHeight(h) {
+    if (!this.page || h <= this.page.h) return;
+    this.page = { ...this.page, h };
+    this.layout();
+  }
+
   destroy() {
+    this.scroll.removeEventListener('scroll', this.onScroll);
     this.endEdit();
     this.ro.disconnect();
     cancelAnimationFrame(this.raf);

@@ -440,8 +440,14 @@ function mergeRecordings(a, b) {
 function mergeInk(a, b) {
   const [win, lose] = newerFirst(a, b);
   const tomb = [...new Set([...(win.pageTomb || []), ...(lose.pageTomb || [])])];
-  const pages = unionBy([...win.pages, ...lose.pages], (p) => p.id).filter((p) => !tomb.includes(p.id));
-  return { ...win, pages, pageTomb: tomb, links: [...new Set([...win.links, ...lose.links])], recordings: mergeRecordings(win.recordings, lose.recordings) };
+  // A page made longer on either device (endless scroll) keeps the longer height.
+  const longest = new Map([...win.pages, ...lose.pages].map((p) => [p.id, 0]));
+  for (const p of [...win.pages, ...lose.pages]) longest.set(p.id, Math.max(longest.get(p.id), p.h || 0));
+  const pages = unionBy([...win.pages, ...lose.pages], (p) => p.id).filter((p) => !tomb.includes(p.id)).map((p) => (p.h ? { ...p, h: longest.get(p.id) } : p));
+  // Handwriting read on either device: keep the newer reading of each page.
+  const hw = { ...(lose.hw || {}) };
+  for (const [k, v] of Object.entries(win.hw || {})) if (!hw[k] || (v.at || 0) >= (hw[k].at || 0)) hw[k] = v;
+  return { ...win, pages, pageTomb: tomb, hw, links: [...new Set([...win.links, ...lose.links])], recordings: mergeRecordings(win.recordings, lose.recordings) };
 }
 // Union of two versions of a page: strokes are never edited in place (a moved
 // stroke gets a new id), erased ones are remembered, and for stickers and text

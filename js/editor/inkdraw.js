@@ -97,14 +97,30 @@ function nibPath(pts, size) {
   return p;
 }
 
+// Smoothing levels a pen can be set to (stored on each stroke as `sm`; Medium
+// is each pen's own setting). `np` on a stroke means pressure is ignored.
+export const SMOOTHING = [
+  { name: 'Off', smoothing: 0.22, streamline: 0.12 },
+  { name: 'Low', smoothing: 0.42, streamline: 0.3 },
+  { name: 'Medium', smoothing: null, streamline: null },
+  { name: 'High', smoothing: 0.82, streamline: 0.72 },
+];
+export function penOptions(s, base) {
+  const o = { ...base };
+  const sm = SMOOTHING[s.sm];
+  if (sm && sm.smoothing !== null) { o.smoothing = sm.smoothing; o.streamline = sm.streamline; }
+  if (s.np) { o.thinning = 0; }
+  return o;
+}
+
 export function strokePath(s) {
   let p = pathCache.get(s);
   if (p) return p;
-  const pts = strokePoints(s);
+  const pts = s.np ? strokePoints(s).map(([x, y]) => [x, y, 0.5]) : strokePoints(s);
   if (s.t === 'pen' && PENS[s.pen]?.nib) p = nibPath(pts, s.s);
   else {
     const pen = s.t === 'hl' ? { o: { thinning: 0, smoothing: 0.5, streamline: 0.55 } } : PENS[s.pen] || PENS.fountain;
-    const outline = getStroke(pts, { size: s.s, ...pen.o, simulatePressure: !!s.sp && !s.shape, last: true });
+    const outline = getStroke(pts, { size: s.s, ...penOptions(s, pen.o), simulatePressure: !!s.sp && !s.shape && !s.np, last: true });
     p = outlinePath(outline);
   }
   pathCache.set(s, p);
@@ -137,7 +153,7 @@ export function drawStroke(ctx, s, fade = 1) {
 
 export const paperColor = (page) => PAPER_COLORS.find((c) => c.id === page.color) || PAPER_COLORS[0];
 
-export function drawPaper(ctx, page, scale, bgImage = null) {
+export function drawPaper(ctx, page, scale, bgImage = null, area = null) {
   const h = page.h;
   const pc = paperColor(page);
   ctx.save();
@@ -177,7 +193,9 @@ export function drawPaper(ctx, page, scale, bgImage = null) {
   if (page.paper === 'dotted') {
     ctx.fillStyle = pc.line;
     const r = Math.max(1.6, 1.3 / scale);
-    for (let y = 25; y < h; y += 25) for (let x = 25; x < PAGE_W; x += 25) { ctx.beginPath(); ctx.arc(x, y, r, 0, 6.3); ctx.fill(); }
+    const ya = area ? Math.max(25, Math.floor((area.y - 30) / 25) * 25) : 25;
+    const yb = area ? Math.min(h, area.y + area.h + 30) : h;
+    for (let y = ya; y < yb; y += 25) for (let x = 25; x < PAGE_W; x += 25) { ctx.beginPath(); ctx.arc(x, y, r, 0, 6.3); ctx.fill(); }
   }
   ctx.restore();
 }
@@ -575,16 +593,21 @@ const ORDER = { image: 0, tape: 1, text: 3, sticker: 4, label: 4, mine: 4, posti
 
 // `dim(item)` fades items (used when replaying with audio); `visible(item)`
 // hides whole layers.
-export function drawContent(ctx, data, { redraw, skip = null, hidden = null, dim = null, visible = null } = {}) {
+export function drawContent(ctx, data, { redraw, skip = null, hidden = null, dim = null, visible = null, area = null } = {}) {
   const objs = [...(data.objects || [])].sort((a, b) => (ORDER[a.type] ?? 4) - (ORDER[b.type] ?? 4));
-  const show = (o) => !(skip && skip.has(o.id)) && (!visible || visible(o));
+  // Skip what's outside the area being drawn (long pages, deep zoom).
+  const inArea = !area ? () => true : (b) => {
+    const m = 40;
+    return b.x - m < area.x + area.w && b.x + b.w + m > area.x && b.y - m < area.y + area.h && b.y + b.h + m > area.y;
+  };
+  const show = (o) => !(skip && skip.has(o.id)) && (!visible || visible(o)) && inArea({ x: o.x, y: o.y, w: o.w || 0, h: o.h || o._h || 200 });
   const fade = (x) => (dim && dim(x) ? 0.16 : 1);
   const obj = (o) => {
     const f = fade(o);
     if (f === 1) { drawObject(ctx, o, { redraw }); return; }
     ctx.save(); ctx.globalAlpha = f; drawObject(ctx, o, { redraw }); ctx.restore();
   };
-  const ok = (s) => !hidden?.has(s.id) && (!visible || visible(s));
+  const ok = (s) => !hidden?.has(s.id) && (!visible || visible(s)) && inArea(strokeBox(s));
   for (const o of objs) if ((ORDER[o.type] ?? 4) < 2 && show(o)) obj(o);
   for (const s of data.strokes || []) if (s.t === 'hl' && ok(s)) drawStroke(ctx, s, fade(s));
   for (const s of data.strokes || []) if (s.t !== 'hl' && ok(s)) drawStroke(ctx, s, fade(s));

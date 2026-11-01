@@ -19,6 +19,9 @@ export async function inkSummary(n, pdfText = null) {
     let d;
     try { d = await V.loadPage(p.id); } catch { continue; }
     const texts = [];
+    // Handwriting read on a device (see handwriting.js) comes first.
+    const hand = (n.hw?.[p.id]?.lines || []).map((l) => l.t).filter(Boolean).join('\n');
+    if (hand) texts.push(hand);
     for (const o of d.objects || []) {
       if (o.type === 'text' && o.doc) {
         texts.push(docToMarkdown(o.doc, lm));
