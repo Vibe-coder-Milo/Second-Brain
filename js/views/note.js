@@ -4,7 +4,7 @@
 import { html, raw, $, fmtDate, fmtTime, toast, debounce, isWide, downloadText } from '../util.js';
 import * as V from '../vault.js';
 import { state } from '../vault.js';
-import { newNote, displayTitle, regionColors, typeName, NOTE_TYPES, TEMPLATES, guessRegions, SOURCE_LABEL, labelMap } from '../model.js';
+import { newNote, displayTitle, kindName, regionColors, typeName, NOTE_TYPES, TEMPLATES, guessRegions, SOURCE_LABEL, labelMap } from '../model.js';
 import { docOutline, docLabels, docPlainText } from '../doc.js';
 import { compressImage } from '../images.js';
 import { rerunOcr } from '../ocr.js';
@@ -12,8 +12,11 @@ import { confirmSheet, menuSheet, notePicker, regionPicker, passphraseSheet, dat
 import { icons } from '../icons.js';
 import { linkedWith, mentions, related, subNotes } from '../connections.js';
 import { notebookPicker } from './notebooks.js';
+import { mountPlayer } from './recordings.js';
+import { makeEditors, valHtml, fmtVal } from './tableview.js';
 
 let InkView = null;
+let BoardView = null;
 
 // Typed and handwritten notes share the route; pick the right screen.
 export function mount(el, params, ctx) {
@@ -21,7 +24,8 @@ export function mount(el, params, ctx) {
   let kind = null;
   const pick = (p) => {
     const n = state.notes.get(p.id);
-    const k = (n?.kind === 'ink' || (p.id === 'new' && p.kind === 'ink')) ? 'ink' : 'typed';
+    const want = n?.kind || (p.id === 'new' ? p.kind : null);
+    const k = want === 'ink' || want === 'board' ? want : 'typed';
     if (k === kind && inst) { inst.update?.(p); return; }
     inst?.destroy?.();
     el.innerHTML = '';
@@ -31,6 +35,11 @@ export function mount(el, params, ctx) {
       const go = (mod) => { if (kind === 'ink') inst = mod.mount(el, p, ctx); };
       if (InkView) go(InkView);
       else import('./inknote.js').then((m) => { InkView = m; go(m); });
+    } else if (k === 'board') {
+      inst = { destroy() {} };
+      const go = (mod) => { if (kind === 'board') inst = mod.mount(el, p, ctx); };
+      if (BoardView) go(BoardView);
+      else import('./board.js').then((m) => { BoardView = m; go(m); });
     } else inst = mountTyped(el, p, ctx);
   };
   pick(params);
@@ -100,6 +109,7 @@ function mountTyped(el, params, ctx) {
           : html`<button type="button" class="back" data-act="back">${icons.back()}Back</button>`}
         <span class="save-state" id="n-save" aria-live="polite"></span>
         <div class="top-actions">
+          <button type="button" class="icon-btn bare rec-tool" data-act="record" aria-label="Record audio" aria-pressed="false">${icons.mic()}</button>
           <button type="button" class="icon-btn bare" data-act="link" aria-label="Link to another note">${icons.link()}</button>
           ${compact ? html`<a class="icon-btn bare" href="#/note/${n.id}" aria-label="Open full note">${icons.external()}</a>` : ''}
           <button type="button" class="icon-btn bare" data-act="more" aria-label="More actions">${icons.more()}</button>
@@ -108,8 +118,10 @@ function mountTyped(el, params, ctx) {
       </div>
       <article class="note">
         <div id="n-head"></div>
+        <dl id="n-props" class="note-props" hidden></dl>
         <div id="n-figs" class="note-figs"></div>
         <div class="rich-host" id="n-rich"></div>
+        <section id="n-recs" class="note-recs" aria-label="Recordings" hidden></section>
         <div id="n-extra"></div>
         <div id="n-details"></div>
         <div id="n-conn"></div>
@@ -119,6 +131,8 @@ function mountTyped(el, params, ctx) {
     <aside class="outline-panel" id="n-outline" aria-label="Outline" hidden></aside>`}`;
     bindTop();
     drawHead();
+    drawProps();
+    drawRecordings();
     drawFigures();
     drawExtra();
     drawDetails();
@@ -132,6 +146,7 @@ function mountTyped(el, params, ctx) {
     on('[data-act=close]', async () => { await flush(); ctx.navigate('#/map', { replace: true }); });
     on('[data-act=toggle-edit]', () => (editing ? stopEditing() : startEditing()));
     on('[data-act=link]', () => linkTo());
+    on('[data-act=record]', () => record());
     on('[data-act=more]', () => more());
   }
 
@@ -295,6 +310,59 @@ function mountTyped(el, params, ctx) {
     setSave('Saved on this device');
   }
 
+  // ---------- Properties (when its notebook section is a table) ----------
+  function drawProps() {
+    const box = $('#n-props', el);
+    const n = note();
+    if (!box || !n) return;
+    const nb = n.notebook ? state.notebooks.get(n.notebook) : null;
+    const fields = nb?.sections.find((s) => s.id === n.section)?.fields || [];
+    if (!fields.length || id === 'new') { box.hidden = true; box.innerHTML = ''; return; }
+    box.hidden = false;
+    box.innerHTML = `${html`${fields.map((f) => html`<dt>${f.name}</dt><dd><button type="button" class="tv-cell" data-prop="${f.id}" aria-label="${f.name}: ${fmtVal(f, n.props[f.id]) || 'empty'}. Edit">${valHtml(f, n.props[f.id])}</button></dd>`)}`}`;
+    box.querySelectorAll('[data-prop]').forEach((b) => {
+      b.onclick = () => {
+        const cur = note();
+        const E = makeEditors(cur.notebook, cur.section);
+        E.editCell(b, cur, fields.find((f) => f.id === b.dataset.prop));
+      };
+    });
+  }
+
+  // ---------- Recordings ----------
+  let player = null;
+  let shownSig = '';
+  const recSig = (n) => JSON.stringify((n?.recordings || []).map((r) => [r.id, !!r.transcript]));
+  function drawRecordings() {
+    const box = $('#n-recs', el);
+    const n = note();
+    shownSig = recSig(n);
+    if (!box || !n) return;
+    if (!n.recordings?.length || id === 'new') { player?.destroy(); player = null; box.hidden = true; return; }
+    box.hidden = false;
+    if (!player) {
+      box.innerHTML = `${html`<h2 class="section-title">${icons.headphones({ size: 16 })}Recordings</h2><div class="rec-player"></div>`}`;
+      player = mountPlayer(box.querySelector('.rec-player'), id, { index: n.recordings.length - 1, compact: true });
+    } else player.refresh();
+  }
+
+  async function record() {
+    const { startRecording, stopRecording, isRecording } = await import('../recorder.js');
+    if (isRecording()) { stopRecording(); return; }
+    if (id === 'new') { await persist(true); if (id === 'new') { toast('Write a title or something first, then record.'); return; } }
+    const nid = id;
+    const b = el.querySelector('[data-act=record]');
+    b?.setAttribute('aria-pressed', 'true');
+    const rec = await startRecording({ sealed: !!note()?.sealed, label: displayTitle(note()) });
+    b?.setAttribute('aria-pressed', 'false');
+    if (!rec) return;
+    const cur = state.notes.get(nid);
+    if (!cur) { V.deleteFile(rec.fileId).catch(() => {}); return; }
+    await V.saveNote({ ...cur, recordings: [...(cur.recordings || []), rec] });
+    toast('Recording saved');
+    if (nid === id) { player?.destroy(); player = null; drawRecordings(); }
+  }
+
   // ---------- Connections ----------
   function drawConnections() {
     const n = note();
@@ -314,7 +382,7 @@ function mountTyped(el, params, ctx) {
     box.innerHTML = `${html`<section class="connections" aria-labelledby="conn-h">
       <h2 id="conn-h" class="conn-title">Connections</h2>
       ${kids.length || n.notebook ? html`<div class="conn-group"><h3>Sub-notes${kids.length ? html` <span class="count">${kids.length}</span>` : ''}</h3>
-        <ul class="links-list">${kids.map((k) => html`<li><a href="${href(k)}">${icons.sub({ size: 16 })}<span style="flex:1;min-width:0">${displayTitle(k)}</span><span class="rn">${k.kind === 'ink' ? 'Handwritten' : 'Typed'}</span></a></li>`)}</ul>
+        <ul class="links-list">${kids.map((k) => html`<li><a href="${href(k)}">${icons.sub({ size: 16 })}<span style="flex:1;min-width:0">${displayTitle(k)}</span><span class="rn">${kindName(k)}</span></a></li>`)}</ul>
         <div class="btn-row"><button type="button" class="btn btn-sm" data-sub="note">${icons.plus({ size: 16 })}Typed sub-note</button><button type="button" class="btn btn-sm" data-sub="ink">${icons.pen({ size: 16 })}Handwritten sub-note</button></div></div>` : ''}
       ${linked.length ? html`<div class="conn-group"><h3>Linked <span class="count">${linked.length}</span></h3>
         <ul class="links-list">${linked.map(({ note: o, explicit, context }) => html`<li><a href="${href(o)}"><span class="dot" style="background:${dot(o)}"></span><span style="flex:1;min-width:0"><span class="lt">${displayTitle(o)}</span>${context ? html`<span class="ctx">…${context.slice(0, 110)}</span>` : ''}</span></a>
@@ -323,9 +391,9 @@ function mountTyped(el, params, ctx) {
         <ul class="links-list">${ment.map((m) => html`<li><a href="${href(m.note)}"><span class="dot" style="background:${dot(m.note)}"></span><span style="flex:1;min-width:0"><span class="lt">${displayTitle(m.note)}</span><span class="ctx">…${m.before}<mark>${m.match}</mark>${m.after}…</span></span></a>
           <button type="button" class="btn btn-sm" data-accept="${m.note.id}">Link</button></li>`)}</ul></div>` : ''}
       ${rel.length ? html`<div class="conn-group"><h3>Related, found on this device</h3>
-        <ul class="links-list">${rel.map((x) => html`<li><a href="${href(x.note)}"><span class="dot" style="background:${dot(x.note)}"></span><span style="flex:1;min-width:0"><span class="lt">${displayTitle(x.note)}</span><span class="ctx">Shares: ${x.shared.join(', ')}</span></span></a>
+        <ul class="links-list">${rel.map((x) => html`<li><a href="${href(x.note)}"><span class="dot" style="background:${dot(x.note)}"></span><span style="flex:1;min-width:0"><span class="lt">${displayTitle(x.note)}</span><span class="ctx">${x.meaning ? 'Close in meaning' : `Shares: ${x.shared.join(', ')}`}</span></span></a>
           <button type="button" class="btn btn-sm" data-accept="${x.note.id}">Link</button></li>`)}</ul>
-        <p class="hint">Worked out on this device from your words. Nothing is sent anywhere.</p></div>` : ''}
+        <p class="hint">Worked out on this device. Nothing is sent anywhere.</p></div>` : ''}
       ${sugg.map(({ other, reason }) => html`<div class="suggest" aria-label="Suggested link">
         <span class="flag">Suggested link</span>
         <p class="title">${displayTitle(other)}</p>
@@ -414,6 +482,8 @@ function mountTyped(el, params, ctx) {
   }
 
   function destroyEditor() {
+    player?.destroy();
+    player = null;
     teardownBar();
     editor?.destroy();
     editor = null;
@@ -635,8 +705,9 @@ function mountTyped(el, params, ctx) {
           const next = rich.noteDoc(n);
           if (JSON.stringify(cur) !== JSON.stringify(next)) editor.commands.setContent(next, false);
         }
-        if (!editing) { drawHead(); drawFigures(); drawExtra(); }
-        else if (evt.type === 'ocr') drawFigures();
+        if (!editing) { drawHead(); drawFigures(); drawExtra(); } else if (evt.type === 'ocr') drawFigures();
+        if (recSig(note()) !== shownSig) drawRecordings();
+        drawProps();
         drawConnections();
       }
     },

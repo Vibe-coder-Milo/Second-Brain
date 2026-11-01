@@ -8,7 +8,7 @@ import { state, emit, applyRemoteRecord, forgetNote, decryptEnv, saveNote, saveN
 import * as C from './crypto.js';
 import { textToB64, b64ToText, bytesToB64, b64ToBytes, debounce } from './util.js';
 // (bytesToB64 / b64ToBytes carry encrypted file payloads.)
-import { normNote, normNotebook, displayTitle } from './model.js';
+import { normNote, normNotebook, displayTitle, hasPages } from './model.js';
 
 const apiBase = () => 'https://api.github.com';
 
@@ -291,7 +291,7 @@ async function attemptSync(gh) {
     }
     // Notebooks and handwritten notes merge instead of making copies: their
     // content lives in page files, which merge on their own.
-    if (remoteNote.kind === 'notebook' || localNote.kind === 'notebook' || (remoteNote.kind === 'ink' && localNote.kind === 'ink')) {
+    if (remoteNote.kind === 'notebook' || localNote.kind === 'notebook' || (hasPages(remoteNote) && remoteNote.kind === localNote.kind)) {
       await records.put({ ...rec, remoteSha: sha });
       const merged = remoteNote.kind === 'notebook' || localNote.kind === 'notebook'
         ? await saveNotebook(mergeNotebook(localNote, remoteNote), { touch: false })
@@ -307,7 +307,14 @@ async function attemptSync(gh) {
     }
     const remoteNewer = remoteNote.updatedAt > localNote.updatedAt;
     const loser = remoteNewer ? localNote : remoteNote;
-    if (remoteNewer) {
+    const recs = mergeRecordings(localNote.recordings, remoteNote.recordings);
+    const winner = remoteNewer ? remoteNote : localNote;
+    if (recs.length !== (winner.recordings || []).length) {
+      // Keep recordings from both versions on the note that wins.
+      await records.put({ ...rec, remoteSha: sha });
+      const saved = await saveNote({ ...winner, recordings: recs }, { touch: false });
+      pushes.push({ kind: 'notes', rec: await records.get(saved.id) });
+    } else if (remoteNewer) {
       const r2 = { id: rec.id, env, rev: (rec.rev || 0) + 1, dirty: false, deleted: false, remoteSha: sha };
       await records.put(r2);
       await applyRemoteRecord(r2);
@@ -324,6 +331,7 @@ async function attemptSync(gh) {
       suggestedRegion: loser.region,
       source: 'conflict',
       files: [],
+      recordings: [],
       links: [],
       suggested: [],
     });
@@ -392,7 +400,7 @@ async function attemptSync(gh) {
   return true;
 }
 
-const CONTENT_KEYS = ['body', 'doc', 'font', 'kind', 'notebook', 'section', 'parent', 'daily', 'type', 'region', 'inbox', 'sealed', 'tags', 'links', 'url', 'chat', 'suggestedRegion', 'dismissed'];
+const CONTENT_KEYS = ['body', 'doc', 'font', 'kind', 'notebook', 'section', 'parent', 'daily', 'type', 'region', 'inbox', 'sealed', 'tags', 'links', 'url', 'chat', 'suggestedRegion', 'dismissed', 'props'];
 function sameContent(a, b) {
   const pick = (n) => {
     const o = Object.fromEntries(CONTENT_KEYS.map((k) => [k, n[k]]));
@@ -409,7 +417,7 @@ function mergeOcr(local, remote) {
   });
   const title = local.title || remote.title;
   const suggested = [...local.suggested, ...remote.suggested.filter((s) => !local.suggested.some((x) => x.id === s.id))];
-  return { ...local, files, title, suggested, updatedAt: Math.max(local.updatedAt, remote.updatedAt) };
+  return { ...local, files, title, suggested, recordings: mergeRecordings(local.recordings, remote.recordings), updatedAt: Math.max(local.updatedAt, remote.updatedAt) };
 }
 
 function newerFirst(a, b) { return (a.updatedAt || 0) >= (b.updatedAt || 0) ? [a, b] : [b, a]; }
@@ -421,11 +429,19 @@ function mergeNotebook(a, b) {
   const [win, lose] = newerFirst(normNotebook(a), normNotebook(b));
   return { ...win, sections: unionBy([...win.sections, ...lose.sections], (s) => s.id) };
 }
+function mergeRecordings(a, b) {
+  const byId = new Map();
+  for (const r of [...(a || []), ...(b || [])]) {
+    const cur = byId.get(r.id);
+    if (!cur || (!cur.transcript && r.transcript) || (r.transcript?.at || 0) > (cur.transcript?.at || 0)) byId.set(r.id, r);
+  }
+  return [...byId.values()].sort((x, y) => x.start - y.start);
+}
 function mergeInk(a, b) {
   const [win, lose] = newerFirst(a, b);
   const tomb = [...new Set([...(win.pageTomb || []), ...(lose.pageTomb || [])])];
   const pages = unionBy([...win.pages, ...lose.pages], (p) => p.id).filter((p) => !tomb.includes(p.id));
-  return { ...win, pages, pageTomb: tomb, links: [...new Set([...win.links, ...lose.links])] };
+  return { ...win, pages, pageTomb: tomb, links: [...new Set([...win.links, ...lose.links])], recordings: mergeRecordings(win.recordings, lose.recordings) };
 }
 // Union of two versions of a page: strokes are never edited in place (a moved
 // stroke gets a new id), erased ones are remembered, and for stickers and text
@@ -458,6 +474,8 @@ function fileType(fileId) {
   for (const n of state.notes.values()) {
     const f = n.files.find((x) => x.id === fileId);
     if (f?.type) return f.type;
+    const r = (n.recordings || []).find((x) => x.fileId === fileId);
+    if (r) return r.mime;
   }
   return 'image/jpeg';
 }

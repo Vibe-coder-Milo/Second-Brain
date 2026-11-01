@@ -74,8 +74,9 @@ const deviceIcon = (name) => (/iPhone|Android/.test(name || '')
 
 export async function openHistory(n, ctx, { page = null } = {}) {
   const S = await import('../sync.js');
-  const ink = n.kind === 'ink' && page;
-  const title = ink ? `${displayTitle(n)}, page ${n.pages.findIndex((p) => p.id === page.id) + 1}` : displayTitle(n);
+  const board = n.kind === 'board' && page;
+  const ink = (n.kind === 'ink' || n.kind === 'board') && page;
+  const title = ink && !board ? `${displayTitle(n)}, page ${n.pages.findIndex((p) => p.id === page.id) + 1}` : displayTitle(n);
   const s = openSheet(`${html`<div class="sheet-head"><span class="side"></span><h2>Version history</h2><span class="side"><button type="button" class="btn btn-ghost btn-sm" data-close>Done</button></span></div>
     <p class="hint" style="margin-top:-10px">${title}. Every sync keeps a copy in your private GitHub repo, encrypted.</p>
     <div id="vh-body" class="vh"><p class="muted">Loading versions…</p></div>`}`, { label: 'Version history' });
@@ -127,7 +128,18 @@ export async function openHistory(n, ctx, { page = null } = {}) {
     draw();
   }
 
+  function boardSummary(cur, prev) {
+    const count = (d) => (d.objects || []).filter((o) => !o.del).length;
+    const oc = count(cur.data);
+    const sc = cur.data.strokes?.length || 0;
+    if (!prev) return [plural(oc, 'thing'), sc ? plural(sc, 'pen stroke') : ''].filter(Boolean).join(', ');
+    const od = oc - count(prev.data);
+    const sd = sc - (prev.data.strokes?.length || 0);
+    return [od > 0 ? `${plural(od, 'thing')} added` : od < 0 ? `${plural(-od, 'thing')} removed` : '', sd > 0 ? `${plural(sd, 'pen stroke')} added` : sd < 0 ? `${plural(-sd, 'pen stroke')} removed` : ''].filter(Boolean).join(', ') || 'Moved or edited';
+  }
+
   function inkSummary(cur, prev) {
+    if (board) return boardSummary(cur, prev);
     const sc = cur.data.strokes?.length || 0;
     const oc = cur.data.objects?.length || 0;
     if (!prev) return `${plural(sc, 'stroke')}${oc ? `, ${plural(oc, 'sticker or box', 'stickers and boxes')}` : ''}`;
@@ -172,11 +184,11 @@ export async function openHistory(n, ctx, { page = null } = {}) {
     const pv = body.querySelector('[data-prev]');
     if (pv) {
       const x = versions[Number(pv.dataset.prev)];
-      import('../editor/inkdraw.js').then(async ({ renderPageCanvas }) => {
-        const c = await renderPageCanvas(page, x.data, 520);
+      (board ? import('../boarddraw.js') : import('../editor/inkdraw.js')).then(async (m) => {
+        const c = board ? await m.renderBoardCanvas(x.data, { widthPx: 1040 }) : await m.renderPageCanvas(page, x.data, 520);
         c.className = 'vh-canvas';
         c.setAttribute('role', 'img');
-        c.setAttribute('aria-label', 'This version of the page');
+        c.setAttribute('aria-label', board ? 'This version of the board' : 'This version of the page');
         pv.replaceChildren(c);
       }).catch(() => { pv.textContent = 'Couldn’t draw this version.'; });
     }
@@ -192,12 +204,24 @@ export async function openHistory(n, ctx, { page = null } = {}) {
         const now = Date.now();
         // Fresh ids, so other devices don't treat the restored ink as erased.
         const strokes = (x.data.strokes || []).map((st) => ({ ...st, id: uid('k') }));
-        const objects = (x.data.objects || []).map((o) => ({ ...o, id: uid('o'), t: now }));
-        const tomb = [...new Set([...(cur.tomb || []), ...(cur.strokes || []).map((st) => st.id), ...(cur.objects || []).map((o) => o.id)])];
         const live = state.notes.get(n.id);
-        await V.savePage(page.id, { ...cur, strokes, objects, tomb }, { sealed: !!live?.sealed });
-        const { refreshInkSummary } = await import('../notework.js');
-        await refreshInkSummary(n.id);
+        if (board) {
+          // Board objects keep their ids (arrows point at them): everything
+          // in that version comes back, everything since is marked deleted.
+          const keep = new Map((x.data.objects || []).map((o) => [o.id, { ...o, t: now }]));
+          const objects = [...keep.values()];
+          for (const o of cur.objects || []) if (!keep.has(o.id)) objects.push(o.del ? o : { ...o, del: true, t: now });
+          const tomb = [...new Set([...(cur.tomb || []), ...(cur.strokes || []).map((st) => st.id)])];
+          const saved = await V.savePage(page.id, { ...cur, strokes, objects, tomb }, { sealed: !!live?.sealed });
+          const { boardSummary } = await import('../boarddraw.js');
+          if (live) await V.saveNote({ ...live, body: boardSummary(saved) });
+        } else {
+          const objects = (x.data.objects || []).map((o) => ({ ...o, id: uid('o'), t: now }));
+          const tomb = [...new Set([...(cur.tomb || []), ...(cur.strokes || []).map((st) => st.id), ...(cur.objects || []).map((o) => o.id)])];
+          await V.savePage(page.id, { ...cur, strokes, objects, tomb }, { sealed: !!live?.sealed });
+          const { refreshInkSummary } = await import('../notework.js');
+          await refreshInkSummary(n.id);
+        }
         V.emit({ type: 'page', id: page.id });
       } else {
         const cur = state.notes.get(n.id);

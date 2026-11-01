@@ -79,6 +79,7 @@ export function mount(el, params, ctx) {
           <h1 class="page-title">${d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })}</h1></div>
         <div class="head-actions">
           ${isToday ? '' : html`<button type="button" class="btn btn-sm" data-day="${today}">Today</button>`}
+          <a class="icon-btn" href="#/notes?focus=1" aria-label="Search your notes">${icons.search()}</a>
           <label class="icon-btn" aria-label="Go to a day">${icons.calendar()}<input type="date" class="sr-only" id="t-jump" value="${day}"></label>
         </div>
       </div>
@@ -153,7 +154,7 @@ export function mount(el, params, ctx) {
     const regions = state.config.regions;
     const list = [...state.notes.values()].filter((n) => !n.daily && isoOf(n.createdAt) === day).sort((a, b) => a.createdAt - b.createdAt);
     $('#t-caps-sec', el).hidden = !list.length;
-    box.innerHTML = list.map((n) => html`<li><a href="#/note/${n.id}"><span class="time">${fmtTime(n.createdAt)}</span><span class="dot" style="background:${regionColors(n.inbox ? null : regions.find((r) => r.id === n.region)).dot}"></span><span class="t">${displayTitle(n)}</span>${n.kind === 'ink' ? raw(icons.pen({ size: 14 })) : ''}</a></li>`).join('');
+    box.innerHTML = list.map((n) => html`<li><a href="#/note/${n.id}"><span class="time">${fmtTime(n.createdAt)}</span><span class="dot" style="background:${regionColors(n.inbox ? null : regions.find((r) => r.id === n.region)).dot}"></span><span class="t">${displayTitle(n)}</span>${n.kind === 'ink' ? raw(icons.pen({ size: 14 })) : n.kind === 'board' ? raw(icons.board({ size: 14 })) : ''}</a></li>`).join('');
   }
 
   function drawNoteLink() {

@@ -103,3 +103,11 @@ export async function rerunOcr(noteId, fileId) {
   await saveNote({ ...n, files: n.files.map((f) => (f.id === fileId ? { ...f, ocrStatus: 'pending', ocrBy: state.deviceId } : f)) }, { touch: false });
   runOcrQueue();
 }
+
+// Read the text in one image (bytes or a Blob), for scanned pages.
+export async function ocrImage(blobOrBytes) {
+  const w = await getWorker();
+  const blob = blobOrBytes instanceof Blob ? blobOrBytes : new Blob([blobOrBytes], { type: 'image/jpeg' });
+  const { data } = await w.recognize(blob);
+  return cleanText(data.text);
+}

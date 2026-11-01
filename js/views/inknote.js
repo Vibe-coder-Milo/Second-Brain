@@ -1,7 +1,7 @@
 // A handwritten note: pages you write on with Apple Pencil, with text boxes,
 // stickers, post-its, photos and imported PDF pages.
 
-import { html, raw, $, fmtDate, toast, debounce, isWide } from '../util.js';
+import { html, raw, $, fmtDate, toast, debounce, isWide, uid } from '../util.js';
 import * as V from '../vault.js';
 import { state } from '../vault.js';
 import { newNote, newPage, displayTitle, PAPERS, PAPER_COLORS } from '../model.js';
@@ -9,9 +9,14 @@ import { refreshInkSummary } from '../notework.js';
 import { icons } from '../icons.js';
 import { openSheet, menuSheet, confirmSheet, popover, stickerDrawer, notePicker, passphraseSheet } from '../ui.js';
 import { InkSurface } from '../editor/ink.js';
-import { PENS, HL, INK_COLORS, HL_COLORS, DEFAULT_FAVS, mm, renderPageCanvas } from '../editor/inkdraw.js';
+import { ZoomStrip } from '../editor/zoomstrip.js';
+import { startRecording, stopRecording, isRecording, recordingTime } from '../recorder.js';
+import { mountPlayer } from './recordings.js';
+import { PENS, HL, INK_COLORS, HL_COLORS, DEFAULT_FAVS, mm, renderPageCanvas, layerView, noteLayers, layerOf } from '../editor/inkdraw.js';
 import { linkedWith, mentions, related, subNotes } from '../connections.js';
-import { notebookPicker } from './notebooks.js';
+import { notebookPicker, textSheet } from './notebooks.js';
+
+const activeLayers = new Map(); // note id -> the layer you're writing on (this session)
 
 const DEFAULT_TOOL = { tool: 'pen', pen: 'fountain', color: '#1B2A38', size: 3.4, hlColor: '#F7D046', hlSize: 18, eraserMode: 'stroke', hlOnly: false, eraserSize: 16, fingerDraw: false };
 
@@ -24,6 +29,7 @@ export function mount(el, params, ctx) {
   let suggest = null;
   let unfloat = null;
   let saving = Promise.resolve();
+  let zoom = null;
   const tool = { ...DEFAULT_TOOL, fingerDraw: !navigator.maxTouchPoints || !/iPad|Macintosh/.test(navigator.userAgent) ? false : false, ...(state.device?.ink || {}) };
   if (!('ontouchstart' in window) && !navigator.maxTouchPoints) tool.fingerDraw = false;
 
@@ -84,6 +90,7 @@ export function mount(el, params, ctx) {
           <span class="ink-sub" id="iv-sub">${nb ? `${nb.title}${sec && nb.sections.length > 1 ? ` › ${sec.name}` : ''}, ` : ''}page ${pageIdx + 1} of ${n.pages.length}</span>
         </div>
         <div class="top-actions">
+          <button type="button" class="icon-btn bare" data-act="replay" aria-label="Replay recordings" aria-pressed="false" ${n.recordings.length ? '' : raw('hidden')}>${icons.headphones()}</button>
           <button type="button" class="icon-btn bare" data-act="pages" aria-label="All pages">${icons.pages()}</button>
           <button type="button" class="icon-btn bare hide-sm" data-act="link" aria-label="Link to another note">${icons.link()}</button>
           <button type="button" class="icon-btn bare hide-sm" data-act="export" aria-label="Export as PDF">${icons.share()}</button>
@@ -92,24 +99,172 @@ export function mount(el, params, ctx) {
       </header>
       <div class="ink-tools" role="toolbar" aria-label="Writing tools" id="iv-tools"></div>
       <div class="ink-host" id="iv-host"></div>
+      <div class="zs" id="iv-zs" role="region" aria-label="Writing window" hidden></div>
       <div class="fmtbar tb-fmt" id="iv-fmt" role="toolbar" aria-label="Text box formatting" hidden></div>
     </div>`}`;
     el.querySelector('[data-act=back]').onclick = () => leave();
     el.querySelector('[data-act=rename]').onclick = () => rename();
     el.querySelector('[data-act=pages]').onclick = () => pagesSheet();
+    el.querySelector('[data-act=replay]').onclick = () => (replay ? exitReplay() : enterReplay());
     el.querySelector('[data-act=link]').onclick = () => linkTo();
     el.querySelector('[data-act=export]').onclick = () => exportPdf();
     el.querySelector('[data-act=more]').onclick = () => more();
     drawTools();
     surface = new InkSurface($('#iv-host', el), {
       getTool: () => tool,
-      onChange: (data) => queueSave(data),
+      onChange: (data) => { queueSave(data); zoom?.render(); },
+      pickLayer: (anchor) => pickLayer(anchor),
       onSelection: () => {},
       onTextEditing: (ed) => textEditing(ed),
       pickColour: (anchor, cb) => colourPop(anchor, cb),
       sealed: () => !!note()?.sealed,
     });
+    applyLayers();
     showPage(pageIdx);
+  }
+
+  // ---------- Layers ----------
+  const activeLayer = () => {
+    const a = activeLayers.get(id) || 'ink';
+    return noteLayers(note()).some((l) => l.id === a && a !== 'paper') ? a : 'ink';
+  };
+  function applyLayers() {
+    const n = note();
+    if (!n || !surface) return;
+    const ls = noteLayers(n);
+    surface.setLayers({
+      hidden: new Set(ls.filter((l) => l.hidden).map((l) => l.id)),
+      locked: new Set(ls.filter((l) => l.locked && l.id !== 'paper').map((l) => l.id)),
+      active: activeLayer(),
+      paperHidden: !!ls.find((l) => l.id === 'paper')?.hidden,
+      names: Object.fromEntries(ls.map((l) => [l.id, l.name])),
+    });
+    zoom?.render();
+    const b = el.querySelector('[data-act=layers]');
+    if (b) b.classList.toggle('dot', ls.some((l) => l.hidden));
+  }
+  async function saveLayers(list, extra = {}) {
+    await V.saveNote({ ...note(), layers: list, ...extra });
+    applyLayers();
+  }
+
+  function layersPop(anchor) {
+    const n = note();
+    const ls = noteLayers(n);
+    const act = activeLayer();
+    const status = (l) => (l.id === act ? 'Writing here' : l.hidden ? 'Hidden' : l.locked ? 'Locked' : '');
+    const p = popover(anchor, `${html`<div class="lay-head"><span class="pop-title">Layers</span><button type="button" class="btn btn-sm" data-ladd>${icons.plus({ size: 15 })}Add layer</button></div>
+      <ul class="lay-list">${ls.map((l) => html`<li class="${l.id === act ? 'on' : ''} ${l.hidden ? 'off' : ''}">
+        <button type="button" class="lay-eye" data-leye="${l.id}" aria-label="${l.hidden ? 'Show' : 'Hide'} ${l.name}" aria-pressed="${l.hidden ? 'false' : 'true'}">${l.hidden ? icons.eyeOff({ size: 18 }) : l.id === 'paper' ? icons.lock({ size: 17 }) : icons.eye({ size: 18 })}</button>
+        <button type="button" class="lay-name" data-lpick="${l.id}" ${l.id === 'paper' ? raw('aria-disabled="true"') : ''}>${l.name}${l.locked && l.id !== 'paper' ? raw(icons.lock({ size: 13 })) : ''}</button>
+        <span class="lay-st">${status(l)}</span>
+        ${l.id === 'paper' ? '' : html`<button type="button" class="lay-more" data-lmore="${l.id}" aria-label="${l.name} options">${icons.more({ size: 16 })}</button>`}</li>`)}</ul>
+      <label class="check lay-exp"><input type="checkbox" id="lay-exp" ${n.exportAllLayers ? '' : raw('checked')}> Export visible layers only</label>`}`, { label: 'Layers', width: 330, keepFocus: false });
+    const redraw = () => { p.close(); layersPop(anchor); };
+    p.el.querySelectorAll('[data-leye]').forEach((b) => {
+      b.onclick = async () => {
+        const lid = b.dataset.leye;
+        const list = noteLayers(note()).map((l) => (l.id === lid ? { ...l, hidden: !l.hidden } : l));
+        await saveLayers(list);
+        redraw();
+      };
+    });
+    p.el.querySelectorAll('[data-lpick]').forEach((b) => {
+      b.onclick = async () => {
+        const lid = b.dataset.lpick;
+        if (lid === 'paper') { toast('The paper is the page itself: its lines and any PDF or photo behind your writing.'); return; }
+        activeLayers.set(id, lid);
+        const l = noteLayers(note()).find((x) => x.id === lid);
+        if (l?.hidden) await saveLayers(noteLayers(note()).map((x) => (x.id === lid ? { ...x, hidden: false } : x)));
+        else applyLayers();
+        if (l?.locked) toast(`${l.name} is locked. Unlock it to write on it.`);
+        redraw();
+      };
+    });
+    p.el.querySelectorAll('[data-lmore]').forEach((b) => { b.onclick = () => { p.close(); layerMenu(b.dataset.lmore, anchor); }; });
+    p.el.querySelector('[data-ladd]').onclick = async () => {
+      p.close();
+      const list = noteLayers(note());
+      const name = await textSheet({ title: 'New layer', label: 'Name', value: `Layer ${list.length}`, confirm: 'Add layer' });
+      if (!name) return;
+      const nl = { id: uid('L'), name };
+      const at = list.findIndex((l) => l.id === 'paper');
+      list.splice(at < 0 ? list.length : at, 0, nl);
+      activeLayers.set(id, nl.id);
+      await saveLayers(list);
+      toast(`Writing on ${name}`);
+    };
+    p.el.querySelector('#lay-exp').onchange = (e) => saveLayers(noteLayers(note()), { exportAllLayers: !e.target.checked });
+  }
+
+  async function layerMenu(lid, anchor) {
+    const l = noteLayers(note()).find((x) => x.id === lid);
+    if (!l) return;
+    const custom = !['ink', 'hl', 'paper'].includes(lid);
+    const items = [{ value: 'lock', label: l.locked ? 'Unlock' : 'Lock, so nothing on it changes' }, { value: 'rename', label: 'Rename' }];
+    if (custom) items.push({ value: 'merge', label: 'Merge into Ink' }, { value: 'delete', label: 'Delete layer and its writing', danger: true });
+    const act = await menuSheet(l.name, items);
+    if (act === 'lock') await saveLayers(noteLayers(note()).map((x) => (x.id === lid ? { ...x, locked: !x.locked } : x)));
+    if (act === 'rename') {
+      const name = await textSheet({ title: 'Rename layer', label: 'Name', value: l.name, confirm: 'Save' });
+      if (name) await saveLayers(noteLayers(note()).map((x) => (x.id === lid ? { ...x, name } : x)));
+    }
+    if (act === 'merge' || act === 'delete') {
+      if (act === 'delete') {
+        const ok = await confirmSheet({ title: `Delete ${l.name}?`, body: 'Everything written on this layer goes, on every page of this note.', confirm: 'Delete', danger: true });
+        if (!ok) return;
+      }
+      await flush();
+      const n = note();
+      for (const pg of n.pages) {
+        let d;
+        try { d = await V.loadPage(pg.id); } catch { continue; }
+        const mine = (it) => layerOf(it) === lid;
+        if (!d.strokes.some(mine) && !d.objects.some(mine)) continue;
+        const tomb = [...d.tomb];
+        const now = Date.now();
+        let strokes;
+        let objects;
+        if (act === 'delete') {
+          strokes = d.strokes.filter((s) => { if (mine(s)) { tomb.push(s.id); return false; } return true; });
+          objects = d.objects.filter((o) => { if (mine(o)) { tomb.push(o.id); return false; } return true; });
+        } else {
+          const un = (it) => { const c = { ...it }; delete c.l; return c; };
+          strokes = d.strokes.map((s) => { if (!mine(s)) return s; tomb.push(s.id); return { ...un(s), id: uid('k'), ...(s.t === 'hl' ? { l: 'ink' } : {}) }; });
+          objects = d.objects.map((o) => (mine(o) ? { ...un(o), t: now } : o));
+        }
+        await V.savePage(pg.id, { ...d, strokes, objects, tomb }, { sealed: n.sealed });
+      }
+      if (activeLayers.get(id) === lid) activeLayers.delete(id);
+      await saveLayers(noteLayers(note()).filter((x) => x.id !== lid));
+      await showPage(pageIdx);
+      toast(act === 'delete' ? 'Layer deleted' : `Merged into Ink`);
+    }
+    void anchor;
+  }
+
+  function pickLayer(anchor) {
+    return new Promise((resolve) => {
+      const ls = noteLayers(note()).filter((l) => l.id !== 'paper');
+      const p = popover(anchor, `${html`<div class="pop-head">Move to layer</div>${ls.map((l) => html`<button type="button" class="pop-item" data-l="${l.id}">${l.name}${l.hidden ? ' (hidden)' : l.locked ? ' (locked)' : ''}</button>`)}`}`, { label: 'Move to layer', width: 260, onClose: (v) => resolve(v || null) });
+      p.el.querySelectorAll('[data-l]').forEach((b) => { b.onclick = () => p.close(b.dataset.l); });
+    });
+  }
+
+  // ---------- Writing window ----------
+  function toggleZoom() {
+    if (zoom) { closeZoom(); return; }
+    if (!surface?.page) return;
+    if (tool.tool !== 'pen' && tool.tool !== 'hl' && tool.tool !== 'eraser') { tool.tool = 'pen'; saveTool(); }
+    zoom = new ZoomStrip(surface, $('#iv-zs', el), { getTool: () => tool, onClose: () => closeZoom() });
+    el.querySelector('#iv')?.classList.add('zooming');
+    drawTools();
+  }
+  function closeZoom() {
+    zoom?.destroy();
+    zoom = null;
+    el.querySelector('#iv')?.classList.remove('zooming');
+    drawTools();
   }
 
   // ---------- Tools ----------
@@ -122,14 +277,17 @@ export function mount(el, params, ctx) {
     const curSize = tool.tool === 'hl' ? tool.hlSize : tool.size;
     const curCol = tool.tool === 'hl' ? tool.hlColor : tool.color;
     box.innerHTML = `${html`
-      <div class="tg"><button type="button" class="tool" data-act="undo" aria-label="Undo">${icons.undo({ size: 22 })}</button><button type="button" class="tool" data-act="redo" aria-label="Redo">${icons.redo({ size: 22 })}</button></div>
+      <div class="tg"><button type="button" class="tool" data-act="undo" aria-label="Undo">${icons.undo({ size: 22 })}</button><button type="button" class="tool" data-act="redo" aria-label="Redo">${icons.redo({ size: 22 })}</button><button type="button" class="tool rec-tool" data-act="record" aria-label="${isRecording() ? 'Stop recording' : 'Record audio'}" aria-pressed="${isRecording() ? 'true' : 'false'}">${icons.mic({ size: 22 })}</button></div>
       <div class="tg">${T('pen', 'pen', `Pen: ${PENS[tool.pen]?.name || 'Fountain'}`)}${T('hl', 'highlighter', 'Highlighter')}${T('eraser', 'eraser', 'Eraser')}${T('lasso', 'lasso', 'Lasso')}${T('shapes', 'shapes', 'Shapes')}${T('text', 'textbox', 'Text box')}</div>
       <div class="tg"><button type="button" class="tool" data-act="postit" aria-label="Post-it note">${icons.postit({ size: 22 })}</button><button type="button" class="tool" data-act="sticker" aria-label="Stickers">${icons.sticker({ size: 22 })}</button><label class="tool" aria-label="Insert image">${icons.image({ size: 22 })}<input type="file" accept="image/*" class="sr-only" id="iv-img"></label></div>
       ${['pen', 'shapes', 'hl'].includes(tool.tool) ? html`<div class="tg colours" role="group" aria-label="Colours">${colours.map((c) => html`<button type="button" class="ink-swatch" data-col="${c}" style="--c:${c}" aria-label="Colour ${INK_COLORS.find((x) => x[1] === c)?.[0] || HL_COLORS.find((x) => x[1] === c)?.[0] || c}" aria-pressed="${c === curCol ? 'true' : 'false'}"></button>`)}<button type="button" class="ink-swatch more" data-act="colours" aria-label="More colours"></button></div>
       <div class="tg sizes" role="group" aria-label="Thickness">${sizes.map((s, i) => html`<button type="button" class="ink-size" data-size="${s}" aria-label="${['Fine', 'Medium', 'Bold'][i]}, ${mm(s)}" aria-pressed="${Math.abs(s - curSize) < 0.01 ? 'true' : 'false'}"><span style="--d:${Math.round(4 + i * 4)}px;--c:${curCol}"></span></button>`)}</div>` : ''}
       ${tool.tool === 'eraser' ? html`<div class="tg"><button type="button" class="chip sm" data-act="eraser-mode">${tool.eraserMode === 'precise' ? 'Precise' : 'Whole strokes'}</button><button type="button" class="chip sm" aria-pressed="${tool.hlOnly ? 'true' : 'false'}" data-act="hl-only">Only highlights</button></div>` : ''}
       ${tool.tool === 'lasso' && surface?.canPaste ? html`<div class="tg"><button type="button" class="chip sm" data-act="paste">Paste</button></div>` : ''}
+      <div class="tg"><button type="button" class="tool wide" data-act="layers" aria-label="Layers">${icons.layers({ size: 20 })}<span class="hide-sm">Layers</span></button><button type="button" class="tool wide" data-act="zoomstrip" aria-label="Writing window" aria-pressed="${zoom ? 'true' : 'false'}">${icons.zoomBox({ size: 20 })}<span class="hide-sm">Zoom</span></button></div>
       <div class="tg zoom hide-sm"><button type="button" class="tool" data-act="zoom-out" aria-label="Zoom out">${icons.zoomOut({ size: 20 })}</button><button type="button" class="tool" data-act="zoom-in" aria-label="Zoom in">${icons.zoomIn({ size: 20 })}</button></div>`}`;
+    const lb = box.querySelector('[data-act=layers]');
+    if (lb) lb.classList.toggle('dot', noteLayers(note()).some((l) => l.hidden));
     box.querySelectorAll('[data-tool]').forEach((b) => {
       b.onclick = () => {
         const t = b.dataset.tool;
@@ -145,11 +303,14 @@ export function mount(el, params, ctx) {
     box.querySelectorAll('[data-size]').forEach((b) => { b.onclick = () => { if (tool.tool === 'hl') tool.hlSize = Number(b.dataset.size); else tool.size = Number(b.dataset.size); saveTool(); drawTools(); }; });
     const on = (a, fn) => { const b = box.querySelector(`[data-act=${a}]`); if (b) b.onclick = () => fn(b); };
     on('undo', () => surface?.undo());
+    on('record', () => record());
     on('redo', () => surface?.redo());
     on('colours', (b) => (tool.tool === 'hl' ? hlPop(b) : penPop(b)));
     on('eraser-mode', () => { tool.eraserMode = tool.eraserMode === 'precise' ? 'stroke' : 'precise'; saveTool(); drawTools(); });
     on('hl-only', () => { tool.hlOnly = !tool.hlOnly; saveTool(); drawTools(); });
     on('paste', () => surface?.paste(30));
+    on('layers', (b) => layersPop(b));
+    on('zoomstrip', () => toggleZoom());
     on('zoom-in', () => surface?.setZoom(surface.zoom * 1.25));
     on('zoom-out', () => surface?.setZoom(surface.zoom / 1.25));
     on('postit', async () => { const v = await stickerDrawer({ tab: 'postits', title: 'Post-its and stickers' }); if (v) placeSticker(v); });
@@ -217,6 +378,89 @@ export function mount(el, params, ctx) {
     p.el.querySelectorAll('[data-c]').forEach((b) => { b.onclick = () => p.close(b.dataset.c); });
   }
 
+  // ---------- Recording and replay ----------
+  async function record() {
+    if (isRecording()) { stopRecording(); return; }
+    const nid = id;
+    const n = note();
+    if (replay) exitReplay();
+    const p = startRecording({ sealed: !!n?.sealed, label: displayTitle(n) });
+    setTimeout(drawTools, 300);
+    const rec = await p;
+    drawTools();
+    if (!rec) return;
+    const cur = state.notes.get(nid);
+    if (!cur) { V.deleteFile(rec.fileId).catch(() => {}); return; }
+    await V.saveNote({ ...cur, recordings: [...cur.recordings, rec] });
+    toast('Recording saved. Tap the headphones to replay it with your writing.');
+    const b = el.querySelector('[data-act=replay]');
+    if (b && nid === id) b.hidden = false;
+  }
+
+  let replay = null;
+  async function enterReplay(index = null) {
+    const n = note();
+    if (!n?.recordings.length || !surface) return;
+    surface.endEdit();
+    await flush();
+    const view = el.querySelector('.inkview');
+    const dock = document.createElement('div');
+    dock.className = 'replay-dock';
+    view.appendChild(dock);
+    view.classList.add('replaying');
+    el.querySelector('[data-act=replay]')?.setAttribute('aria-pressed', 'true');
+    let tNow = 0;
+    let rec = null;
+    let ranges = null;
+    // When each page was written during this recording, to turn pages as it plays.
+    const loadRanges = async (r) => {
+      const out = [];
+      for (const p of note().pages) {
+        let lo = Infinity;
+        let hi = -Infinity;
+        try {
+          const d = await V.loadPage(p.id);
+          for (const x of [...d.strokes, ...d.objects]) { const t = recordingTime(r, x.at); if (t !== null) { lo = Math.min(lo, t); hi = Math.max(hi, t); } }
+        } catch { /* not downloaded */ }
+        out.push(lo <= hi ? [lo, hi] : null);
+      }
+      return out;
+    };
+    const after = (x) => { if (!rec) return false; const t = recordingTime(rec, x.at); return t !== null && t > tNow + 0.05; };
+    const player = mountPlayer(dock, id, {
+      index: index ?? n.recordings.length - 1,
+      onClose: () => exitReplay(),
+      onTime: async (t, r) => {
+        if (r !== rec) { rec = r; ranges = null; ranges = await loadRanges(r); }
+        tNow = t;
+        surface?.renderMainSoon();
+        if (!ranges) return;
+        const cur = ranges[pageIdx];
+        if (cur && t >= cur[0] - 1 && t <= cur[1] + 1) return;
+        let best = -1;
+        ranges.forEach((g, k) => { if (g && g[0] <= t + 0.5) best = best < 0 || g[0] >= ranges[best][0] ? k : best; });
+        if (best >= 0 && best !== pageIdx && !(cur && t < cur[0])) showPage(best);
+      },
+    });
+    surface.setReplay(after, (x, y) => {
+      const hit = surface.strokeNear(x, y);
+      const t = hit && rec ? recordingTime(rec, hit.at) : null;
+      if (t !== null) player.seek(Math.max(0, t - 1.5));
+      else toast('That wasn’t written during this recording.');
+    });
+    replay = { player, dock };
+  }
+
+  function exitReplay() {
+    if (!replay) return;
+    replay.player.destroy();
+    replay.dock.remove();
+    replay = null;
+    surface?.setReplay(null, null);
+    el.querySelector('.inkview')?.classList.remove('replaying');
+    el.querySelector('[data-act=replay]')?.setAttribute('aria-pressed', 'false');
+  }
+
   // ---------- Text box formatting ----------
   async function textEditing(ed) {
     const bar = $('#iv-fmt', el);
@@ -247,6 +491,7 @@ export function mount(el, params, ctx) {
     let data;
     try { data = await V.loadPage(page.id); } catch (e) { console.warn(e); data = V.emptyPageData(); }
     surface.setPage(page, data);
+    zoom?.reset();
     drawPageBar();
     const sub = $('#iv-sub', el);
     if (sub) {
@@ -294,7 +539,7 @@ export function mount(el, params, ctx) {
         <div class="chips" role="radiogroup" aria-label="Paper colour">${PAPER_COLORS.map((c) => html`<button type="button" class="chip" role="radio" aria-pressed="${c.id === (state.device?.paperColor || 'white') ? 'true' : 'false'}" data-pcol="${c.id}"><span class="dot lg" style="background:${c.bg};border:1px solid var(--field)"></span>${c.name}</button>`)}</div>
         <div class="btn-row"><button type="button" class="btn btn-sm" data-add2>${icons.plus({ size: 16 })}Add after page ${pageIdx + 1}</button>
           <label class="btn btn-sm">${icons.pdf({ size: 16 })}Import PDF<input type="file" accept="application/pdf" class="sr-only" data-pdf></label>
-          <label class="btn btn-sm">${icons.camera({ size: 16 })}Photo of paper<input type="file" accept="image/*" capture="environment" class="sr-only" data-photo></label></div>
+          <button type="button" class="btn btn-sm" data-scan>${icons.scan({ size: 16 })}Scan paper</button></div>
       </section>`}`, { label: 'Pages' });
     s.el.classList.add('wide-sheet');
     s.el.querySelector('[data-close]').onclick = () => s.close();
@@ -305,13 +550,13 @@ export function mount(el, params, ctx) {
     s.el.querySelectorAll('[data-paper]').forEach((b) => { b.onclick = async () => { await V.updateDevice({ paper: b.dataset.paper }); s.el.querySelectorAll('[data-paper]').forEach((x) => x.setAttribute('aria-pressed', x === b ? 'true' : 'false')); }; });
     s.el.querySelectorAll('[data-pcol]').forEach((b) => { b.onclick = async () => { await V.updateDevice({ paperColor: b.dataset.pcol }); s.el.querySelectorAll('[data-pcol]').forEach((x) => x.setAttribute('aria-pressed', x === b ? 'true' : 'false')); }; });
     s.el.querySelector('[data-pdf]').onchange = async (e) => { const f = e.target.files?.[0]; if (!f) return; s.close(); await importPdf(f); };
-    s.el.querySelector('[data-photo]').onchange = async (e) => { const f = e.target.files?.[0]; if (!f) return; s.close(); await photoPage(f); };
+    s.el.querySelector('[data-scan]').onclick = async () => { s.close(); await scanPages(); };
     s.el.querySelectorAll('[data-pm]').forEach((b) => { b.onclick = () => pageMenu(Number(b.dataset.pm), s); });
     // Thumbnails
     n.pages.forEach(async (p, i) => {
       try {
         const data = await V.loadPage(p.id);
-        const c = await renderPageCanvas(p, data, 220);
+        const c = await renderPageCanvas(p, data, 220, layerView(note()));
         const slot = s.el.querySelector(`[data-thumb="${i}"]`);
         if (slot) slot.replaceWith(Object.assign(c, { className: 'thumb-canvas' }));
       } catch { /* not downloaded yet */ }
@@ -356,6 +601,36 @@ export function mount(el, params, ctx) {
     }
     await V.saveNote({ ...n, pages });
     await showPage(act === 'left' ? i - 1 : act === 'right' ? i + 1 : i);
+  }
+
+  async function scanPages() {
+    const { openScanner } = await import('./scanner.js');
+    const pages = await openScanner({ title: 'Scan pages', done: 'Add' });
+    if (!pages.length) return;
+    const n = note();
+    let at = pageIdx + 1;
+    const add = [];
+    for (const pg of pages) {
+      const bg = await V.addFile(pg.bytes, { sealed: n.sealed, type: pg.type });
+      add.push(newPage({ paper: 'blank', bg, h: Math.round((1000 * pg.h) / pg.w) }));
+    }
+    const cur = note();
+    const all = [...cur.pages];
+    all.splice(at, 0, ...add);
+    await V.saveNote({ ...cur, pages: all });
+    toast(`Added ${add.length} scanned page${add.length === 1 ? '' : 's'}`);
+    await showPage(at);
+    // Read the scanned text on this device so the pages turn up in search.
+    try {
+      const { ocrImage } = await import('../ocr.js');
+      const texts = [];
+      for (const pg of pages) texts.push(await ocrImage(pg.bytes));
+      const words = texts.filter(Boolean).join('\n\n');
+      if (words) {
+        const latest = note();
+        await refreshInkSummary(id, { pdfText: [latest.pdfText, words].filter(Boolean).join('\n\n') });
+      }
+    } catch { /* search just won't see these pages */ }
   }
 
   async function photoPage(file) {
@@ -565,9 +840,17 @@ export function mount(el, params, ctx) {
         else if (sub) drawPageBar();
       }
       if (evt.type === 'config') surface?.render();
+      if ((evt.type === 'note' || evt.type === 'remote') && evt.id === id) applyLayers();
+      if (evt.type === 'note' || evt.type === 'remote') {
+        const rb = el.querySelector('[data-act=replay]');
+        if (rb) rb.hidden = !n.recordings.length;
+      }
     },
     destroy() {
+      zoom?.destroy();
+      zoom = null;
       window.removeEventListener('resize', onResize);
+      exitReplay();
       surface?.endEdit();
       flush().then(() => discardIfEmpty());
       fmt?.destroy();

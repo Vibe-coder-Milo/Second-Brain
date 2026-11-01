@@ -224,6 +224,7 @@ export async function deleteNote(id) {
   const n = state.notes.get(id);
   if (!n) return;
   for (const f of n.files || []) await deleteFile(f.id);
+  for (const r of n.recordings || []) await deleteFile(r.fileId);
   for (const fid of await pageFileIds(n)) await deleteFile(fid);
   for (const p of n.pages || []) pageCache.delete(p.id);
   // Sub-notes move up a level rather than vanishing with their parent.
@@ -333,6 +334,7 @@ export async function setSealed(id, sealed) {
   if (!n || n.sealed === sealed) return n;
   if (!state.keys.s) throw new Error('Set up and unlock sealed notes first.');
   for (const f of n.files) await reencryptFile(f.id, sealed ? 's' : 'm');
+  for (const r of n.recordings || []) await reencryptFile(r.fileId, sealed ? 's' : 'm');
   for (const fid of await pageFileIds(n)) await reencryptFile(fid, sealed ? 's' : 'm');
   for (const p of n.pages || []) pageCache.delete(p.id);
   return saveNote({ ...n, sealed, sealSuggested: false });

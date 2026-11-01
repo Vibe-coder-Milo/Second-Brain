@@ -76,7 +76,8 @@ export function regionPicker({ title = 'File in', allowInbox = true } = {}) {
   return menuSheet(title, items);
 }
 
-export function notePicker({ title = 'Link to a note', exclude = [] } = {}) {
+// Resolves with a note id, or 'new:<title>' when `allowNew` and you chose to make one.
+export function notePicker({ title = 'Link to a note', exclude = [], allowNew = false } = {}) {
   return new Promise((resolve) => {
     const s = openSheet(
       `${html`<div class="sheet-head"><span class="side"></span><h2>${title}</h2><span class="side"><button type="button" class="btn btn-ghost btn-sm" data-cancel>Cancel</button></span></div>
@@ -89,13 +90,16 @@ export function notePicker({ title = 'Link to a note', exclude = [] } = {}) {
     const pool = [...state.notes.values()].filter((n) => !exclude.includes(n.id));
     const draw = () => {
       const found = q.value.trim() ? searchNotes(pool, q.value, 60) : pool.sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 60);
-      list.innerHTML = found.length
+      const make = allowNew ? html`<li><button type="button" data-new class="np-new">${icons.plus({ size: 16 })}${q.value.trim() ? html`New note: <strong>${q.value.trim()}</strong>` : 'New typed note'}</button></li>`.s : '';
+      list.innerHTML = make + (found.length
         ? found.map((n) => {
           const r = state.config.regions.find((x) => x.id === n.region);
           return html`<li><button type="button" data-id="${n.id}"><span class="dot" style="background:${regionColors(n.inbox ? null : r).dot}"></span>${displayTitle(n)}</button></li>`;
         }).join('')
-        : html`<li class="hint" style="padding:16px 2px">No notes match.</li>`.s;
+        : html`<li class="hint" style="padding:16px 2px">No notes match.</li>`.s);
       list.querySelectorAll('[data-id]').forEach((b) => { b.onclick = () => s.close(b.dataset.id); });
+      const nb = list.querySelector('[data-new]');
+      if (nb) nb.onclick = () => s.close(`new:${q.value.trim()}`);
     };
     q.addEventListener('input', draw);
     s.el.querySelector('[data-cancel]').onclick = () => s.close(null);

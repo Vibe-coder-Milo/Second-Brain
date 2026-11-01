@@ -24,12 +24,13 @@ export function noteToMarkdown(n, { images = [] } = {}) {
   if (nb) fm.push(`notebook: ${yamlStr(nb.title)}`);
   if (sec && nb.sections.length > 1) fm.push(`section: ${yamlStr(sec.name)}`);
   if (n.kind === 'ink') fm.push('handwritten: true');
+  if (n.kind === 'board') fm.push('whiteboard: true');
   if (n.daily) fm.push(`daily: ${n.daily}`);
   if (n.tags.length) fm.push(`tags: [${n.tags.map(yamlStr).join(', ')}]`);
   if (n.url) fm.push(`url: ${yamlStr(n.url)}`);
   fm.push('---', '');
   const parts = [fm.join('\n'), `# ${displayTitle(n)}`];
-  if (images.length) parts.push(images.map((p, i) => `![${n.kind === 'ink' ? `Page ${i + 1}` : `Image ${i + 1}`}](${p})`).join('\n\n'));
+  if (images.length) parts.push(images.map((p, i) => `![${n.kind === 'ink' ? `Page ${i + 1}` : n.kind === 'board' ? 'The board' : `Image ${i + 1}`}](${p})`).join('\n\n'));
   if (n.body.trim()) parts.push(n.body.trim());
   const ocr = n.files.filter((f) => f.ocr?.trim());
   if (ocr.length) parts.push(`## Text from images\n\n${ocr.map((f) => f.ocr.trim()).join('\n\n')}`);
@@ -40,10 +41,10 @@ export function noteToMarkdown(n, { images = [] } = {}) {
   return `${parts.join('\n\n').trim()}\n`;
 }
 
-async function pngOfPage(page) {
-  const { renderPageCanvas } = await import('./editor/inkdraw.js');
+async function pngOfPage(page, n = null) {
+  const { renderPageCanvas, layerView } = await import('./editor/inkdraw.js');
   const data = await V.loadPage(page.id);
-  const c = await renderPageCanvas(page, data, 1200);
+  const c = await renderPageCanvas(page, data, 1200, layerView(n, { forExport: true }));
   const blob = await new Promise((r) => c.toBlob(r, 'image/png'));
   return new Uint8Array(await blob.arrayBuffer());
 }
@@ -66,10 +67,18 @@ async function zipNotes(list, place, name) {
         out[p] = b.bytes || b;
         images.push(`${'../'.repeat(folder.split('/').filter(Boolean).length)}${p}`);
       }
+      if (n.kind === 'board' && n.pages[0]) {
+        const { renderBoardCanvas } = await import('./boarddraw.js');
+        const c = await renderBoardCanvas(await V.loadPage(n.pages[0].id), { widthPx: 1800 });
+        const blob = await new Promise((r) => c.toBlob(r, 'image/png'));
+        const p = unique(`attachments/${safeName(displayTitle(n))}.png`);
+        out[p] = new Uint8Array(await blob.arrayBuffer());
+        images.push(`${'../'.repeat(folder.split('/').filter(Boolean).length)}${encodeURI(p)}`);
+      }
       if (n.kind === 'ink') {
         for (const [i, pg] of n.pages.entries()) {
           const p = unique(`attachments/${safeName(displayTitle(n))} page ${i + 1}.png`);
-          out[p] = await pngOfPage(pg);
+          out[p] = await pngOfPage(pg, n);
           images.push(`${'../'.repeat(folder.split('/').filter(Boolean).length)}${encodeURI(p)}`);
         }
       }
@@ -134,11 +143,12 @@ export function treeOrder(nb) {
 const PX = 1240; // pixel width of a rendered page (about 150 dpi on A4)
 
 async function inkCanvases(n) {
-  const { renderPageCanvas } = await import('./editor/inkdraw.js');
+  const { renderPageCanvas, layerView } = await import('./editor/inkdraw.js');
   const out = [];
+  const view = layerView(n, { forExport: true });
   for (const p of n.pages) {
     const data = await V.loadPage(p.id);
-    out.push(await renderPageCanvas(p, data, PX));
+    out.push(await renderPageCanvas(p, data, PX, view));
   }
   return out;
 }
@@ -238,7 +248,13 @@ async function typedCanvases(n) {
   return out;
 }
 
-export const noteCanvases = (n) => (n.kind === 'ink' ? inkCanvases(n) : typedCanvases(n));
+async function boardCanvases(n) {
+  const { renderBoardCanvas } = await import('./boarddraw.js');
+  const data = await V.loadPage(n.pages[0].id);
+  return [await renderBoardCanvas(data, { widthPx: 2000 })];
+}
+
+export const noteCanvases = (n) => (n.kind === 'ink' ? inkCanvases(n) : n.kind === 'board' ? boardCanvases(n) : typedCanvases(n));
 
 async function coverCanvas(nb) {
   const { coverStandaloneSVG } = await import('./covers.js');

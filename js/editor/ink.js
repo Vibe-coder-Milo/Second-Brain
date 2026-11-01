@@ -6,7 +6,7 @@ import { PAGE_W } from '../model.js';
 import { uid, html, raw, toast } from '../util.js';
 import { state } from '../vault.js';
 import * as V from '../vault.js';
-import { PENS, HL, strokePath, strokeBox, drawStroke, drawPaper, drawContent, fileImage, drawRichText, renderPageCanvas } from './inkdraw.js';
+import { PENS, HL, strokePath, strokeBox, drawStroke, drawPaper, drawContent, fileImage, drawRichText, renderPageCanvas, layerOf } from './inkdraw.js';
 import { getStroke } from '../../vendor/freehand.js';
 import { labelDef, POSTIT_COLORS, postitColor, stickerDef } from '../stickers.js';
 import { icons } from '../icons.js';
@@ -146,6 +146,7 @@ export class InkSurface {
     this.editing = null;
     this.drawing = null;
     this.penSeen = false;
+    this.layers = { hidden: new Set(), locked: new Set(), active: 'ink', paperHidden: false, names: {} };
     host.innerHTML = `<div class="ink-scroll"><div class="ink-page"><canvas class="ink-bg"></canvas><canvas class="ink-main"></canvas><canvas class="ink-wet"></canvas><div class="ink-overlay"></div></div></div>`;
     this.scroll = host.querySelector('.ink-scroll');
     this.pageEl = host.querySelector('.ink-page');
@@ -176,6 +177,95 @@ export class InkSurface {
     this.render();
   }
 
+  // ---------- Layers ----------
+  setLayers(ls) {
+    this.layers = { hidden: new Set(), locked: new Set(), active: 'ink', paperHidden: false, names: {}, ...ls };
+    const hidden = this.layers.hidden;
+    this.visible = hidden.size ? (it) => !hidden.has(layerOf(it)) : null;
+    if (this.sel) this.clearSelection();
+    this.render();
+  }
+  // Can this stroke or object be erased, selected or edited right now?
+  editable(it) {
+    const l = layerOf(it);
+    return !this.layers.hidden.has(l) && !this.layers.locked.has(l);
+  }
+  // Why writing is blocked on the current layer, or null.
+  writeBlocked() {
+    const a = this.layers.active;
+    const name = this.layers.names?.[a] || 'This layer';
+    if (this.layers.hidden.has(a)) return `${name} is hidden. Show it, or pick another layer to write on.`;
+    if (this.layers.locked.has(a)) return `${name} is locked. Unlock it, or pick another layer to write on.`;
+    return null;
+  }
+  stamp(it, isHl = false) {
+    const a = this.layers.active || 'ink';
+    if (a === 'ink' || (a === 'hl' && isHl)) return it;
+    return { ...it, l: a };
+  }
+
+  // ---------- Writing window ----------
+  // The dashed box on the page that the writing window writes into.
+  setZoomBox(b) {
+    this.zbox = b;
+    this.drawZoomBox();
+  }
+  drawZoomBox() {
+    let el = this.overlay.querySelector('.zbox');
+    if (!this.zbox || !this.page) { el?.remove(); return; }
+    if (!el) {
+      el = document.createElement('div');
+      el.className = 'zbox';
+      el.setAttribute('aria-hidden', 'true');
+      this.overlay.appendChild(el);
+      // Drag the box to write somewhere else.
+      el.addEventListener('pointerdown', (e) => {
+        e.preventDefault(); e.stopPropagation();
+        el.setPointerCapture(e.pointerId);
+        const sx = e.clientX; const sy = e.clientY;
+        const b0 = { ...this.zbox };
+        const mv = (ev) => {
+          const nb = { ...b0, x: b0.x + (ev.clientX - sx) / this.scale, y: b0.y + (ev.clientY - sy) / this.scale };
+          this.zbox = nb;
+          this.drawZoomBox();
+        };
+        const upf = () => { el.removeEventListener('pointermove', mv); el.removeEventListener('pointerup', upf); this.onZoomBoxMove?.(this.zbox); };
+        el.addEventListener('pointermove', mv);
+        el.addEventListener('pointerup', upf);
+      });
+    }
+    const s = this.scale;
+    const b = this.zbox;
+    Object.assign(el.style, { left: `${b.x * s}px`, top: `${b.y * s}px`, width: `${b.w * s}px`, height: `${b.h * s}px` });
+  }
+  revealBox(b) {
+    const s = this.scale;
+    const sc = this.scroll;
+    const top = this.pageEl.offsetTop + b.y * s;
+    const bottom = top + b.h * s;
+    if (top < sc.scrollTop + 40 || bottom > sc.scrollTop + sc.clientHeight - 40) sc.scrollTo({ top: Math.max(0, top - sc.clientHeight * 0.35), behavior: 'smooth' });
+    const left = this.pageEl.offsetLeft + b.x * s;
+    const right = left + b.w * s;
+    if (left < sc.scrollLeft || right > sc.scrollLeft + sc.clientWidth) sc.scrollTo({ left: Math.max(0, left - 20), behavior: 'smooth' });
+  }
+  // A stroke written somewhere else (the writing window) lands on this page.
+  addStroke(s) {
+    const blocked = this.writeBlocked();
+    if (blocked) { toast(blocked); return; }
+    this.snapshot();
+    this.data.strokes.push(this.stamp(s, s.t === 'hl'));
+    this.renderMain();
+    this.changed();
+  }
+  beginExternalErase() { this.snapshot(); this.drawing = { pointerId: -1, kind: 'erase', any: false }; }
+  endExternalErase() {
+    const d = this.drawing;
+    this.drawing = null;
+    if (d?.any) this.changed(); else this.undoStack.pop();
+    const w = this.ctxFor(this.wet);
+    w.clearRect(0, 0, PAGE_W, this.page?.h || 2000);
+  }
+
   get baseWidth() {
     const w = this.scroll.clientWidth;
     const pad = w > 700 ? 48 : 16;
@@ -203,6 +293,7 @@ export class InkSurface {
     this.render();
     this.positionEditor();
     this.drawSelection();
+    this.drawZoomBox();
   }
 
   ctxFor(c) {
@@ -219,7 +310,8 @@ export class InkSurface {
       const bgImg = this.page.bg ? fileImage(this.page.bg, () => this.render()) : null;
       const b = this.ctxFor(this.bg);
       b.clearRect(0, 0, PAGE_W, this.page.h);
-      drawPaper(b, this.page, this.scale, bgImg);
+      if (this.layers.paperHidden) drawPaper(b, { ...this.page, paper: 'blank', bg: null }, this.scale, null);
+      else drawPaper(b, this.page, this.scale, bgImg);
       this.renderMain();
     });
   }
@@ -230,7 +322,7 @@ export class InkSurface {
     const skip = new Set();
     if (this.editing) skip.add(this.editing.id);
     if (this.sel?.moving) for (const id of this.sel.objects) skip.add(id);
-    drawContent(m, this.data, { redraw: () => this.renderMainSoon(), skip, hidden: this.sel?.moving ? this.sel.strokes : null });
+    drawContent(m, this.data, { redraw: () => this.renderMainSoon(), skip, hidden: this.sel?.moving ? this.sel.strokes : null, dim: this.dim, visible: this.visible });
     // Text boxes report their laid-out height; keep it for hit testing.
     for (const o of this.data.objects) if (o.type === 'text' && o._h) o.h = o._h;
   }
@@ -331,9 +423,41 @@ export class InkSurface {
     return !!this.opts.getTool().fingerDraw && !this.penSeen;
   }
 
+  // Replay mode: writing after the playback point fades, and a tap on writing
+  // reports where it is so the audio can jump there.
+  setReplay(dim, onTap) {
+    this.dim = dim;
+    this.replayTap = onTap;
+    this.endEdit();
+    this.clearSelection();
+    this.renderMain();
+  }
+
+  strokeNear(x, y, r = 14) {
+    let best = null;
+    let bd = Infinity;
+    for (const s of this.data.strokes) {
+      const b = strokeBox(s);
+      if (x < b.x - r || x > b.x + b.w + r || y < b.y - r || y > b.y + b.h + r) continue;
+      for (let i = 0; i < s.pts.length; i += 3) {
+        const d = Math.hypot(s.pts[i] - x, s.pts[i + 1] - y);
+        if (d < bd) { bd = d; best = s; }
+      }
+    }
+    if (best && bd <= r + best.s) return best;
+    const o = this.objectAt(x, y);
+    return o || null;
+  }
+
   down(e) {
+    if (this.replayTap) {
+      const [x, y] = this.toPage(e);
+      if (e.pointerType === 'touch' && !this.opts.getTool().fingerDraw) { this.tap = { x, y, t: Date.now(), cx: e.clientX, cy: e.clientY, id: e.pointerId, replay: true }; return; }
+      this.replayTap(x, y);
+      return;
+    }
     if (!this.page || this.opts.readOnly) return;
-    if (e.target.closest('.tb-edit, .postit-edit, .sel-bar, .sel-handle')) return;
+    if (e.target.closest('.tb-edit, .postit-edit, .sel-bar, .sel-handle, .zbox')) return;
     const tool = this.opts.getTool();
     const [x, y] = this.toPage(e);
     // Palm rejection: while the Pencil is down, other touches are ignored.
@@ -360,11 +484,12 @@ export class InkSurface {
     this.pageEl.setPointerCapture?.(e.pointerId);
     const pr = e.pointerType === 'pen' ? (e.pressure || 0.5) : 0.5;
     const t = tool.tool;
+    if (['pen', 'shapes', 'hl', 'text'].includes(t) && this.writeBlocked()) { toast(this.writeBlocked()); return; }
     if (t === 'pen' || t === 'shapes' || t === 'hl') {
       const hl = t === 'hl';
       this.drawing = {
         pointerId: e.pointerId, kind: 'stroke', t0: Date.now(),
-        stroke: { id: uid('k'), t: hl ? 'hl' : 'pen', pen: hl ? null : tool.pen, c: hl ? tool.hlColor : tool.color, s: hl ? tool.hlSize : tool.size, sp: e.pointerType === 'pen' ? 0 : 1, pts: [] },
+        stroke: { id: uid('k'), at: Date.now(), t: hl ? 'hl' : 'pen', pen: hl ? null : tool.pen, c: hl ? tool.hlColor : tool.color, s: hl ? tool.hlSize : tool.size, sp: e.pointerType === 'pen' ? 0 : 1, pts: [] },
         pts: [[x, y, pr]], last: [x, y], still: Date.now(), shapes: t === 'shapes',
       };
       this.armHold();
@@ -417,7 +542,7 @@ export class InkSurface {
       const moved = Math.hypot(e.clientX - this.tap.cx, e.clientY - this.tap.cy);
       const t = this.tap;
       this.tap = null;
-      if (moved < 8 && Date.now() - t.t < 450) this.tapAt(t.x, t.y, { finger: true });
+      if (moved < 8 && Date.now() - t.t < 450) { if (t.replay) this.replayTap?.(t.x, t.y); else this.tapAt(t.x, t.y, { finger: true }); }
       return;
     }
     const d = this.drawing;
@@ -495,8 +620,9 @@ export class InkSurface {
       const a = pts[0]; const b = pts[pts.length - 1];
       if (Math.abs(a[1] - b[1]) < 14 && Math.max(...pts.map((p) => Math.abs(p[1] - a[1]))) < 16) { pts = densify([a, [b[0], a[1]]]); shape = 'line'; }
     }
-    const s = { ...d.stroke, pts: pts.flat().map(r2) };
+    let s = { ...d.stroke, pts: pts.flat().map(r2) };
     if (shape) { s.shape = shape; s.sp = 0; }
+    s = this.stamp(s, s.t === 'hl');
     this.snapshot();
     this.data.strokes.push(s);
     this.renderMain();
@@ -510,7 +636,7 @@ export class InkSurface {
     let changed = false;
     const next = [];
     for (const s of this.data.strokes) {
-      if (hlOnly && s.t !== 'hl') { next.push(s); continue; }
+      if ((hlOnly && s.t !== 'hl') || !this.editable(s)) { next.push(s); continue; }
       const b = strokeBox(s);
       if (x < b.x - r || x > b.x + b.w + r || y < b.y - r || y > b.y + b.h + r) { next.push(s); continue; }
       const rr = r + s.s / 2;
@@ -566,6 +692,7 @@ export class InkSurface {
     if (len < 12) { this.tapAt(poly[0][0], poly[0][1], { tool: 'lasso' }); return; }
     const strokes = new Set();
     for (const s of this.data.strokes) {
+      if (!this.editable(s)) continue;
       const b = strokeBox(s);
       let inside = 0; let n = 0;
       for (let i = 0; i < s.pts.length; i += 3) { n++; if (inPoly(s.pts[i], s.pts[i + 1], poly)) inside++; }
@@ -573,6 +700,7 @@ export class InkSurface {
     }
     const objects = new Set();
     for (const o of this.data.objects) {
+      if (!this.editable(o)) continue;
       const b = objBox(o);
       if (inPoly(b.x + b.w / 2, b.y + b.h / 2, poly)) objects.add(o.id);
     }
@@ -649,6 +777,7 @@ export class InkSurface {
     if (this.sel.strokes.size) items.push(['colour', 'Colour', raw('<span class="sel-col"></span>')]);
     items.push(['copy', 'Copy', icons.copy()], ['cut', 'Cut', raw('✂︎')], ['dup', 'Duplicate', icons.plus()]);
     if (this.sel.strokes.size || one?.type === 'image') items.push(['sticker', 'Save as sticker', icons.sticker()]);
+    if (this.opts.pickLayer && Object.keys(this.layers.names || {}).length > 3) items.push(['layer', 'Layer', icons.layers()]);
     items.push(['delete', 'Delete', icons.trash()]);
     bar.innerHTML = String(html`${items.map(([a, l, ic]) => html`<button type="button" data-sel="${a}" aria-label="${l}">${ic}<span>${l}</span></button>`)}`);
     const top = b.y * s - 56;
@@ -666,6 +795,7 @@ export class InkSurface {
     if (act === 'cut') { this.copySelection(); this.deleteSelection(); return; }
     if (act === 'dup') { this.copySelection(); this.paste(24); return; }
     if (act === 'colour') { this.opts.pickColour?.(btn, (c) => c && this.recolour(c)); return; }
+    if (act === 'layer') { const l = await this.opts.pickLayer?.(btn); if (l) this.moveToLayer(l); return; }
     if (act === 'sticker') { await this.saveSelectionAsSticker(); }
   }
 
@@ -701,6 +831,30 @@ export class InkSurface {
     this.clearSelection();
     this.renderMain();
     this.changed();
+  }
+
+  // Put the selection on another layer.
+  moveToLayer(layer) {
+    if (!this.sel) return;
+    this.snapshot();
+    const now = Date.now();
+    const put = (it) => { const n = { ...it }; delete n.l; return layer === layerOf(n) ? n : { ...n, l: layer }; };
+    const ids = new Set();
+    this.data.strokes = this.data.strokes.map((s) => {
+      if (!this.sel.strokes.has(s.id)) return s;
+      const n = { ...put(s), id: uid('k') };
+      this.data.tomb.push(s.id);
+      ids.add(n.id);
+      return n;
+    });
+    this.data.objects = this.data.objects.map((o) => (this.sel.objects.has(o.id) ? { ...put(o), t: now } : o));
+    this.sel.strokes = ids;
+    const hidden = this.layers.hidden.has(layer) || this.layers.locked.has(layer);
+    if (hidden) this.clearSelection();
+    this.renderMain();
+    if (!hidden) this.drawSelection();
+    this.changed();
+    toast(`Moved to ${this.layers.names?.[layer] || 'that layer'}`);
   }
 
   recolour(c) {
@@ -835,7 +989,7 @@ export class InkSurface {
   // ---------- Objects ----------
   objectAt(x, y) {
     const order = { postit: 6, sticker: 5, label: 5, mine: 5, text: 4, tape: 2, image: 1 };
-    const hits = this.data.objects.filter((o) => hitObject(o, x, y));
+    const hits = this.data.objects.filter((o) => this.editable(o) && hitObject(o, x, y));
     return hits.sort((a, b) => (order[b.type] || 0) - (order[a.type] || 0))[0] || null;
   }
 
@@ -888,13 +1042,15 @@ export class InkSurface {
       o = { type: 'image', fileId: v.fileId, w: v.w * k, h: v.h * k };
     }
     if (!o) return;
+    if (this.writeBlocked()) { toast(this.writeBlocked()); return; }
+    o = this.stamp(o);
     // Don't stack a new sticker exactly on top of the last one.
     let px = cx;
     let py = cy;
     for (let i = 0; i < 12 && this.data.objects.some((x) => Math.abs(x.x + x.w / 2 - px) < 24 && Math.abs(x.y + (x.h || 40) / 2 - py) < 24); i++) { px += 36; py += 36; }
     px = Math.min(PAGE_W - o.w / 2, px);
     py = Math.min(this.page.h - o.h / 2, py);
-    o = { id: uid('o'), x: px - o.w / 2, y: py - o.h / 2, rot: 0, t: now, ...o };
+    o = { id: uid('o'), x: px - o.w / 2, y: py - o.h / 2, rot: 0, t: now, at: now, ...o };
     this.snapshot();
     this.data.objects.push(o);
     this.renderMain();
@@ -905,7 +1061,7 @@ export class InkSurface {
   }
 
   addText(x, y) {
-    const o = { id: uid('o'), type: 'text', x: Math.min(x, PAGE_W - 240), y: y - 14, w: Math.min(520, PAGE_W - Math.min(x, PAGE_W - 240) - 30), h: 40, size: 20, doc: { type: 'doc', content: [{ type: 'paragraph' }] }, t: Date.now(), fresh: true };
+    const o = this.stamp({ id: uid('o'), at: Date.now(), type: 'text', x: Math.min(x, PAGE_W - 240), y: y - 14, w: Math.min(520, PAGE_W - Math.min(x, PAGE_W - 240) - 30), h: 40, size: 20, doc: { type: 'doc', content: [{ type: 'paragraph' }] }, t: Date.now(), fresh: true });
     this.snapshot();
     this.data.objects.push(o);
     this.edit(o);

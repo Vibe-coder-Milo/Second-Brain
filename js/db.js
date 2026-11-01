@@ -4,9 +4,11 @@
 // meta:    key/value (keyring, encrypted device settings, sync bookkeeping)
 // records: { id, env, rev, dirty, deleted, remoteSha }   env = encrypted JSON
 // files:   { id, k, data, rev, dirty, deleted, remoteSha } data = iv||ciphertext
+// local:   { id, k, data } things worked out on this device and never synced
+//          (the search-by-meaning index), encrypted like everything else
 
 const DB_NAME = 'second-brain';
-const VERSION = 1;
+const VERSION = 2;
 let dbPromise;
 
 export function openDB() {
@@ -18,8 +20,13 @@ export function openDB() {
         if (!db.objectStoreNames.contains('meta')) db.createObjectStore('meta');
         if (!db.objectStoreNames.contains('records')) db.createObjectStore('records', { keyPath: 'id' });
         if (!db.objectStoreNames.contains('files')) db.createObjectStore('files', { keyPath: 'id' });
+        if (!db.objectStoreNames.contains('local')) db.createObjectStore('local', { keyPath: 'id' });
       };
-      req.onsuccess = () => resolve(req.result);
+      req.onsuccess = () => {
+        const db = req.result;
+        db.onversionchange = () => { db.close(); dbPromise = null; };
+        resolve(db);
+      };
       req.onerror = () => reject(req.error);
       req.onblocked = () => reject(new Error('Close other Second brain tabs and try again.'));
     });
@@ -66,6 +73,7 @@ function table(name) {
 
 export const records = table('records');
 export const files = table('files');
+export const local = table('local');
 
 export async function wipeAll() {
   const db = await openDB();

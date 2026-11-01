@@ -88,7 +88,7 @@ let chrome = 'today';
 function currentChrome(name, params) {
   if (name === 'note') {
     const n = state.notes.get(params.id);
-    if (n?.notebook || params.notebook || params.kind === 'ink') return 'notebooks';
+    if (n?.notebook || params.notebook || params.kind === 'ink' || params.kind === 'board') return 'notebooks';
     if (n?.daily) return 'today';
   }
   return CHROME[name] || name;
@@ -123,6 +123,7 @@ function startUnlocked() {
   startAutoSync();
   runOcrQueue().catch(() => {});
   startAutoLock();
+  import('./semantic.js').then((S) => S.buildSoon(5000)).catch(() => {});
 }
 
 async function boot() {
@@ -138,6 +139,7 @@ async function boot() {
       refreshChrome(chrome);
     }
     if (evt.type === 'remote') runOcrQueue().catch(() => {});
+    if (['note', 'remote', 'delete', 'sealed', 'ocr'].includes(evt.type)) import('./semantic.js').then((S) => S.buildSoon(8000)).catch(() => {});
   });
   window.addEventListener('hashchange', route);
   document.addEventListener('click', (e) => {

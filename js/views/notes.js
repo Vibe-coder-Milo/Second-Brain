@@ -1,6 +1,6 @@
 // All notes, a single region, or search results.
 
-import { html, $, fmtDate, snippet, debounce } from '../util.js';
+import { html, raw, $, fmtDate, snippet, debounce } from '../util.js';
 import { state, sealedState } from '../vault.js';
 import { displayTitle, regionColors, searchNotes, typeName } from '../model.js';
 import { icons } from '../icons.js';
@@ -32,8 +32,10 @@ export function mount(main, params, ctx) {
         <a class="chip" href="#/notes${q ? `?q=${encodeURIComponent(q)}` : ''}" aria-pressed="${!region ? 'true' : 'false'}">All</a>
         ${regions.map((r) => html`<a class="chip" href="#/notes?region=${r.id}${q ? `&q=${encodeURIComponent(q)}` : ''}" aria-pressed="${region?.id === r.id ? 'true' : 'false'}"><span class="dot" style="background:${regionColors(r).dot}"></span>${r.name}</a>`)}
       </div>
-      ${list.length ? html`<ul class="rows">${list.map(row)}</ul>` : html`<div class="empty"><p class="serif">${q ? 'No matches' : 'Nothing here yet'}</p><p style="margin:0">${q ? 'Try fewer words, or search for text inside a screenshot.' : region ? `File notes from your inbox into ${region.name}, or start a new one.` : 'Capture something to get started.'}</p></div>`}
+      ${list.length ? html`<ul class="rows">${list.map(row)}</ul>` : html`<div class="empty" id="nq-empty"><p class="serif">${q ? 'No exact matches' : 'Nothing here yet'}</p><p style="margin:0">${q ? 'Try fewer words, or search for text inside a screenshot.' : region ? `File notes from your inbox into ${region.name}, or start a new one.` : 'Capture something to get started.'}</p></div>`}
+      ${q ? html`<section class="meaning" id="nq-meaning" aria-live="polite"></section>` : ''}
     </div>`}`;
+    if (q) meaning(q, list, region);
 
     const input = $('#nq', main);
     input.addEventListener('input', debounce(() => {
@@ -45,12 +47,35 @@ export function mount(main, params, ctx) {
       p = { ...p, q: v };
       draw(true);
     }, 250));
-    if (keepFocus) { input.focus(); input.setSelectionRange(input.value.length, input.value.length); }
+    if (keepFocus || p.focus) { input.focus(); input.setSelectionRange(input.value.length, input.value.length); p.focus = null; }
   };
 
-  function row(n) {
+  // Notes that are about the same thing, even without the same words.
+  let token = 0;
+  async function meaning(q, exact, region) {
+    const my = ++token;
+    const box = $('#nq-meaning', main);
+    const S = await import('../semantic.js');
+    if (my !== token || !box) return;
+    if (!S.semanticOn()) return;
+    if (!S.indexReady()) {
+      box.innerHTML = `${html`<p class="hint">Search by meaning is getting ready on this device${S.semState.total ? ` (${S.semState.done} of ${S.semState.total} notes)` : ''}.</p>`}`;
+      S.buildSoon(0);
+      return;
+    }
+    const pool = new Set([...state.notes.values()].filter((n) => !region || (!n.inbox && n.region === region.id)).map((n) => n.id));
+    const top = new Set(exact.slice(0, 12).map((n) => n.id));
+    let hits;
+    try { hits = await S.searchByMeaning(q, { limit: 10, pool }); } catch { return; }
+    if (my !== token) return;
+    hits = hits.filter((h) => !top.has(h.note.id)).slice(0, 8);
+    if (!hits.length) { box.innerHTML = ''; return; }
+    box.innerHTML = `${html`<h2 class="section-title">Close in meaning</h2><ul class="rows">${hits.map((h) => row(h.note, S.passageText(h.note, h.passage)))}</ul>`}`;
+  }
+
+  function row(n, passage = null) {
     const r = state.config.regions.find((x) => x.id === n.region);
-    const text = n.body.trim() || n.files.map((f) => f.ocr || '').join(' ');
+    const text = passage || n.body.trim() || n.files.map((f) => f.ocr || '').join(' ');
     return html`<li><a class="row note-row" href="#/note/${n.id}">
       <span class="dot" style="margin-top:8px;background:${regionColors(n.inbox ? null : r).dot}"></span>
       <span class="row-main">

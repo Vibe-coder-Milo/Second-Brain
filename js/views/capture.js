@@ -15,7 +15,7 @@ export function openCapture({ files = [], text = '' } = {}, ctx) {
 
   const s = openSheet(`${html`<form id="cap" novalidate style="display:flex;flex-direction:column;gap:18px">
     <div class="sheet-head"><button type="button" class="btn btn-ghost side" data-cancel style="justify-content:flex-start;padding:0">Cancel</button><h2>Capture</h2><span class="side"></span></div>
-    <div class="cap-kinds"><button type="button" class="btn" data-kind="note">${icons.lines({ size: 18 })}Typed note</button><button type="button" class="btn" data-kind="ink">${icons.pen({ size: 18 })}Handwritten</button></div>
+    <div class="cap-kinds"><button type="button" class="btn" data-kind="note">${icons.lines({ size: 18 })}Typed note</button><button type="button" class="btn" data-kind="ink">${icons.pen({ size: 18 })}Handwritten</button><button type="button" class="btn" data-kind="board">${icons.board({ size: 18 })}Whiteboard</button></div>
     <div class="field"><label class="sr-only" for="cap-text">Thought</label>
       <textarea id="cap-text" class="serif" rows="4" placeholder="What’s on your mind?">${text}</textarea></div>
     <div class="field" style="gap:10px">
@@ -25,6 +25,7 @@ export function openCapture({ files = [], text = '' } = {}, ctx) {
     </div>
     <div class="btn-row">
       <label class="btn" style="flex:1">${icons.camera()}Take photo<input type="file" accept="image/*" capture="environment" class="sr-only" id="cap-camera"></label>
+      <button type="button" class="btn" style="flex:1" id="cap-scan">${icons.scan({ size: 18 })}Scan</button>
       <button type="button" class="btn" style="flex:1" id="cap-link-btn">${icons.link({ size: 18 })}Add link</button>
     </div>
     <div class="field" id="cap-url-wrap" hidden><label for="cap-url">Link</label><input id="cap-url" type="url" placeholder="https://" autocapitalize="off" autocorrect="off"></div>
@@ -83,11 +84,30 @@ export function openCapture({ files = [], text = '' } = {}, ctx) {
     $('#cap-save', el).textContent = r ? `Save to ${r.name}` : 'Save to inbox';
   };
   el.querySelector('[data-cancel]').onclick = () => s.close();
+  // Scan paper into one note (all pages together), read on this device.
+  $('#cap-scan', el).onclick = async () => {
+    const { openScanner } = await import('./scanner.js');
+    const pages = await openScanner({ title: 'Scan', done: 'Save' });
+    if (!pages.length) return;
+    try {
+      const files = [];
+      for (const pg of pages) {
+        const fid = await V.addFile(pg.bytes, { type: pg.type });
+        files.push({ id: fid, w: pg.w, h: pg.h, type: pg.type, ocr: '', ocrStatus: 'pending', ocrBy: V.state.deviceId });
+      }
+      await V.saveNote(newNote({ region: dest || null, inbox: !dest, body: ta.value.trim(), files, source: 'scan' }));
+      s.close(true);
+      const where = dest ? V.state.config.regions.find((r) => r.id === dest)?.name : 'inbox';
+      toast(`Scanned ${pages.length} page${pages.length === 1 ? '' : 's'} to ${where}`);
+      ctx.runOcr();
+    } catch (e) { toast(e.message || 'Couldn’t save the scan.'); }
+  };
   el.querySelectorAll('[data-kind]').forEach((b) => {
     b.onclick = () => {
       s.close();
       const r = dest ? `region=${dest}` : '';
-      ctx.navigate(b.dataset.kind === 'ink' ? `#/note/new?kind=ink${r ? `&${r}` : ''}` : `#/note/new${r ? `?${r}` : ''}`);
+      const k = b.dataset.kind;
+      ctx.navigate(k === 'ink' || k === 'board' ? `#/note/new?kind=${k}${r ? `&${r}` : ''}` : `#/note/new${r ? `?${r}` : ''}`);
     };
   });
 

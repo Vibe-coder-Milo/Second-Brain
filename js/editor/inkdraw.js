@@ -33,6 +33,24 @@ export const INK_COLORS = [
 export const HL_COLORS = [['Yellow', '#F7D046'], ['Green', '#7FD99A'], ['Blue', '#7DB7F0'], ['Pink', '#F29BC0'], ['Orange', '#F5A962'], ['Violet', '#B79BEB']];
 export const DEFAULT_FAVS = ['#1B2A38', '#2B5684', '#B0413E', '#2F8A72', '#C0802F', '#8C67B0'];
 
+// ---- Layers -------------------------------------------------------------------------
+// Everything on a page sits on a layer: `l` when set, otherwise highlighter
+// strokes are on Highlights and everything else on Ink.
+export const layerOf = (it) => it.l || (it.t === 'hl' ? 'hl' : 'ink');
+export const DEFAULT_LAYERS = [{ id: 'ink', name: 'Ink' }, { id: 'hl', name: 'Highlights' }, { id: 'paper', name: 'Paper', locked: true }];
+export function noteLayers(n) {
+  const list = Array.isArray(n?.layers) && n.layers.length ? n.layers : DEFAULT_LAYERS;
+  const ids = new Set(list.map((l) => l.id));
+  return [...list, ...DEFAULT_LAYERS.filter((l) => !ids.has(l.id))];
+}
+// What to draw for a note: { visible(item), paperHidden }, or {} when nothing is hidden.
+export function layerView(n, { forExport = false } = {}) {
+  if (forExport && n?.exportAllLayers) return {};
+  const hidden = new Set(noteLayers(n).filter((l) => l.hidden).map((l) => l.id));
+  if (!hidden.size) return {};
+  return { visible: (it) => !hidden.has(layerOf(it)), paperHidden: hidden.has('paper') };
+}
+
 // ---- Stroke geometry --------------------------------------------------------------
 
 const pathCache = new WeakMap();
@@ -107,10 +125,10 @@ export function strokeBox(s) {
   return box;
 }
 
-export function drawStroke(ctx, s) {
+export function drawStroke(ctx, s, fade = 1) {
   ctx.save();
   ctx.fillStyle = s.c;
-  ctx.globalAlpha = s.t === 'hl' ? HL.alpha : (PENS[s.pen]?.alpha || 1);
+  ctx.globalAlpha = (s.t === 'hl' ? HL.alpha : (PENS[s.pen]?.alpha || 1)) * fade;
   ctx.fill(strokePath(s), 'nonzero');
   ctx.restore();
 }
@@ -555,17 +573,27 @@ export function drawRichText(ctx, doc, x, y, width, { size = 20, font = 'Overpas
 
 const ORDER = { image: 0, tape: 1, text: 3, sticker: 4, label: 4, mine: 4, postit: 5 };
 
-export function drawContent(ctx, data, { redraw, skip = null, hidden = null } = {}) {
+// `dim(item)` fades items (used when replaying with audio); `visible(item)`
+// hides whole layers.
+export function drawContent(ctx, data, { redraw, skip = null, hidden = null, dim = null, visible = null } = {}) {
   const objs = [...(data.objects || [])].sort((a, b) => (ORDER[a.type] ?? 4) - (ORDER[b.type] ?? 4));
-  const show = (o) => !(skip && skip.has(o.id));
-  for (const o of objs) if ((ORDER[o.type] ?? 4) < 2 && show(o)) drawObject(ctx, o, { redraw });
-  for (const s of data.strokes || []) if (s.t === 'hl' && !hidden?.has(s.id)) drawStroke(ctx, s);
-  for (const s of data.strokes || []) if (s.t !== 'hl' && !hidden?.has(s.id)) drawStroke(ctx, s);
-  for (const o of objs) if ((ORDER[o.type] ?? 4) >= 2 && show(o)) drawObject(ctx, o, { redraw });
+  const show = (o) => !(skip && skip.has(o.id)) && (!visible || visible(o));
+  const fade = (x) => (dim && dim(x) ? 0.16 : 1);
+  const obj = (o) => {
+    const f = fade(o);
+    if (f === 1) { drawObject(ctx, o, { redraw }); return; }
+    ctx.save(); ctx.globalAlpha = f; drawObject(ctx, o, { redraw }); ctx.restore();
+  };
+  const ok = (s) => !hidden?.has(s.id) && (!visible || visible(s));
+  for (const o of objs) if ((ORDER[o.type] ?? 4) < 2 && show(o)) obj(o);
+  for (const s of data.strokes || []) if (s.t === 'hl' && ok(s)) drawStroke(ctx, s, fade(s));
+  for (const s of data.strokes || []) if (s.t !== 'hl' && ok(s)) drawStroke(ctx, s, fade(s));
+  for (const o of objs) if ((ORDER[o.type] ?? 4) >= 2 && show(o)) obj(o);
 }
 
 // Render a page to a new canvas at a given pixel width (thumbnails, export, crops).
-export async function renderPageCanvas(page, data, widthPx, { crop = null } = {}) {
+export async function renderPageCanvas(page, data, widthPx, { crop = null, visible = null, paperHidden = false } = {}) {
+  if (paperHidden) page = { ...page, paper: 'blank', bg: null };
   const bg = page.bg ? await fileImageReady(page.bg) : null;
   for (const o of data.objects || []) {
     if (o.type === 'image') await fileImageReady(o.fileId);
@@ -587,6 +615,6 @@ export async function renderPageCanvas(page, data, widthPx, { crop = null } = {}
     const img = svgImage(stickerSVG(def));
     if (img.complete && img.naturalWidth) res(); else { img.addEventListener('load', res, { once: true }); img.addEventListener('error', res, { once: true }); setTimeout(res, 1500); }
   })));
-  drawContent(ctx, data);
+  drawContent(ctx, data, { visible });
   return c;
 }

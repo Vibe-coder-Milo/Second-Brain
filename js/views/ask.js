@@ -1,7 +1,8 @@
 // Ask Claude: chat sweeps, questions about your notes, and importing replies.
 
-import { html, $, copyText, downloadText, fmtDate, isoDay, readFileText, toast } from '../util.js';
+import { html, raw, $, copyText, downloadText, fmtDate, isoDay, readFileText, toast, debounce } from '../util.js';
 import { state } from '../vault.js';
+import * as V from '../vault.js';
 import { buildSweepRequest, buildQuestionRequest, PRESETS, sweepFrom, shareableNotes, parseReply, session } from '../claude.js';
 import { regionColors } from '../model.js';
 import { openSheet } from '../ui.js';
@@ -13,6 +14,32 @@ export function mount(main, params, ctx) {
   let copiedWhat = '';
   let question = session.question || '';
   let preset = params.preset || '';
+  let closest = state.device?.askClosest ?? true;
+  let picked = null; // ids of the notes closest to the question, best first
+  let pickedFor = '';
+  let semReady = false;
+  import('../semantic.js').then((S) => { semReady = S.semanticOn() && S.indexReady(); if (semReady) { draw(); pick(); } }).catch(() => {});
+
+  async function pick() {
+    const q = question.trim();
+    if (!semReady || !closest || q.length < 4) { picked = null; paintCount(); return; }
+    const S = await import('../semantic.js');
+    const pool = new Set(shareableNotes([...selected], { includeInbox }).map((n) => n.id));
+    try {
+      const hits = await S.searchByMeaning(q, { limit: 25, pool, min: 0.12 });
+      if (q !== question.trim()) return;
+      picked = hits.map((h) => h.note.id);
+      pickedFor = q;
+    } catch { picked = null; }
+    paintCount();
+  }
+  const pickSoon = debounce(pick, 500);
+  function paintCount() {
+    const el = $('#ask-count', main);
+    if (!el) return;
+    const all = shareableNotes([...selected], { includeInbox }).length;
+    el.textContent = closest && semReady && picked && pickedFor === question.trim() ? `${picked.length} of ${all} notes, the closest to your question.` : `${all} note${all === 1 ? '' : 's'} selected.`;
+  }
 
   const draw = () => {
     const regions = state.config.regions;
@@ -67,7 +94,8 @@ export function mount(main, params, ctx) {
           ${regions.map((r) => html`<button type="button" class="chip toggle" aria-pressed="${selected.has(r.id) ? 'true' : 'false'}" data-region="${r.id}">${selected.has(r.id) ? icons.check() : html`<span class="dot" style="background:${regionColors(r).dot}"></span>`}${r.name}</button>`)}
           <button type="button" class="chip toggle" aria-pressed="${includeInbox ? 'true' : 'false'}" data-inbox>${includeInbox ? icons.check() : ''}Inbox</button>
         </div>
-        <p class="hint" style="display:flex;align-items:center;gap:6px">${icons.lock()}${sealedCount ? 'Sealed notes are never shared.' : 'Sealed notes, if you add any, are never shared.'} ${count} note${count === 1 ? '' : 's'} selected.</p>
+        ${semReady ? html`<label class="check"><input type="checkbox" id="ask-closest" ${closest ? raw('checked') : ''}> Only the notes closest to my question (found on this device)</label>` : ''}
+        <p class="hint" style="display:flex;align-items:center;gap:6px">${icons.lock()}<span>${sealedCount ? 'Sealed notes are never shared.' : 'Sealed notes, if you add any, are never shared.'} <span id="ask-count">${count} note${count === 1 ? '' : 's'} selected.</span></span></p>
       </fieldset>
 
       <div style="display:flex;flex-direction:column;gap:8px">
@@ -80,13 +108,16 @@ export function mount(main, params, ctx) {
     </div>`}`;
 
     const qEl = $('#question', main);
-    qEl.addEventListener('input', () => { question = qEl.value; session.question = question; });
+    qEl.addEventListener('input', () => { question = qEl.value; session.question = question; pickSoon(); });
+    const cl = $('#ask-closest', main);
+    if (cl) cl.onchange = () => { closest = cl.checked; V.updateDevice({ askClosest: closest }).catch(() => {}); pick(); };
+    paintCount();
     main.querySelectorAll('[data-region]').forEach((b) => {
-      b.onclick = () => { const id = b.dataset.region; if (selected.has(id)) selected.delete(id); else selected.add(id); draw(); };
+      b.onclick = () => { const id = b.dataset.region; if (selected.has(id)) selected.delete(id); else selected.add(id); draw(); pick(); };
     });
-    main.querySelector('[data-inbox]').onclick = () => { includeInbox = !includeInbox; draw(); };
+    main.querySelector('[data-inbox]').onclick = () => { includeInbox = !includeInbox; draw(); pick(); };
     main.querySelectorAll('[data-fill]').forEach((b) => {
-      b.onclick = () => { question = PRESETS[b.dataset.fill].question; session.question = question; draw(); $('#question', main).focus(); };
+      b.onclick = () => { question = PRESETS[b.dataset.fill].question; session.question = question; draw(); pick(); $('#question', main).focus(); };
     });
     main.querySelectorAll('[data-copy]').forEach((b) => { b.onclick = () => act(b.dataset.copy, 'copy'); });
     main.querySelectorAll('[data-save]').forEach((b) => { b.onclick = () => act(b.dataset.save, 'save'); });
@@ -100,7 +131,8 @@ export function mount(main, params, ctx) {
     const q = ($('#question', main)?.value || '').trim();
     if (!q) { toast('Type a question first.'); $('#question', main)?.focus(); return null; }
     session.question = q;
-    return { text: buildQuestionRequest(q, [...selected], { includeInbox }), label: 'question and notes' };
+    const only = closest && semReady && picked && pickedFor === q ? picked : null;
+    return { text: buildQuestionRequest(q, [...selected], { includeInbox, only }), label: only ? `question and ${only.length} closest notes` : 'question and notes' };
   }
 
   async function act(kind, how) {

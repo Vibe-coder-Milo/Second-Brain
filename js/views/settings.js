@@ -16,8 +16,10 @@ const COLOR_NAMES = { ochre: 'Ochre', sea: 'Sea green', chart: 'Chart blue', plu
 export function mount(main, params, ctx) {
   let editingSync = !state.device?.sync;
   let pwOpen = false;
+  const cleanups = [];
 
   const draw = async () => {
+    cleanups.splice(0).forEach((f) => f());
     const sync = state.device?.sync;
     const s = state.sync;
     const sealed = V.sealedState();
@@ -110,6 +112,14 @@ export function mount(main, params, ctx) {
         <p class="hint">The label stickers you can put on pages and notes, and find again on the Labels screen.</p>
         <div class="chips">${(state.config.labels || []).map((l) => html`<span class="chip static"><span class="dot" style="background:${l.color}"></span>${l.name}</span>`)}</div>
         <div class="btn-row"><button type="button" class="btn btn-sm" data-act="labels">Edit labels</button></div>
+      </section>
+
+      <section aria-labelledby="s-ai">
+        <h2 id="s-ai">On-device intelligence</h2>
+        <p class="hint">Search by meaning, related notes and transcribing recordings run on this device with small models that come with the app. Nothing you write or record is sent anywhere.</p>
+        <label class="check"><input type="checkbox" id="s-sem" ${state.device?.semantic !== false ? raw('checked') : ''}> Search by meaning and related notes</label>
+        <p class="status-line" id="s-sem-status" aria-live="polite"></p>
+        <div class="btn-row"><button type="button" class="btn btn-sm" data-act="sem-rebuild">Rebuild the index</button></div>
       </section>
 
       <section aria-labelledby="s-backup">
@@ -244,6 +254,23 @@ export function mount(main, params, ctx) {
       const inputs = main.querySelectorAll('[data-name]');
       inputs[inputs.length - 1]?.select();
     });
+    import('../semantic.js').then((S) => {
+      const st = $('#s-sem-status', main);
+      const paint = (x) => {
+        if (!st) return;
+        if (!S.semanticOn()) { st.textContent = 'Off on this device.'; return; }
+        st.textContent = x.error ? `Stopped: ${x.error}` : x.building ? `Reading your notes: ${x.done} of ${x.total}` : x.total ? `Ready: ${x.total} notes` : 'Starts shortly after you unlock.';
+      };
+      paint(S.semState);
+      const off = S.onSemantic(paint);
+      cleanups.push(off);
+      $('#s-sem', main).onchange = async (e) => {
+        await V.updateDevice({ semantic: e.target.checked });
+        if (e.target.checked) S.buildSoon(0); else await S.clearIndex();
+        paint(S.semState);
+      };
+      on('[data-act=sem-rebuild]', async () => { await S.clearIndex(); S.buildSoon(0); toast('Rebuilding'); });
+    });
     on('[data-act=labels]', async () => { const { manageLabels } = await import('./labels.js'); manageLabels(); });
     on('[data-act=export-md]', async (b) => {
       b.disabled = true;
@@ -268,6 +295,7 @@ export function mount(main, params, ctx) {
 
   draw();
   return {
+    destroy() { cleanups.splice(0).forEach((f) => f()); },
     onEvent(evt) {
       if (['sync', 'sealed', 'config', 'device'].includes(evt.type)) {
         if (main.contains(document.activeElement) && document.activeElement.matches('input, textarea')) return;

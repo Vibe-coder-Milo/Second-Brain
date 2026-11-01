@@ -91,12 +91,14 @@ export function mount(el, params, ctx) {
 
 // ---- Inside a notebook -------------------------------------------------------------
 
-const ROW_ICON = (n) => (n.kind === 'ink' ? icons.pen({ size: 17 }) : icons.lines({ size: 17 }));
+const ROW_ICON = (n) => (n.kind === 'ink' ? icons.pen({ size: 17 }) : n.kind === 'board' ? icons.board({ size: 17 }) : icons.lines({ size: 17 }));
 
 export function mountNotebook(el, params, ctx) {
   let id = params.id;
   let current = params.note || null;
+  let tableSec = params.view || null; // a section shown as a table
   let pane = null; // { id, inst }
+  let tv = null; // the table view instance
   const collapsed = new Set();
   let wide = isWide();
   document.body.classList.add('nb-open');
@@ -140,6 +142,7 @@ export function mountNotebook(el, params, ctx) {
         ${one ? '' : html`<div class="nb-sec-head">
           <button type="button" class="nb-sec-toggle" aria-expanded="${open ? 'true' : 'false'}" data-toggle="${s.id}">${icons.chevron({ size: 16 })}<span>${s.name}</span></button>
           <span class="count">${count}</span>
+          <button type="button" class="icon-btn bare sm ${tableSec === s.id ? 'on' : ''}" data-view="${s.id}" aria-label="See ${s.name} as a table" ${tableSec === s.id ? raw('aria-current="true"') : ''}>${icons.table({ size: 17 })}</button>
           <button type="button" class="icon-btn bare sm" data-secmenu="${s.id}" aria-label="${s.name} options">${icons.more({ size: 18 })}</button>
         </div>`}
         ${open ? html`<ul class="nb-tree">${top.length ? rows(top, 0) : html`<li class="nb-empty">Nothing here yet</li>`}</ul>` : ''}
@@ -150,13 +153,22 @@ export function mountNotebook(el, params, ctx) {
   function draw() {
     wide = isWide();
     const b = nb();
+    tv?.destroy();
+    tv = null;
     if (!b) {
       el.innerHTML = `${html`<div class="page"><div class="empty"><p class="serif">This notebook isn’t here</p><p style="margin:0">It may have been deleted, or it’s sealed and locked.</p><a class="btn" href="#/notebooks">Back to notebooks</a></div></div>`}`;
       return;
     }
+    if (tableSec && !b.sections.some((s) => s.id === tableSec)) tableSec = null;
+    // On iPhone a table takes the whole screen.
+    if (tableSec && !wide) {
+      el.innerHTML = '<div class="nbv-tv page" id="nb-tv"></div>';
+      mountTable($('#nb-tv', el));
+      return;
+    }
     const n = notesIn(b.id).length;
     const r = state.config.regions.find((x) => x.id === b.region);
-    el.innerHTML = `${html`<div class="nbv ${wide && current ? 'with-pane' : ''}">
+    el.innerHTML = `${html`<div class="nbv ${wide && (current || tableSec) ? 'with-pane' : ''}">
       <div class="nb-side">
         <a class="back" href="#/notebooks">${icons.back()}Notebooks</a>
         <div class="nb-head">
@@ -170,20 +182,37 @@ export function mountNotebook(el, params, ctx) {
         <div class="nb-new">
           <button type="button" class="btn" data-newnote="ink">${icons.pen({ size: 18 })}Handwritten</button>
           <button type="button" class="btn" data-newnote="note">${icons.lines({ size: 18 })}Typed</button>
+          <button type="button" class="btn" data-newnote="board">${icons.board({ size: 18 })}Whiteboard</button>
+          <button type="button" class="btn" data-act="table">${icons.table({ size: 18 })}Table view</button>
         </div>
         <nav class="nb-tree-wrap" aria-label="Notes in ${b.title}">${treeHtml(b)}</nav>
         <button type="button" class="nb-add-sec" data-act="add-section">${icons.plus({ size: 18 })}Add section</button>
       </div>
-      ${wide ? html`<div class="nb-pane" id="nb-pane">${current ? '' : html`<div class="nb-pane-empty">${raw(coverSVG(b, { width: 150, label: false }))}<p class="serif">${n ? 'Pick a note, or start a new one.' : 'Start your first page.'}</p>
-        <div class="btn-row"><button type="button" class="btn" data-newnote="ink">${icons.pen({ size: 18 })}Handwritten</button><button type="button" class="btn" data-newnote="note">${icons.lines({ size: 18 })}Typed</button></div></div>`}</div>` : ''}
+      ${wide ? html`<div class="nb-pane" id="nb-pane">${current || tableSec ? '' : html`<div class="nb-pane-empty">${raw(coverSVG(b, { width: 150, label: false }))}<p class="serif">${n ? 'Pick a note, or start a new one.' : 'Start your first page.'}</p>
+        <div class="btn-row"><button type="button" class="btn" data-newnote="ink">${icons.pen({ size: 18 })}Handwritten</button><button type="button" class="btn" data-newnote="note">${icons.lines({ size: 18 })}Typed</button><button type="button" class="btn" data-newnote="board">${icons.board({ size: 18 })}Whiteboard</button></div></div>`}</div>` : ''}
     </div>`}`;
     bind();
     paintPhotoCovers(el);
-    if (wide && current) openPane(params);
+    if (wide && tableSec) { pane = null; mountTable($('#nb-pane', el)); } else if (wide && current) openPane(params);
     else pane = null;
   }
 
+  async function mountTable(host) {
+    const { mountSectionView } = await import('./tableview.js');
+    if (!host.isConnected) return;
+    tv?.destroy();
+    tv = mountSectionView(host, id, tableSec, ctx, {
+      back: wide ? null : () => ctx.navigate(`#/notebook/${id}`),
+      onOpenNote: (nid) => ctx.navigate(isWide() ? `#/notebook/${id}?note=${nid}` : `#/note/${nid}`),
+    });
+  }
+
+  function showTable(sid) {
+    ctx.navigate(`#/notebook/${id}?view=${sid}`);
+  }
+
   function redrawTree() {
+    if (tableSec && !wide && nb()) return; // the table keeps itself up to date
     const wrap = el.querySelector('.nb-tree-wrap');
     const b = nb();
     if (!wrap || !b) { draw(); return; }
@@ -200,6 +229,7 @@ export function mountNotebook(el, params, ctx) {
     el.querySelector('[data-act=more]').onclick = () => more();
     el.querySelector('[data-act=edit]').onclick = async () => { await notebookSheet(nb()); };
     el.querySelector('[data-act=add-section]').onclick = () => addSection();
+    el.querySelector('[data-act=table]').onclick = () => showTable(lastSection());
     bindTree();
   }
 
@@ -208,6 +238,7 @@ export function mountNotebook(el, params, ctx) {
       b.onclick = () => { const s = b.dataset.toggle; if (collapsed.has(s)) collapsed.delete(s); else collapsed.add(s); redrawTree(); };
     });
     el.querySelectorAll('[data-secmenu]').forEach((b) => { b.onclick = () => sectionMenu(b.dataset.secmenu); });
+    el.querySelectorAll('[data-view]').forEach((b) => { b.onclick = () => (tableSec === b.dataset.view ? ctx.navigate(`#/notebook/${id}`) : showTable(b.dataset.view)); });
   }
 
   function lastSection() {
@@ -217,7 +248,7 @@ export function mountNotebook(el, params, ctx) {
   }
 
   function newNoteIn(kind, section = lastSection()) {
-    const q = `notebook=${id}&section=${section}${kind === 'ink' ? '&kind=ink' : ''}`;
+    const q = `notebook=${id}&section=${section}${kind === 'ink' || kind === 'board' ? `&kind=${kind}` : ''}`;
     if (isWide()) ctx.navigate(`#/notebook/${id}?note=new&${q}`);
     else ctx.navigate(`#/note/new?${q}`);
   }
@@ -261,13 +292,16 @@ export function mountNotebook(el, params, ctx) {
     const items = [
       { value: 'ink', label: 'New handwritten note here' },
       { value: 'note', label: 'New typed note here' },
+      { value: 'board', label: 'New whiteboard here' },
+      { value: 'table', label: 'See as a table' },
       { value: 'rename', label: 'Rename section' },
     ];
     if (i > 0) items.push({ value: 'up', label: 'Move up' });
     if (i < b.sections.length - 1) items.push({ value: 'down', label: 'Move down' });
     if (b.sections.length > 1) items.push({ value: 'delete', label: 'Delete section', danger: true });
     const act = await menuSheet(s.name, items);
-    if (act === 'ink' || act === 'note') newNoteIn(act, sid);
+    if (act === 'ink' || act === 'note' || act === 'board') newNoteIn(act, sid);
+    if (act === 'table') showTable(sid);
     if (act === 'rename') {
       const name = await textSheet({ title: 'Rename section', label: 'Name', value: s.name, confirm: 'Save' });
       if (name) await V.saveNotebook({ ...b, sections: b.sections.map((x) => (x.id === sid ? { ...x, name } : x)) });
@@ -341,9 +375,10 @@ export function mountNotebook(el, params, ctx) {
 
   return {
     update(p) {
-      if (p.id !== id) { closePane(); id = p.id; current = p.note || null; params = p; collapsed.clear(); draw(); return; }
+      if (p.id !== id) { closePane(); id = p.id; current = p.note || null; tableSec = p.view || null; params = p; collapsed.clear(); draw(); return; }
       params = p;
       const had = !!current;
+      if ((p.view || null) !== tableSec) { tableSec = p.view || null; current = p.note || null; closePane(); draw(); return; }
       current = p.note || null;
       if (!isWide()) { if (current && current !== 'new') ctx.navigate(`#/note/${current}`, { replace: true }); return; }
       if (!current) { closePane(); draw(); return; }
@@ -354,7 +389,8 @@ export function mountNotebook(el, params, ctx) {
     },
     onEvent(evt) {
       pane?.inst?.onEvent?.(evt);
-      if (evt.type === 'notebook' && evt.id === id) { draw(); return; }
+      tv?.onEvent(evt);
+      if (evt.type === 'notebook' && evt.id === id) { if (tv) redrawTree(); else draw(); return; }
       if (['note', 'delete', 'remote', 'sealed', 'config'].includes(evt.type)) {
         if (evt.type === 'delete' && evt.id === id) { draw(); return; }
         soon();
@@ -362,6 +398,7 @@ export function mountNotebook(el, params, ctx) {
     },
     destroy() {
       gone = true;
+      tv?.destroy();
       window.removeEventListener('resize', onResize);
       closePane();
       document.body.classList.remove('nb-open');

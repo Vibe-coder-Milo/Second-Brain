@@ -29,17 +29,23 @@ export function formatNote(n) {
   const lines = [`### [${n.id}] ${displayTitle(n)}`];
   const meta = [
     `Region: ${n.inbox ? 'Inbox (unsorted)' : regionName(n.region)}`,
-    `Type: ${typeName(n.type)}`,
+    `Type: ${n.kind === 'board' ? 'Whiteboard (outline below)' : typeName(n.type)}`,
     `Captured: ${fmtDate(n.createdAt, { year: 'always' })}`,
   ];
   if (n.source) meta.push(`Source: ${SOURCE_LABEL[n.source] || n.source}`);
   lines.push(meta.join(' | '));
   if (n.tags.length) lines.push(`Tags: ${n.tags.join(', ')}`);
+  const fields = n.notebook ? state.notebooks.get(n.notebook)?.sections.find((s) => s.id === n.section)?.fields || [] : [];
+  const props = fields.map((f) => [f.name, n.props?.[f.id]]).filter(([, v]) => v !== undefined && v !== null && v !== '' && !(Array.isArray(v) && !v.length));
+  if (props.length) lines.push(props.map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(', ') : v === true ? 'yes' : v}`).join(' | '));
   if (n.url) lines.push(`URL: ${n.url}`);
   if (n.chat?.title) lines.push(`From chat: ${n.chat.title}${n.chat.url ? ` (${n.chat.url})` : ''}`);
   const linked = n.links.map((id) => state.notes.get(id)).filter((x) => x && !x.sealed);
   if (linked.length) lines.push(`Linked to: ${linked.map((x) => `[${x.id}] ${displayTitle(x)}`).join('; ')}`);
   if (n.body.trim()) lines.push('', n.body.trim());
+  (n.recordings || []).forEach((r, i) => {
+    if (r.transcript?.text) lines.push('', `Transcript of recording ${i + 1}:`, `> ${(r.transcript.text.length > MAX_OCR * 2 ? `${r.transcript.text.slice(0, MAX_OCR * 2)}…` : r.transcript.text)}`);
+  });
   n.files.forEach((f, i) => {
     if (f.ocr) {
       const t = f.ocr.length > MAX_OCR ? `${f.ocr.slice(0, MAX_OCR)}…` : f.ocr;
@@ -167,8 +173,9 @@ ${replySpec('win')}`,
   },
 };
 
-export function buildQuestionRequest(question, regionIds, { includeInbox = true } = {}) {
-  const notes = shareableNotes(regionIds, { includeInbox });
+export function buildQuestionRequest(question, regionIds, { includeInbox = true, only = null } = {}) {
+  let notes = shareableNotes(regionIds, { includeInbox });
+  if (only) { const keep = new Map(only.map((id, i) => [id, i])); notes = notes.filter((n) => keep.has(n.id)).sort((a, b) => keep.get(a.id) - keep.get(b.id)); }
   return `# Second brain: question
 
 ${question.trim()}
@@ -293,8 +300,8 @@ export async function applyReply(reply, choices) {
     if (u.appendBody) {
       const src = u.chat?.title ? `\n\n_From chat: ${u.chat.url ? `[${u.chat.title}](${u.chat.url})` : u.chat.title}_` : '';
       const add = `${u.appendBody.trim()}${src}`;
-      if (n.kind === 'ink') {
-        // Handwritten notes keep their words on the pages, so the addition
+      if (n.kind === 'ink' || n.kind === 'board') {
+        // Handwritten notes and boards keep their words on the pages, so the addition
         // becomes a typed sub-note beside them.
         await saveNote(newNote({ title: `Added from Claude, ${new Date().toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}`, titleAuto: false, body: add, source: 'claude', parent: n.id, notebook: n.notebook, section: n.section, region: n.region, inbox: n.inbox, sealed: n.sealed }));
       } else if (n.doc) {

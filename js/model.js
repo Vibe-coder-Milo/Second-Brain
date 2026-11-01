@@ -73,6 +73,7 @@ export const SOURCE_LABEL = {
   link: 'Link',
   chat: 'From a Claude chat',
   pdf: 'Imported PDF',
+  scan: 'Scan',
   daily: 'Daily note',
   claude: 'From Claude',
   conflict: 'Sync conflict copy',
@@ -84,7 +85,8 @@ export function newNote(fields = {}) {
 }
 
 export function normNote(n) {
-  const kind = n.kind === 'ink' ? 'ink' : 'note';
+  const kind = n.kind === 'ink' || n.kind === 'board' ? n.kind : 'note';
+  const paged = kind === 'ink' || kind === 'board';
   return {
     id: n.id,
     kind,
@@ -111,12 +113,16 @@ export function normNote(n) {
     section: n.section || null,
     parent: n.parent || null,
     order: Number.isFinite(n.order) ? n.order : (n.createdAt || 0),
-    pages: kind === 'ink' && Array.isArray(n.pages) ? n.pages.map(normPage) : [],
-    pageTomb: kind === 'ink' && Array.isArray(n.pageTomb) ? n.pageTomb : [],
+    pages: paged && Array.isArray(n.pages) ? n.pages.map(normPage) : [],
+    pageTomb: paged && Array.isArray(n.pageTomb) ? n.pageTomb : [],
     labels: Array.isArray(n.labels) ? n.labels : [],
     tasks: kind === 'ink' && Array.isArray(n.tasks) ? n.tasks : [],
     daily: n.daily || null,
+    recordings: Array.isArray(n.recordings) ? n.recordings : [],
+    props: n.props && typeof n.props === 'object' ? n.props : {},
     pdfText: kind === 'ink' && n.pdfText ? String(n.pdfText) : '',
+    layers: kind === 'ink' && Array.isArray(n.layers) ? n.layers : null,
+    exportAllLayers: kind === 'ink' && !!n.exportAllLayers,
     editedOn: n.editedOn || null,
     createdAt: n.createdAt || Date.now(),
     updatedAt: n.updatedAt || Date.now(),
@@ -190,6 +196,10 @@ export function deviceLabel() {
   return 'Computer';
 }
 
+// Notes whose content lives in page files (handwriting and whiteboards).
+export const hasPages = (n) => n?.kind === 'ink' || n?.kind === 'board';
+export const kindName = (n) => (n?.kind === 'ink' ? 'Handwritten' : n?.kind === 'board' ? 'Whiteboard' : 'Typed');
+
 export function displayTitle(n) {
   if (n.title) return n.title;
   const fromBody = firstLine(n.body);
@@ -197,11 +207,12 @@ export function displayTitle(n) {
   const ocr = n.files?.find((f) => f.ocr)?.ocr;
   if (ocr) return firstLine(ocr);
   if (n.kind === 'ink') return 'Handwritten note';
+  if (n.kind === 'board') return 'Whiteboard';
   return `${SOURCE_LABEL[n.source] || 'Note'}`;
 }
 
 export function noteText(n) {
-  return [n.title, n.body, ...(n.files || []).map((f) => f.ocr || ''), (n.tags || []).join(' '), n.url || '', n.chat?.title || ''].join('\n');
+  return [n.title, n.body, ...(n.files || []).map((f) => f.ocr || ''), ...(n.recordings || []).map((r) => r.transcript?.text || ''), ...Object.values(n.props || {}).flat().map((v) => (typeof v === 'string' ? v : '')), (n.tags || []).join(' '), n.url || '', n.chat?.title || ''].join('\n');
 }
 
 // [[Title]] or [[Title|label]] links inside a note body.
