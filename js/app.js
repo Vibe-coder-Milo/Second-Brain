@@ -23,6 +23,13 @@ import * as LabelsView from './views/labels.js';
 import * as NotebooksView from './views/notebooks.js';
 
 const root = document.getElementById('app');
+
+// On iPhone and iPad, Safari zooms the whole app in when you tap into small
+// text (a text box on a handwritten page, say) and doesn't zoom back out, so
+// pages look blurry. maximum-scale stops that; iOS still lets you pinch-zoom.
+const iOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+if (iOS) document.querySelector('meta[name=viewport]')?.setAttribute('content', 'width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover');
+
 const NotebookView = { mount: NotebooksView.mountNotebook };
 const VIEWS = { today: TodayView, map: MapView, inbox: InboxView, notes: NotesView, note: NoteView, notebooks: NotebooksView, notebook: NotebookView, tasks: TasksView, labels: LabelsView, ask: AskView, review: ReviewView, settings: SettingsView };
 // Which tab or sidebar item lights up for each screen.

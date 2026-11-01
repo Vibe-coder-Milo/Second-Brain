@@ -91,6 +91,7 @@ export const icons = {
   timeline: (o) => svg('<line x1="3" y1="12" x2="21" y2="12"/><circle cx="7" cy="12" r="2" fill="currentColor"/><circle cx="13" cy="12" r="2" fill="currentColor"/><circle cx="18" cy="12" r="2" fill="currentColor"/>', o),
   kanban: (o) => svg('<rect x="4" y="4" width="4.5" height="14" rx="1"/><rect x="10" y="4" width="4.5" height="9" rx="1"/><rect x="16" y="4" width="4.5" height="11" rx="1"/>', o),
   type: (o) => svg('<polyline points="5 7.5 5 5 19 5 19 7.5"/><line x1="12" y1="5" x2="12" y2="19"/><line x1="9" y1="19" x2="15" y2="19"/>', o),
+  callout: (o) => svg('<rect x="3.5" y="5" width="17" height="14" rx="2.5"/><line x1="7.5" y1="10" x2="16.5" y2="10"/><line x1="7.5" y1="14" x2="13" y2="14"/>', o),
   front: (o) => svg('<rect x="4" y="14" width="16" height="6" rx="1.5"/><line x1="12" y1="11" x2="12" y2="3"/><polyline points="8.5 6.5 12 3 15.5 6.5"/>', o),
   fit: (o) => svg('<polyline points="4 9 4 4 9 4"/><polyline points="15 4 20 4 20 9"/><polyline points="20 15 20 20 15 20"/><polyline points="9 20 4 20 4 15"/>', o),
   select: (o) => svg('<path d="M6 3.5l12 7-5.5 1.5L10 18z"/>', o),

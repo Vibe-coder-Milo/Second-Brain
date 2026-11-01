@@ -7,7 +7,7 @@ import * as V from '../vault.js';
 import { state } from '../vault.js';
 import { newNote, newPage, displayTitle } from '../model.js';
 import { icons } from '../icons.js';
-import { openSheet, menuSheet, confirmSheet, notePicker, passphraseSheet, popover, closePopover } from '../ui.js';
+import { openSheet, menuSheet, confirmSheet, notePicker, passphraseSheet, popover, closePopover, tooltips } from '../ui.js';
 import { compressImage } from '../images.js';
 import { notebookPicker } from './notebooks.js';
 import { PENS, HL, HL_COLORS, INK_COLORS } from '../editor/inkdraw.js';
@@ -202,6 +202,7 @@ export function mount(el, params, ctx) {
     if (!box) return;
     box.innerHTML = `${html`${TOOLS.map((t) => html`<button type="button" class="tool" data-tool="${t.id}" aria-label="${t.name}" title="${t.name} (${t.key.toUpperCase()})" aria-pressed="${tool === t.id ? 'true' : 'false'}">${raw(icons[t.icon]({ size: 22 }))}</button>`)}`}`;
     box.querySelectorAll('[data-tool]').forEach((b) => { b.onclick = () => setTool(b.dataset.tool); });
+    tooltips(box);
     drawOpts();
   }
 

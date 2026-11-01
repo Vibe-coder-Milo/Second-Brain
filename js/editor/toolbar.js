@@ -5,7 +5,7 @@ import { html, raw, esc, toast, isWide } from '../util.js';
 import { state } from '../vault.js';
 import * as V from '../vault.js';
 import { icons } from '../icons.js';
-import { popover, closePopover, labelPicker, datePicker, stickerDrawer } from '../ui.js';
+import { popover, closePopover, labelPicker, datePicker, stickerDrawer, tooltips } from '../ui.js';
 import { searchNotes, displayTitle } from '../model.js';
 import { compressImage } from '../images.js';
 import { FONTS, TEXT_COLORS, HIGHLIGHTS, suggestKey } from './rich.js';
@@ -20,15 +20,15 @@ export const STYLES = [
   { id: 'numbers', name: 'Numbered list', hint: '1.', icon: 'numbers', keys: 'numbered list ordered', run: (c) => c.toggleOrderedList(), active: (e) => e.isActive('orderedList') },
   { id: 'checklist', name: 'Checklist', hint: '[ ]', icon: 'checklist', keys: 'checklist todo task', run: (c) => c.toggleTaskList(), active: (e) => e.isActive('taskList') },
   { id: 'quote', name: 'Quote', hint: '>', icon: 'quote', keys: 'quote', run: (c) => c.toggleBlockquote(), active: (e) => e.isActive('blockquote') },
-  { id: 'callout', name: 'Callout with label', hint: '!', icon: 'tag', keys: 'callout important label box', run: (c) => c.toggleCallout({ label: 'important' }), active: (e) => e.isActive('callout') },
+  { id: 'callout', name: 'Callout box', hint: '!', icon: 'callout', keys: 'callout important box highlight', run: (c) => c.toggleCallout({ label: 'important' }), active: (e) => e.isActive('callout') },
   { id: 'postit', name: 'Post-it', hint: '', icon: 'postit', keys: 'post-it postit sticky note', run: (c) => c.togglePostIt({ color: 'yellow' }), active: (e) => e.isActive('postit') },
   { id: 'divider', name: 'Divider', hint: '---', icon: 'divider', keys: 'divider line rule', run: (c) => c.setHorizontalRule() },
 ];
 
 const EXTRA = [
-  { id: 'table', name: 'Table', icon: 'table', keys: 'table grid' },
-  { id: 'label', name: 'Label', icon: 'tag', keys: 'label tag sticker important' },
-  { id: 'sticker', name: 'Sticker', icon: 'sticker', keys: 'sticker star emoji' },
+  { id: 'table', name: 'Table', icon: 'table', keys: 'table grid rows columns' },
+  { id: 'label', name: 'Label', icon: 'tag', keys: 'label tag important follow' },
+  { id: 'sticker', name: 'Sticker or post-it', icon: 'sticker', keys: 'sticker star emoji post-it postit' },
   { id: 'due', name: 'Due date', icon: 'calendar', keys: 'due date deadline' },
   { id: 'image', name: 'Image', icon: 'image', keys: 'image photo picture' },
   { id: 'link', name: 'Link to a note', icon: 'link', keys: 'link note wiki [[' },
@@ -142,6 +142,7 @@ export function mountFormatBar(bar, editor, opts = {}) {
   const B = (act, icon, label, extra = '') => html`<button type="button" class="fb" data-act="${act}" aria-label="${label}" ${raw(extra)}>${raw(icons[icon]({ size: 20 }))}</button>`;
   bar.innerHTML = `${html`
     <button type="button" class="fb fb-text" data-act="style" aria-label="Text styles"><span id="fb-style">Body</span>${raw(icons.up({ size: 14 }))}</button>
+    <button type="button" class="fb fb-text fb-insert" data-act="insert" aria-label="Insert a table, image, sticker, due date or link">${raw(icons.plus({ size: 16 }))}<span>Insert</span></button>
     ${compact ? '' : html`<button type="button" class="fb fb-text" data-act="font" aria-label="Font">Aa</button>
     <span class="fb-size" role="group" aria-label="Text size"><button type="button" class="fb sm" data-act="smaller" aria-label="Smaller">−</button><span id="fb-size">18</span><button type="button" class="fb sm" data-act="larger" aria-label="Larger">+</button></span>`}
     <span class="fb-sep"></span>
@@ -153,16 +154,13 @@ export function mountFormatBar(bar, editor, opts = {}) {
     ${B('outdent', 'outdent', 'Indent less')}${B('indent', 'indent', 'Indent more')}
     ${compact ? '' : B('align', 'align', 'Alignment')}
     <span class="fb-sep"></span>
-    ${B('label', 'tag', 'Add a label')}${B('sticker', 'sticker', 'Stickers and post-its')}
-    ${compact ? '' : B('table', 'table', 'Table')}
-    ${B('due', 'calendar', 'Due date')}
-    ${compact ? '' : B('image', 'image', 'Insert image')}
-    <button type="button" class="fb" data-act="link" aria-label="Link to a note">${raw(icons.wiki({ size: 20 }))}</button>
+    ${B('label', 'tag', 'Add a label')}${B('due', 'calendar', 'Due date')}
     <span class="fb-sep"></span>
     ${B('undo', 'undo', 'Undo')}${B('redo', 'redo', 'Redo')}
     ${opts.hideKeyboard ? B('hidekb', 'keyboardDown', 'Hide keyboard') : ''}`}`;
 
   bar.addEventListener('pointerdown', (e) => { if (e.target.closest('button')) e.preventDefault(); });
+  tooltips(bar);
   bar.addEventListener('click', async (e) => {
     const b = e.target.closest('[data-act]');
     if (!b) return;
@@ -173,6 +171,12 @@ export function mountFormatBar(bar, editor, opts = {}) {
         const items = [...STYLES, ...(compact ? [] : [EXTRA[0]])];
         const p = popover(b, `${styleMenuHtml(editor, items)}<p class="hint" style="padding:6px 10px 8px">Type / anywhere to open this menu</p>`, { label: 'Text styles', width: 290 });
         p.el.querySelectorAll('[data-style]').forEach((x) => { x.onclick = () => { p.close(); runAction(editor, x.dataset.style, b, opts); }; });
+        break;
+      }
+      case 'insert': {
+        const items = EXTRA.map((x) => (x.id === 'table' && editor.isActive('table') ? { ...x, name: 'Table options' } : x));
+        const p = popover(b, `${html`<div class="pop-head">Insert</div>${items.map((x) => html`<button type="button" class="pop-item" data-ins="${x.id}">${raw(icons[x.icon]({ size: 20 }))}${x.name}</button>`)}`}`, { label: 'Insert', width: 260 });
+        p.el.querySelectorAll('[data-ins]').forEach((x) => { x.onclick = () => { p.close(); runAction(editor, x.dataset.ins, b, opts); }; });
         break;
       }
       case 'font': fontMenu(editor, b, opts); break;
@@ -215,6 +219,8 @@ export function mountFormatBar(bar, editor, opts = {}) {
     for (const [act, mark] of Object.entries(press)) bar.querySelector(`[data-act=${act}]`)?.setAttribute('aria-pressed', editor.isActive(mark) ? 'true' : 'false');
     const tb = bar.querySelector('[data-act=table]');
     if (tb) tb.setAttribute('aria-label', editor.isActive('table') ? 'Table options' : 'Insert table');
+    const ins = bar.querySelector('[data-act=insert] span');
+    if (ins) ins.textContent = editor.isActive('table') ? 'Table' : 'Insert';
   };
   editor.on('selectionUpdate', refresh);
   editor.on('transaction', refresh);
@@ -250,7 +256,10 @@ export function attachSuggest(editor, opts = {}) {
     if (!cur) return;
     if (cur.kind === 'slash') {
       const q = cur.query.trim().toLowerCase();
-      items = [...STYLES, ...EXTRA].filter((s) => !q || s.name.toLowerCase().includes(q) || s.keys.includes(q));
+      // Names that start with what you typed come first, then other name
+      // matches, then matches on other words.
+      const rank = (s) => (s.name.toLowerCase().startsWith(q) ? 0 : s.name.toLowerCase().includes(q) ? 1 : 2);
+      items = [...STYLES, ...EXTRA].filter((s) => !q || s.name.toLowerCase().includes(q) || s.keys.includes(q)).map((s, i) => ({ s, i })).sort((a, b) => rank(a.s) - rank(b.s) || a.i - b.i).map((x) => x.s);
     } else {
       const q = cur.query.trim();
       const pool = [...state.notes.values()].filter((n) => n.id !== opts.noteId?.());

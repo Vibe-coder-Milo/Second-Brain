@@ -150,6 +150,60 @@ export function passphraseSheet({ title, body = '', confirmLabel = 'Unlock', che
 let openPop = null;
 export function closePopover() { openPop?.close(); }
 
+// Names for icon buttons. With a mouse or trackpad the name shows on hover;
+// on a touch screen, press and hold a button to see its name (the button
+// isn't pressed when you do).
+export function tooltips(root) {
+  const named = 'button[aria-label], label[aria-label], [data-tip]';
+  root.querySelectorAll(named).forEach((b) => { if (!b.title) b.title = b.dataset.tip || b.getAttribute('aria-label'); });
+  if (root._tips) return;
+  root._tips = true;
+  let timer = 0;
+  let bubble = null;
+  let shownFor = null;
+  const hide = () => { bubble?.remove(); bubble = null; };
+  root.addEventListener('pointerdown', (e) => {
+    if (e.pointerType === 'mouse') return;
+    const b = e.target.closest(named);
+    if (!b || !root.contains(b)) return;
+    clearTimeout(timer);
+    shownFor = null;
+    const sx = e.clientX;
+    const sy = e.clientY;
+    const move = (ev) => { if (Math.hypot(ev.clientX - sx, ev.clientY - sy) > 10) { clearTimeout(timer); root.removeEventListener('pointermove', move); } };
+    root.addEventListener('pointermove', move);
+    timer = setTimeout(() => {
+      root.removeEventListener('pointermove', move);
+      const text = b.dataset.tip || b.getAttribute('aria-label');
+      if (!text) return;
+      hide();
+      bubble = document.createElement('div');
+      bubble.className = 'tip';
+      bubble.setAttribute('role', 'tooltip');
+      bubble.textContent = text;
+      document.body.appendChild(bubble);
+      const r = b.getBoundingClientRect();
+      const w = bubble.offsetWidth;
+      const h = bubble.offsetHeight;
+      const below = r.bottom + h + 12 < window.innerHeight;
+      bubble.style.left = `${Math.max(8, Math.min(window.innerWidth - w - 8, r.left + r.width / 2 - w / 2))}px`;
+      bubble.style.top = `${below ? r.bottom + 8 : r.top - h - 8}px`;
+      shownFor = b;
+      navigator.vibrate?.(5);
+      setTimeout(hide, 1800);
+    }, 450);
+  });
+  const stop = () => clearTimeout(timer);
+  root.addEventListener('pointerup', stop);
+  root.addEventListener('pointercancel', stop);
+  root.addEventListener('contextmenu', (e) => { if (e.target.closest(named)) e.preventDefault(); });
+  // A press that showed the name doesn't also press the button.
+  root.addEventListener('click', (e) => {
+    if (shownFor && e.target.closest(named) === shownFor) { e.stopPropagation(); e.preventDefault(); }
+    shownFor = null;
+  }, true);
+}
+
 export function popover(anchor, content, { label = 'Options', width = 300, onClose, keepFocus = true, place = 'auto', cls = '' } = {}) {
   closePopover();
   const el = document.createElement('div');
@@ -271,14 +325,15 @@ export function datePicker(anchor, current = null) {
 // Returns what to place: { type: 'label', label } | { type: 'sticker', pack, key }
 // | { type: 'tape', key } | { type: 'postit', color } | { type: 'mine', id }.
 
-export function stickerDrawer({ tab = 'labels', allowTape = true, allowPostits = true, title = 'Stickers' } = {}) {
+export function stickerDrawer({ tab = 'postits', allowTape = true, allowPostits = true, title = 'Stickers', labels = false } = {}) {
   return new Promise((resolve) => {
-    const packs = PACKS.filter((p) => (allowTape || !p.tape));
+    // Labels have their own button; this drawer is for decoration.
+    const packs = PACKS.filter((p) => (allowTape || !p.tape) && (labels || p.id !== 'labels'));
     const tabs = [...(allowPostits ? [{ id: 'postits', name: 'Post-its' }] : []), ...packs];
     let cur = tabs.some((t) => t.id === tab) ? tab : tabs[0].id;
-    const recent = (state.device?.recentStickers || []).slice(0, 8);
+    const recent = (state.device?.recentStickers || []).filter((k) => labels || !k.includes('"type":"label"')).slice(0, 8);
     const s = openSheet(`${html`<div class="sheet-head"><span class="side"></span><h2>${title}</h2><span class="side"><button type="button" class="btn btn-ghost btn-sm" data-cancel>Done</button></span></div>
-      <p class="hint" style="margin-top:-10px">Labels show up in search and on the Labels screen.</p>
+      <p class="hint" style="margin-top:-10px">Stickers are decoration. To mark something you want to find later, use a label (the tag button).</p>
       <div class="chips scroll" role="tablist" aria-label="Sticker packs" id="sd-tabs"></div>
       <div id="sd-body" class="sticker-grid"></div>`}`, { label: title, onClose: (v) => resolve(v ?? null) });
     s.el.classList.add('sticker-sheet');

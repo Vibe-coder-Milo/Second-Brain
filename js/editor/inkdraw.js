@@ -270,6 +270,23 @@ function rotated(ctx, o, fn) {
 }
 
 export function drawObject(ctx, o, { redraw } = {}) {
+  if (o.type === 'table') {
+    rotated(ctx, o, () => {
+      const c = o.c || '#4A6E8C';
+      const rh = o.h / o.rows;
+      const cw = o.w / o.cols;
+      if (o.header) { ctx.fillStyle = `${c}1F`; ctx.fillRect(0, 0, o.w, rh); }
+      ctx.strokeStyle = c;
+      ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      for (let r = 1; r < o.rows; r++) { ctx.moveTo(0, r * rh); ctx.lineTo(o.w, r * rh); }
+      for (let k = 1; k < o.cols; k++) { ctx.moveTo(k * cw, 0); ctx.lineTo(k * cw, o.h); }
+      ctx.stroke();
+      ctx.lineWidth = 2;
+      ctx.strokeRect(0, 0, o.w, o.h);
+    });
+    return;
+  }
   if (o.type === 'tape') {
     rotated(ctx, o, () => {
       ctx.globalAlpha = 0.88;
@@ -589,7 +606,7 @@ export function drawRichText(ctx, doc, x, y, width, { size = 20, font = 'Overpas
 
 // ---- The whole page ---------------------------------------------------------------
 
-const ORDER = { image: 0, tape: 1, text: 3, sticker: 4, label: 4, mine: 4, postit: 5 };
+const ORDER = { table: 0, image: 0, tape: 1, text: 3, sticker: 4, label: 4, mine: 4, postit: 5 };
 
 // `dim(item)` fades items (used when replaying with audio); `visible(item)`
 // hides whole layers.

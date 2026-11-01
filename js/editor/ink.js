@@ -194,10 +194,15 @@ export class InkSurface {
 
   // ---------- Layers ----------
   setLayers(ls) {
+    const key = (l) => JSON.stringify([[...(l.hidden || [])].sort(), [...(l.locked || [])].sort(), !!l.paperHidden]);
+    const same = this.layers && key(this.layers) === key({ hidden: new Set(), locked: new Set(), ...ls });
     this.layers = { hidden: new Set(), locked: new Set(), active: 'ink', paperHidden: false, names: {}, ...ls };
+    // Saving the note calls this too; only redraw (and drop the selection)
+    // when what's shown or locked actually changed.
+    if (same) return;
     const hidden = this.layers.hidden;
     this.visible = hidden.size ? (it) => !hidden.has(layerOf(it)) : null;
-    if (this.sel) this.clearSelection();
+    if (this.sel && this.drawing?.kind !== 'move') this.clearSelection();
     this.render();
   }
   // Can this stroke or object be erased, selected or edited right now?
@@ -424,7 +429,8 @@ export class InkSurface {
   bind() {
     const el = this.pageEl;
     const fingerDraws = () => !!this.opts.getTool().fingerDraw && !this.penSeen;
-    const updateTouchAction = () => { el.style.touchAction = fingerDraws() || this.drawing ? 'none' : 'pan-x pan-y'; };
+    const moving = () => this.opts.getTool().tool === 'move';
+    const updateTouchAction = () => { el.style.touchAction = fingerDraws() || this.drawing || moving() ? 'none' : 'pan-x pan-y'; };
     this.updateTouchAction = updateTouchAction;
     updateTouchAction();
 
@@ -432,7 +438,7 @@ export class InkSurface {
     const blockStylus = (e) => {
       if (this.opts.readOnly) return;
       const stylus = [...e.touches].some((t) => t.touchType === 'stylus');
-      if (stylus || (fingerDraws() && e.touches.length === 1 && !e.target.closest('.tb-edit, .postit-edit, .sel-bar'))) e.preventDefault();
+      if (stylus || ((fingerDraws() || moving()) && e.touches.length === 1 && !e.target.closest('.tb-edit, .postit-edit, .sel-bar'))) e.preventDefault();
     };
     el.addEventListener('touchstart', blockStylus, { passive: false });
     el.addEventListener('touchmove', blockStylus, { passive: false });
@@ -523,6 +529,27 @@ export class InkSurface {
     const [x, y] = this.toPage(e);
     // Palm rejection: while the Pencil is down, other touches are ignored.
     if (this.drawing && this.drawing.pointerId !== e.pointerId) return;
+    if (e.pointerType === 'pen' && !this.penSeen) { this.penSeen = true; this.updateTouchAction(); }
+
+    // Move: press on anything to drag it there and then; on bare paper, drag to scroll.
+    if (tool.tool === 'move') {
+      if (e.button > 0) return;
+      e.preventDefault();
+      this.pageEl.setPointerCapture?.(e.pointerId);
+      if (this.editing) this.endEdit();
+      const o = this.objectAt(x, y);
+      // Keep dragging what's selected, unless you pressed on something else.
+      if (this.sel && this.inSelection(x, y) && (!o || this.sel.objects.has(o.id))) { this.startMove(e, x, y, 'move'); return; }
+      const st = o ? null : this.strokeAt(x, y);
+      if (o || st) {
+        this.select(st ? new Set([st.id]) : new Set(), o ? new Set([o.id]) : new Set());
+        this.startMove(e, x, y, 'move');
+        return;
+      }
+      if (this.sel) this.clearSelection();
+      this.drawing = { pointerId: e.pointerId, kind: 'pan', sx: e.clientX, sy: e.clientY, st: this.scroll.scrollTop, sl: this.scroll.scrollLeft };
+      return;
+    }
     const drawPtr = this.isDrawPointer(e);
 
     // Dragging the current selection, with a finger or with the lasso.
@@ -834,6 +861,7 @@ export class InkSurface {
     bar.className = 'sel-bar';
     const items = [];
     if (one?.type === 'text') items.push(['edit', 'Edit text', icons.textbox()]);
+    if (one?.type === 'table' && this.opts.editTable) items.push(['table', 'Rows and columns', icons.table()]);
     if (one?.type === 'postit') items.push(['edit', 'Edit', icons.postit()]);
     if (this.sel.strokes.size && this.opts.readHandwriting) items.push(['read', 'Convert to text', icons.type()]);
     if (this.sel.strokes.size) items.push(['colour', 'Colour', raw('<span class="sel-col"></span>')]);
@@ -852,6 +880,7 @@ export class InkSurface {
   async selAction(act, btn) {
     const one = this.singleObject();
     if (act === 'edit' && one) { this.clearSelection(); this.edit(one); return; }
+    if (act === 'table' && one) { this.opts.editTable?.(one, btn); return; }
     if (act === 'delete') { this.deleteSelection(); return; }
     if (act === 'copy') { this.copySelection(); toast('Copied'); return; }
     if (act === 'cut') { this.copySelection(); this.deleteSelection(); return; }
@@ -915,6 +944,22 @@ export class InkSurface {
     return o;
   }
 
+  // Change a table's rows, columns or header (keeps its row height).
+  updateTable(id, patchIn) {
+    const o = this.data.objects.find((x) => x.id === id);
+    if (!o) return;
+    this.snapshot();
+    const rowH = o.h / o.rows;
+    const colW = o.w / o.cols;
+    const rows = Math.max(1, Math.min(20, patchIn.rows ?? o.rows));
+    const cols = Math.max(1, Math.min(10, patchIn.cols ?? o.cols));
+    Object.assign(o, { rows, cols, header: patchIn.header ?? o.header, h: rowH * rows, w: Math.min(PAGE_W - o.x - 10, colW * cols), t: Date.now() });
+    if (this.sel) this.sel.box = this.selBox();
+    this.renderMain();
+    this.drawSelection();
+    this.changed();
+  }
+
   // Put the selection on another layer.
   moveToLayer(layer) {
     if (!this.sel) return;
@@ -955,10 +1000,25 @@ export class InkSurface {
     this.changed();
   }
 
+  // Writing and stickers sitting inside a table move with it.
+  carried(table) {
+    const inside = (b) => { const cx = b.x + b.w / 2; const cy = b.y + b.h / 2; return cx > table.x && cx < table.x + table.w && cy > table.y && cy < table.y + table.h; };
+    return {
+      strokes: new Set(this.data.strokes.filter((s) => this.editable(s) && inside(strokeBox(s))).map((s) => s.id)),
+      objects: new Set(this.data.objects.filter((o) => o.id !== table.id && o.type !== 'table' && this.editable(o) && inside(objBox(o))).map((o) => o.id)),
+    };
+  }
+
   startMove(e, x, y, mode) {
     this.snapshot();
     const b = this.sel.box;
     const one = this.singleObject();
+    if (one?.type === 'table' && mode !== 'rotate') {
+      const c = this.carried(one);
+      for (const id of c.strokes) this.sel.strokes.add(id);
+      for (const id of c.objects) this.sel.objects.add(id);
+      this.sel.carriedFor = one.id;
+    }
     this.drawing = { pointerId: e.pointerId, kind: 'move', mode, x0: x, y0: y, box: { ...b }, rot0: one?.rot || 0, dx: 0, dy: 0, k: 1, rot: one?.rot || 0 };
     this.sel.moving = true;
     this.updateTouchAction();
@@ -1007,9 +1067,18 @@ export class InkSurface {
     if (!sel || !d) return;
     const b = d.box;
     const moved = d.dx || d.dy || d.k !== 1 || d.rot !== d.rot0;
+    const dropCarried = () => {
+      // After moving a table, only the table stays selected.
+      if (!sel.carriedFor) return;
+      sel.strokes = new Set();
+      sel.objects = new Set([sel.carriedFor]);
+      sel.carriedFor = null;
+      sel.box = this.selBox();
+    };
     if (!moved) {
       this.undoStack.pop();
       sel.moving = false;
+      dropCarried();
       this.renderMain();
       this.drawSelection();
       return;
@@ -1045,6 +1114,7 @@ export class InkSurface {
     sel.strokes = ids;
     sel.moving = false;
     sel.box = this.selBox();
+    dropCarried();
     this.updateTouchAction();
     this.renderMain();
     this.clearWet();
@@ -1068,9 +1138,22 @@ export class InkSurface {
     toast('Saved to your stickers (Mine)');
   }
 
+  // The topmost stroke near a point that can be moved (Move tool).
+  strokeAt(x, y, r = 10) {
+    for (let i = this.data.strokes.length - 1; i >= 0; i--) {
+      const s = this.data.strokes[i];
+      if (!this.editable(s)) continue;
+      const b = strokeBox(s);
+      if (x < b.x - r || x > b.x + b.w + r || y < b.y - r || y > b.y + b.h + r) continue;
+      const rr = r + s.s / 2;
+      for (let k = 0; k < s.pts.length; k += 3) if (Math.hypot(s.pts[k] - x, s.pts[k + 1] - y) <= rr) return s;
+    }
+    return null;
+  }
+
   // ---------- Objects ----------
   objectAt(x, y) {
-    const order = { postit: 6, sticker: 5, label: 5, mine: 5, text: 4, tape: 2, image: 1 };
+    const order = { postit: 6, sticker: 5, label: 5, mine: 5, text: 4, tape: 2, image: 1, table: 0 };
     const hits = this.data.objects.filter((o) => this.editable(o) && hitObject(o, x, y));
     return hits.sort((a, b) => (order[b.type] || 0) - (order[a.type] || 0))[0] || null;
   }
@@ -1122,6 +1205,10 @@ export class InkSurface {
     } else if (v.type === 'image') {
       const k = Math.min(1, 520 / v.w, 520 / v.h);
       o = { type: 'image', fileId: v.fileId, w: v.w * k, h: v.h * k };
+    } else if (v.type === 'table') {
+      const rows = Math.max(1, Math.min(20, v.rows || 3));
+      const cols = Math.max(1, Math.min(10, v.cols || 3));
+      o = { type: 'table', rows, cols, header: v.header !== false, c: v.c || '#4A6E8C', w: Math.min(820, Math.max(320, cols * 210)), h: rows * 72 };
     }
     if (!o) return;
     if (this.writeBlocked()) { toast(this.writeBlocked()); return; }
@@ -1133,6 +1220,11 @@ export class InkSurface {
     px = Math.min(PAGE_W - o.w / 2, px);
     py = Math.min(this.page.h - o.h / 2, py);
     o = { id: uid('o'), x: px - o.w / 2, y: py - o.h / 2, rot: 0, t: now, at: now, ...o };
+    if (o.type === 'table') {
+      // Sit tables on the ruled lines and inside the margin.
+      o.x = Math.max(124, Math.min(PAGE_W - o.w - 30, o.x));
+      o.y = Math.max(120, 120 + Math.round((o.y - 120) / 36) * 36);
+    }
     this.snapshot();
     this.data.objects.push(o);
     this.renderMain();

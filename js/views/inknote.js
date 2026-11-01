@@ -8,7 +8,7 @@ import { state } from '../vault.js';
 import { newNote, newPage, displayTitle, PAPERS, PAPER_COLORS, PAGE_W, A4_H } from '../model.js';
 import { refreshInkSummary } from '../notework.js';
 import { icons } from '../icons.js';
-import { openSheet, menuSheet, confirmSheet, popover, stickerDrawer, notePicker, passphraseSheet } from '../ui.js';
+import { openSheet, menuSheet, confirmSheet, popover, stickerDrawer, notePicker, passphraseSheet, labelPicker, tooltips } from '../ui.js';
 import { InkSurface, penExtras } from '../editor/ink.js';
 import { ZoomStrip } from '../editor/zoomstrip.js';
 import { startRecording, stopRecording, isRecording, recordingTime } from '../recorder.js';
@@ -93,6 +93,8 @@ export function mount(el, params, ctx) {
           <span class="ink-sub" id="iv-sub">${nb ? `${nb.title}${sec && nb.sections.length > 1 ? ` › ${sec.name}` : ''}, ` : ''}page ${pageIdx + 1} of ${n.pages.length}</span>
         </div>
         <div class="top-actions">
+          <button type="button" class="icon-btn bare show-sm-flex" data-act="undo" aria-label="Undo">${icons.undo()}</button>
+          <button type="button" class="icon-btn bare show-sm-flex" data-act="redo" aria-label="Redo">${icons.redo()}</button>
           <button type="button" class="icon-btn bare" data-act="replay" aria-label="Replay recordings" aria-pressed="false" ${n.recordings.length ? '' : raw('hidden')}>${icons.headphones()}</button>
           <button type="button" class="icon-btn bare" data-act="pages" aria-label="All pages">${icons.pages()}</button>
           <button type="button" class="icon-btn bare hide-sm" data-act="link" aria-label="Link to another note">${icons.link()}</button>
@@ -100,7 +102,8 @@ export function mount(el, params, ctx) {
           <button type="button" class="icon-btn bare" data-act="more" aria-label="More actions">${icons.more()}</button>
         </div>
       </header>
-      <div class="ink-tools" role="toolbar" aria-label="Writing tools" id="iv-tools"></div>
+      <div class="ink-bars"><div class="ink-tools" role="toolbar" aria-label="Writing tools" id="iv-tools"></div>
+      <div class="ink-props" role="toolbar" aria-label="Settings for this tool" id="iv-props" hidden></div></div>
       <div class="ink-host" id="iv-host"></div>
       <div class="zs" id="iv-zs" role="region" aria-label="Writing window" hidden></div>
       <div class="fmtbar tb-fmt" id="iv-fmt" role="toolbar" aria-label="Text box formatting" hidden></div>
@@ -112,12 +115,14 @@ export function mount(el, params, ctx) {
     el.querySelector('[data-act=link]').onclick = () => linkTo();
     el.querySelector('[data-act=export]').onclick = () => exportPdf();
     el.querySelector('[data-act=more]').onclick = () => more();
+    tooltips(el.querySelector('.ink-top'));
     drawTools();
     surface = new InkSurface($('#iv-host', el), {
       getTool: () => tool,
       onChange: (data) => { queueSave(data); zoom?.render(); maybeGrow(data); },
       pickLayer: (anchor) => pickLayer(anchor),
       readHandwriting: (strokes, box) => convertSheet(strokes, box),
+      editTable: (o, btn) => tableSheet(btn, o),
       onSelection: () => {},
       onTextEditing: (ed) => textEditing(ed),
       pickColour: (anchor, cb) => colourPop(anchor, cb),
@@ -304,67 +309,182 @@ export function mount(el, params, ctx) {
   }
 
   // ---------- Tools ----------
+  // Two rows: the tools (always the same, so nothing jumps around), and
+  // below them the settings for the tool in hand.
   function drawTools() {
     const box = $('#iv-tools', el);
+    const props = $('#iv-props', el);
     if (!box) return;
+    const wide = isWide() || window.innerWidth >= 700;
     const T = (t, ic, label) => html`<button type="button" class="tool" data-tool="${t}" aria-label="${label}" aria-pressed="${tool.tool === t ? 'true' : 'false'}">${raw(icons[ic]({ size: 22 }))}</button>`;
-    const colours = tool.tool === 'hl' ? HL_COLORS.slice(0, 4).map((c) => c[1]) : favs().slice(0, isWide() ? 6 : 4);
-    const sizes = tool.tool === 'hl' ? HL.sizes : (PENS[tool.pen] || PENS.fountain).sizes;
-    const curSize = tool.tool === 'hl' ? tool.hlSize : tool.size;
-    const curCol = tool.tool === 'hl' ? tool.hlColor : tool.color;
+    const A = (act, ic, label, extra = '') => html`<button type="button" class="tool" data-act="${act}" aria-label="${label}" ${raw(extra)}>${raw(icons[ic]({ size: 22 }))}</button>`;
+    const penName = PENS[tool.pen]?.name || 'Fountain';
     box.innerHTML = `${html`
-      <div class="tg"><button type="button" class="tool" data-act="undo" aria-label="Undo">${icons.undo({ size: 22 })}</button><button type="button" class="tool" data-act="redo" aria-label="Redo">${icons.redo({ size: 22 })}</button><button type="button" class="tool rec-tool" data-act="record" aria-label="${isRecording() ? 'Stop recording' : 'Record audio'}" aria-pressed="${isRecording() ? 'true' : 'false'}">${icons.mic({ size: 22 })}</button></div>
-      <div class="tg">${T('pen', 'pen', `Pen: ${PENS[tool.pen]?.name || 'Fountain'}`)}${T('hl', 'highlighter', 'Highlighter')}${T('eraser', 'eraser', 'Eraser')}${T('lasso', 'lasso', 'Lasso')}${T('shapes', 'shapes', 'Shapes')}${T('text', 'textbox', 'Text box')}</div>
-      <div class="tg"><button type="button" class="tool" data-act="postit" aria-label="Post-it note">${icons.postit({ size: 22 })}</button><button type="button" class="tool" data-act="sticker" aria-label="Stickers">${icons.sticker({ size: 22 })}</button><label class="tool" aria-label="Insert image">${icons.image({ size: 22 })}<input type="file" accept="image/*" class="sr-only" id="iv-img"></label></div>
-      ${tool.tool === 'pen' && savedPens().length && isWide() ? html`<div class="tg pens" role="group" aria-label="Your pens">${savedPens().map((sp, i) => ({ sp, i })).slice(-4).map(({ sp, i }) => html`<button type="button" class="pen-fav" data-usepen="${i}" aria-label="${penLabel(sp)}" aria-pressed="${sp.pen === tool.pen && sp.color === tool.color && Math.abs(sp.size - tool.size) < 0.05 ? 'true' : 'false'}"><canvas width="44" height="20" aria-hidden="true"></canvas></button>`)}</div>` : ''}
-      ${['pen', 'shapes', 'hl'].includes(tool.tool) ? html`<div class="tg colours" role="group" aria-label="Colours">${colours.map((c) => html`<button type="button" class="ink-swatch" data-col="${c}" style="--c:${c}" aria-label="Colour ${INK_COLORS.find((x) => x[1] === c)?.[0] || HL_COLORS.find((x) => x[1] === c)?.[0] || c}" aria-pressed="${c === curCol ? 'true' : 'false'}"></button>`)}<button type="button" class="ink-swatch more" data-act="colours" aria-label="More colours"></button></div>
-      <div class="tg sizes" role="group" aria-label="Thickness">${sizes.map((s, i) => html`<button type="button" class="ink-size" data-size="${s}" aria-label="${['Fine', 'Medium', 'Bold'][i]}, ${mm(s)}" aria-pressed="${Math.abs(s - curSize) < 0.01 ? 'true' : 'false'}"><span style="--d:${Math.round(4 + i * 4)}px;--c:${curCol}"></span></button>`)}</div>` : ''}
-      ${tool.tool === 'eraser' ? html`<div class="tg"><button type="button" class="chip sm" data-act="eraser-mode">${tool.eraserMode === 'precise' ? 'Precise' : 'Whole strokes'}</button><button type="button" class="chip sm" aria-pressed="${tool.hlOnly ? 'true' : 'false'}" data-act="hl-only">Only highlights</button></div>` : ''}
-      ${tool.tool === 'lasso' && surface?.canPaste ? html`<div class="tg"><button type="button" class="chip sm" data-act="paste">Paste</button></div>` : ''}
-      <div class="tg"><button type="button" class="tool wide" data-act="layers" aria-label="Layers">${icons.layers({ size: 20 })}<span class="hide-sm">Layers</span></button><button type="button" class="tool wide" data-act="zoomstrip" aria-label="Writing window" aria-pressed="${zoom ? 'true' : 'false'}">${icons.zoomBox({ size: 20 })}<span class="hide-sm">Zoom</span></button></div>
-      <div class="tg zoom hide-sm"><button type="button" class="tool" data-act="zoom-out" aria-label="Zoom out">${icons.zoomOut({ size: 20 })}</button><button type="button" class="tool" data-act="zoom-in" aria-label="Zoom in">${icons.zoomIn({ size: 20 })}</button></div>`}`;
-    box.querySelectorAll('.pen-fav').forEach((b) => {
-      const sp = savedPens()[Number(b.dataset.usepen)];
-      requestAnimationFrame(() => penPreview(b.querySelector('canvas'), sp));
-      b.onclick = () => usePen(sp);
-    });
+      ${wide ? html`<div class="tg">${A('undo', 'undo', 'Undo')}${A('redo', 'redo', 'Redo')}</div>` : ''}
+      <div class="tg">${T('move', 'hand', 'Move: drag stickers, post-its, tables and writing')}${T('pen', 'pen', `Pen (${penName})`)}${T('hl', 'highlighter', 'Highlighter')}${T('eraser', 'eraser', 'Eraser')}${T('lasso', 'lasso', 'Lasso: select by drawing around')}${wide ? T('shapes', 'shapes', 'Shapes: lines and boxes come out straight') : ''}${T('text', 'textbox', 'Text box')}</div>
+      <div class="tg">${A('label', 'tag', 'Add a label you can search for')}${A('insert', 'plus', 'Insert: post-it, sticker, table, photo, scan')}</div>
+      ${wide ? html`<div class="tg">${A('record', 'mic', isRecording() ? 'Stop recording' : 'Record audio', `aria-pressed="${isRecording() ? 'true' : 'false'}"`)}<button type="button" class="tool wide" data-act="layers" aria-label="Layers">${icons.layers({ size: 20 })}<span>Layers</span></button><button type="button" class="tool wide" data-act="zoomstrip" aria-label="Writing window: write large, it lands small" aria-pressed="${zoom ? 'true' : 'false'}">${icons.zoomBox({ size: 20 })}<span>Zoom</span></button></div>` : ''}`}`;
+    box.querySelector('[data-act=record]')?.classList.add('rec-tool');
     const lb = box.querySelector('[data-act=layers]');
     if (lb) lb.classList.toggle('dot', noteLayers(note()).some((l) => l.hidden));
+    drawProps(props, wide);
     box.querySelectorAll('[data-tool]').forEach((b) => {
       b.onclick = () => {
         const t = b.dataset.tool;
         if (tool.tool === t && (t === 'pen' || t === 'shapes')) { penPop(b); return; }
         if (tool.tool === t && t === 'hl') { hlPop(b); return; }
         if (tool.tool === t && t === 'eraser') { eraserPop(b); return; }
-        tool.tool = t;
-        saveTool();
-        drawTools();
+        setTool(t);
       };
     });
-    box.querySelectorAll('[data-col]').forEach((b) => { b.onclick = () => { if (tool.tool === 'hl') tool.hlColor = b.dataset.col; else tool.color = b.dataset.col; saveTool(); drawTools(); }; });
-    box.querySelectorAll('[data-size]').forEach((b) => { b.onclick = () => { if (tool.tool === 'hl') tool.hlSize = Number(b.dataset.size); else tool.size = Number(b.dataset.size); saveTool(); drawTools(); }; });
     const on = (a, fn) => { const b = box.querySelector(`[data-act=${a}]`); if (b) b.onclick = () => fn(b); };
     on('undo', () => surface?.undo());
-    on('record', () => record());
     on('redo', () => surface?.redo());
-    on('colours', (b) => (tool.tool === 'hl' ? hlPop(b) : penPop(b)));
-    on('eraser-mode', () => { tool.eraserMode = tool.eraserMode === 'precise' ? 'stroke' : 'precise'; saveTool(); drawTools(); });
-    on('hl-only', () => { tool.hlOnly = !tool.hlOnly; saveTool(); drawTools(); });
-    on('paste', () => surface?.paste(30));
+    on('record', () => record());
     on('layers', (b) => layersPop(b));
     on('zoomstrip', () => toggleZoom());
-    on('zoom-in', () => surface?.setZoom(surface.zoom * 1.25));
-    on('zoom-out', () => surface?.setZoom(surface.zoom / 1.25));
-    on('postit', async () => { const v = await stickerDrawer({ tab: 'postits', title: 'Post-its and stickers' }); if (v) placeSticker(v); });
-    on('sticker', async () => { const v = await stickerDrawer({ tab: 'labels' }); if (v) placeSticker(v); });
-    const img = $('#iv-img', box);
-    if (img) img.onchange = async (e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) { try { await surface.insertImage(f); } catch { toast('Couldn’t add that image.'); } } };
+    on('label', (b) => addLabel(b));
+    on('insert', (b) => insertMenu(b, wide));
+    tooltips(box);
+    // Undo and redo sit in the header on phones.
+    const hu = el.querySelector('.ink-top [data-act=undo]');
+    if (hu) hu.onclick = () => surface?.undo();
+    const hr = el.querySelector('.ink-top [data-act=redo]');
+    if (hr) hr.onclick = () => surface?.redo();
+  }
+
+  function setTool(t) {
+    tool.tool = t;
+    saveTool();
+    surface?.updateTouchAction?.();
+    if (t !== 'move' && t !== 'lasso') surface?.clearSelection();
+    drawTools();
+  }
+
+  function drawProps(props, wide) {
+    if (!props) return;
+    const t = tool.tool;
+    const hl = t === 'hl';
+    const colours = hl ? HL_COLORS.slice(0, 5).map((c) => c[1]) : favs().slice(0, wide ? 6 : 4);
+    const sizes = hl ? HL.sizes : (PENS[tool.pen] || PENS.fountain).sizes;
+    const curSize = hl ? tool.hlSize : tool.size;
+    const curCol = hl ? tool.hlColor : tool.color;
+    const colourName = (c) => INK_COLORS.find((x) => x[1] === c)?.[0] || HL_COLORS.find((x) => x[1] === c)?.[0] || c;
+    let inner = '';
+    if (t === 'pen' || t === 'shapes' || hl) {
+      inner = html`<button type="button" class="pen-chip" data-act="penpanel" aria-label="${hl ? 'Highlighter settings' : 'Pen settings'}"><span class="dot" style="background:${curCol}"></span><span>${hl ? 'Highlighter' : `${PENS[tool.pen]?.name || 'Fountain'}${t === 'shapes' ? ' shapes' : ''}`}, ${mm(curSize)}</span>${raw(icons.chevron({ size: 14 }))}</button>
+        ${!hl && savedPens().length ? html`<div class="tg pens" role="group" aria-label="Your pens">${savedPens().map((sp, i) => ({ sp, i })).slice(wide ? -4 : -2).map(({ sp, i }) => html`<button type="button" class="pen-fav" data-usepen="${i}" aria-label="Your pen: ${penLabel(sp)}" aria-pressed="${sp.pen === tool.pen && sp.color === tool.color && Math.abs(sp.size - tool.size) < 0.05 ? 'true' : 'false'}"><canvas width="44" height="20" aria-hidden="true"></canvas></button>`)}</div>` : ''}
+        <div class="tg colours" role="group" aria-label="Colours">${colours.map((c) => html`<button type="button" class="ink-swatch" data-col="${c}" style="--c:${c}" aria-label="${colourName(c)}" aria-pressed="${c === curCol ? 'true' : 'false'}"></button>`)}<button type="button" class="ink-swatch more" data-act="colours" aria-label="More colours"></button></div>
+        <div class="tg sizes" role="group" aria-label="Thickness">${sizes.map((sz, i) => html`<button type="button" class="ink-size" data-size="${sz}" aria-label="${['Fine', 'Medium', 'Bold'][i]}, ${mm(sz)}" aria-pressed="${Math.abs(sz - curSize) < 0.01 ? 'true' : 'false'}"><span style="--d:${Math.round(4 + i * 4)}px;--c:${curCol}"></span></button>`)}</div>`;
+    } else if (t === 'eraser') {
+      inner = html`<div class="tg" role="radiogroup" aria-label="Eraser"><button type="button" class="chip sm" data-em="stroke" aria-pressed="${tool.eraserMode !== 'precise' ? 'true' : 'false'}">Whole strokes</button><button type="button" class="chip sm" data-em="precise" aria-pressed="${tool.eraserMode === 'precise' ? 'true' : 'false'}">Precise</button></div><div class="tg"><button type="button" class="chip sm" aria-pressed="${tool.hlOnly ? 'true' : 'false'}" data-act="hl-only">Only highlights</button></div>`;
+    } else if (t === 'lasso') {
+      inner = html`<span class="props-hint">Draw around writing to select it${surface?.canPaste ? '' : '. Then move, copy, recolour or convert it to text'}</span>${surface?.canPaste ? html`<button type="button" class="chip sm" data-act="paste">Paste</button>` : ''}`;
+    } else if (t === 'move') {
+      inner = html`<span class="props-hint">Drag anything to move it. Tap it for more options.</span>`;
+    } else if (t === 'text') {
+      inner = html`<span class="props-hint">Tap the page where the text box should go</span>`;
+    }
+    props.hidden = !inner;
+    props.innerHTML = `${inner}`;
+    props.querySelectorAll('.pen-fav').forEach((b) => {
+      const sp = savedPens()[Number(b.dataset.usepen)];
+      requestAnimationFrame(() => penPreview(b.querySelector('canvas'), sp));
+      b.onclick = () => usePen(sp);
+    });
+    props.querySelectorAll('[data-col]').forEach((b) => { b.onclick = () => { if (tool.tool === 'hl') tool.hlColor = b.dataset.col; else tool.color = b.dataset.col; saveTool(); drawTools(); }; });
+    props.querySelectorAll('[data-size]').forEach((b) => { b.onclick = () => { if (tool.tool === 'hl') tool.hlSize = Number(b.dataset.size); else tool.size = Number(b.dataset.size); saveTool(); drawTools(); }; });
+    props.querySelectorAll('[data-em]').forEach((b) => { b.onclick = () => { tool.eraserMode = b.dataset.em; saveTool(); drawTools(); }; });
+    const on = (a, fn) => { const b = props.querySelector(`[data-act=${a}]`); if (b) b.onclick = () => fn(b); };
+    on('penpanel', (b) => (tool.tool === 'hl' ? hlPop(b) : penPop(b)));
+    on('colours', (b) => (tool.tool === 'hl' ? hlPop(b) : penPop(b)));
+    on('hl-only', () => { tool.hlOnly = !tool.hlOnly; saveTool(); drawTools(); });
+    on('paste', () => surface?.paste(30));
+    tooltips(props);
+  }
+
+  // ---------- Adding things to the page ----------
+  async function addLabel(anchor) {
+    const l = await labelPicker(anchor, { title: 'Add a label' });
+    if (l) placeSticker({ type: 'label', label: l });
+  }
+
+  function pickFile(accept, fn) {
+    const inp = document.createElement('input');
+    inp.type = 'file';
+    inp.accept = accept;
+    inp.onchange = () => { const f = inp.files?.[0]; if (f) fn(f); };
+    inp.click();
+  }
+
+  function insertMenu(anchor, wide) {
+    const I = (act, ic, name, hint = '') => html`<button type="button" class="pop-item ins-item" data-ins="${act}">${raw(icons[ic]({ size: 20 }))}<span class="ins-t">${name}${hint ? html`<small>${hint}</small>` : ''}</span></button>`;
+    const p = popover(anchor, `${html`<div class="pop-head">Add to this page</div>
+      ${I('postit', 'postit', 'Post-it', 'Write on it, fold it away')}
+      ${I('sticker', 'sticker', 'Sticker', 'Decoration, tape and marks')}
+      ${I('table', 'table', 'Table', 'Rows and columns to write in')}
+      ${I('photo', 'image', 'Photo')}
+      ${I('scan', 'scan', 'Scan paper', 'Adds pages after this one')}
+      ${I('pdf', 'pdf', 'PDF', 'Adds its pages to write on')}
+      ${wide ? '' : html`<div class="pop-head">More tools</div>
+      ${I('shapes', 'shapes', 'Shapes', 'Lines and boxes come out straight')}
+      ${I('zoomstrip', 'zoomBox', zoom ? 'Close the writing window' : 'Writing window', 'Write large, it lands small')}
+      ${I('layers', 'layers', 'Layers')}
+      ${I('record', 'mic', isRecording() ? 'Stop recording' : 'Record audio')}`}`}`, { label: 'Insert', width: 300, cls: 'tall' });
+    p.el.querySelectorAll('[data-ins]').forEach((b) => {
+      b.onclick = async () => {
+        const a = b.dataset.ins;
+        if (a === 'photo') { pickFile('image/*', async (f) => { try { await surface.insertImage(f); afterPlace(); } catch { toast('Couldn’t add that image.'); } }); p.close(); return; }
+        if (a === 'pdf') { pickFile('application/pdf', (f) => importPdf(f)); p.close(); return; }
+        p.close();
+        if (a === 'postit') { const v = await stickerDrawer({ tab: 'postits', title: 'Post-its' }); if (v) placeSticker(v); }
+        if (a === 'sticker') { const v = await stickerDrawer({ tab: 'marks', title: 'Stickers' }); if (v) placeSticker(v); }
+        if (a === 'table') tableSheet(anchor);
+        if (a === 'scan') scanPages();
+        if (a === 'shapes') setTool('shapes');
+        if (a === 'zoomstrip') toggleZoom();
+        if (a === 'layers') layersPop(anchor);
+        if (a === 'record') record();
+      };
+    });
+  }
+
+  // Choose a table size, then place it on the page.
+  function tableSheet(anchor, existing = null) {
+    let rows = existing?.rows || 3;
+    let cols = existing?.cols || 3;
+    let header = existing ? !!existing.header : true;
+    const p = popover(anchor, `${html`<div class="pop-head">${existing ? 'Rows and columns' : 'Table'}</div>
+      <div class="tbl-steps"><span>Rows</span><button type="button" class="icon-btn sm" data-r="-1" aria-label="Fewer rows">−</button><strong id="tb-r">${rows}</strong><button type="button" class="icon-btn sm" data-r="1" aria-label="More rows">+</button></div>
+      <div class="tbl-steps"><span>Columns</span><button type="button" class="icon-btn sm" data-c="-1" aria-label="Fewer columns">−</button><strong id="tb-c">${cols}</strong><button type="button" class="icon-btn sm" data-c="1" aria-label="More columns">+</button></div>
+      <label class="pp-switch"><span>Shaded header row</span><input type="checkbox" role="switch" id="tb-h" ${header ? raw('checked') : ''}></label>
+      <div class="tbl-preview" id="tb-p" aria-hidden="true"></div>
+      ${existing ? '' : html`<button type="button" class="btn btn-primary btn-block" data-go>Add table</button>`}`}`, { label: 'Table', width: 280, keepFocus: false });
+    let applied = `${rows}/${cols}/${header}`;
+    const paint = () => {
+      $('#tb-r', p.el).textContent = rows;
+      $('#tb-c', p.el).textContent = cols;
+      $('#tb-p', p.el).innerHTML = `<div style="display:grid;grid-template-columns:repeat(${cols},1fr)">${Array.from({ length: rows * cols }, (_, i) => `<span class="${header && i < cols ? 'h' : ''}"></span>`).join('')}</div>`;
+      const now = `${rows}/${cols}/${header}`;
+      if (existing && now !== applied) { applied = now; surface?.updateTable(existing.id, { rows, cols, header }); }
+    };
+    p.el.querySelectorAll('[data-r]').forEach((b) => { b.onclick = () => { rows = Math.max(1, Math.min(20, rows + Number(b.dataset.r))); paint(); }; });
+    p.el.querySelectorAll('[data-c]').forEach((b) => { b.onclick = () => { cols = Math.max(1, Math.min(10, cols + Number(b.dataset.c))); paint(); }; });
+    $('#tb-h', p.el).onchange = (e) => { header = e.target.checked; paint(); };
+    const go = p.el.querySelector('[data-go]');
+    if (go) go.onclick = () => { p.close(); placeSticker({ type: 'table', rows, cols, header }); };
+    paint();
+  }
+
+  // After adding something, switch to Move so it can be dragged into place.
+  function afterPlace() {
+    if (tool.tool !== 'move') setTool('move');
   }
 
   function placeSticker(v) {
     if (!surface) return;
-    surface.place(v);
-    if (tool.tool === 'pen' || tool.tool === 'hl' || tool.tool === 'eraser') { tool.tool = 'lasso'; drawTools(); }
+    const o = surface.place(v);
+    if (o) afterPlace();
   }
 
   const saveTool = debounce(() => V.updateDevice({ ink: { ...tool } }).catch(() => {}), 600);
