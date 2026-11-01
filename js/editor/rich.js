@@ -14,6 +14,7 @@ import { labelMap, titleIndex } from '../model.js';
 import { docToMarkdown } from '../doc.js';
 import { stickerDef, stickerSVG, labelDef, postitColor } from '../stickers.js';
 import { esc } from '../util.js';
+import { darkInk, darkHighlight } from '../theme.js';
 
 export const FONTS = [
   { id: 'Spectral', name: 'Spectral', note: 'Book serif', css: "'Spectral', Georgia, serif" },
@@ -26,8 +27,57 @@ export const FONTS = [
 ];
 export const fontCss = (id) => FONTS.find((f) => f.id === id)?.css || FONTS[0].css;
 
-export const TEXT_COLORS = ['#1B2A38', '#51606C', '#2B5684', '#4277B5', '#2F8A72', '#7C8A2F', '#C0802F', '#B0413E', '#8C67B0', '#B8578E'];
-export const HIGHLIGHTS = ['#FFF1B8', '#FFD6D6', '#D7F2E1', '#CFE0F5', '#F5D6EC', '#FFE0C2'];
+// Text colours: ten hues, each in three strengths, like the named colours in
+// Notion and the shade grid in Google Docs. Tuned to read well on white; in
+// dark mode each is shown brightened (see darkInk).
+export const HUES = ['Grey', 'Brown', 'Red', 'Orange', 'Yellow', 'Green', 'Teal', 'Blue', 'Purple', 'Pink'];
+export const TEXT_PALETTE = [
+  { name: 'Bright', colors: ['#8A8F98', '#B5835A', '#E03E3E', '#F2711C', '#D9A20B', '#2DA44E', '#0FA3A3', '#2F80ED', '#9B51E0', '#E0559C'] },
+  { name: 'Classic', colors: ['#6B7280', '#976D57', '#C4554D', '#CC782F', '#B8862B', '#548164', '#2E8A86', '#487CA5', '#8A67AB', '#B35488'] },
+  { name: 'Deep', colors: ['#3F4650', '#6B4A3A', '#9B2C2C', '#A0521C', '#8C6A1E', '#2F6B4F', '#1F6467', '#2B5684', '#5E3F8A', '#8A2F64'] },
+];
+// Highlights: soft pastels (like a light wash) and brighter marker colours.
+export const HL_PALETTE = [
+  { name: 'Soft', colors: ['#E9E9E7', '#EEE0DA', '#FFD6D6', '#FFE0C2', '#FFF1B8', '#D7F2E1', '#CFF0EE', '#CFE0F5', '#E6DDF7', '#F5D6EC'] },
+  { name: 'Marker', colors: ['#D5D8DC', '#E3C9B4', '#FFADAD', '#FFC98B', '#FFF475', '#B9F6A9', '#A6F0E8', '#A8D8FF', '#D9C2FF', '#FFB3DE'] },
+];
+export const TEXT_COLORS = TEXT_PALETTE.flatMap((r) => r.colors);
+export const HIGHLIGHTS = HL_PALETTE.flatMap((r) => r.colors);
+export const colourName = (c) => {
+  const C = String(c || '').toUpperCase();
+  for (const [rows, kind] of [[TEXT_PALETTE, ''], [HL_PALETTE, ' highlight']]) {
+    for (const r of rows) { const i = r.colors.indexOf(C); if (i >= 0) return `${HUES[i]}, ${r.name.toLowerCase()}${kind}`; }
+  }
+  return C;
+};
+
+// Text colour and highlight carry their dark-mode versions with them, so the
+// app can show them readable on a dark background (CSS picks them up).
+const ToneColor = Color.extend({
+  addGlobalAttributes() {
+    return [{
+      types: this.options.types,
+      attributes: {
+        color: {
+          default: null,
+          parseHTML: (el) => el.style.color?.replace(/['"]+/g, '') || null,
+          renderHTML: (a) => (a.color ? { style: `color: ${a.color}; --tcd: ${darkInk(a.color)}` } : {}),
+        },
+      },
+    }];
+  },
+});
+const ToneHighlight = Highlight.extend({
+  addAttributes() {
+    return {
+      color: {
+        default: null,
+        parseHTML: (el) => el.getAttribute('data-color') || el.style.backgroundColor,
+        renderHTML: (a) => (a.color ? { 'data-color': a.color, style: `background-color: ${a.color}; color: inherit; --hld: ${darkHighlight(a.color)}` } : {}),
+      },
+    };
+  },
+});
 
 const newTid = () => `t${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 
@@ -398,10 +448,10 @@ export function extensions({ placeholder = 'Write, or type / for styles' } = {})
     ShadedHeader,
     ShadedCell,
     TextStyle,
-    Color,
+    ToneColor,
     FontFamily,
     FontSize,
-    Highlight.configure({ multicolor: true }),
+    ToneHighlight.configure({ multicolor: true }),
     TextAlign.configure({ types: ['heading', 'paragraph'] }),
     Placeholder.configure({ placeholder }),
     Callout,

@@ -8,8 +8,9 @@ import { icons } from '../icons.js';
 import { popover, closePopover, labelPicker, datePicker, stickerDrawer, tooltips } from '../ui.js';
 import { searchNotes, displayTitle } from '../model.js';
 import { compressImage } from '../images.js';
-import { FONTS, TEXT_COLORS, HIGHLIGHTS, suggestKey } from './rich.js';
+import { FONTS, TEXT_PALETTE, HL_PALETTE, colourName, suggestKey } from './rich.js';
 import { POSTIT_COLORS } from '../stickers.js';
+import { isDarkUI, darkInk, darkHighlight } from '../theme.js';
 
 export const STYLES = [
   { id: 'title', name: 'Title', hint: '#', keys: 'title h1', run: (c) => c.toggleHeading({ level: 1 }), active: (e) => e.isActive('heading', { level: 1 }) },
@@ -109,14 +110,47 @@ function tableMenu(editor, anchor) {
   p.el.querySelector('[data-del]').onclick = () => { editor.chain().focus().deleteTable().run(); p.close(); };
 }
 
-function colourMenu(editor, anchor) {
-  const p = popover(anchor, `${html`<div class="pop-head">Text colour</div>
-    <div class="pop-row wrap">${TEXT_COLORS.map((c) => html`<button type="button" class="swatch" data-color="${c}" style="background:${c}" aria-label="Text colour ${c}"></button>`)}</div>
+// The colour picker: text colours by hue and strength, highlights (soft or
+// marker), the colours you used last, and any colour of your own.
+const RECENT_MAX = 8;
+export const recentColours = (kind = 'text') => (state.device?.[kind === 'hl' ? 'recentHl' : 'recentText'] || []).slice(0, RECENT_MAX);
+export async function rememberColour(c, kind = 'text') {
+  if (!c) return;
+  const key = kind === 'hl' ? 'recentHl' : 'recentText';
+  const list = [c.toUpperCase(), ...(state.device?.[key] || []).filter((x) => x.toUpperCase() !== c.toUpperCase())].slice(0, RECENT_MAX);
+  try { await V.updateDevice({ [key]: list }); } catch { /* locked */ }
+}
+
+function colourMenu(editor, anchor, opts = {}) {
+  // Show colours as they'll look: brightened in dark mode.
+  const dark = opts.dark ? opts.dark() : isDarkUI();
+  const show = (c) => (dark ? (opts.tone || darkInk)(c) : c);
+  const showHl = (c) => (dark ? darkHighlight(c) : c);
+  const cur = (editor.getAttributes('textStyle').color || '').toUpperCase();
+  const curHl = (editor.getAttributes('highlight').color || '').toUpperCase();
+  const sw = (c, kind) => html`<button type="button" class="cswatch" data-${kind === 'hl' ? 'hl' : 'color'}="${c}" style="--c:${kind === 'hl' ? showHl(c) : show(c)}" aria-label="${colourName(c)}" aria-pressed="${(kind === 'hl' ? curHl : cur) === c.toUpperCase() ? 'true' : 'false'}"></button>`;
+  const recT = recentColours('text');
+  const recH = recentColours('hl');
+  const p = popover(anchor, `${html`<div class="cpick">
+    <div class="pop-head">Text colour</div>
+    <div class="cgrid">${TEXT_PALETTE.map((r) => html`${r.colors.map((c) => sw(c, 'text'))}`)}</div>
+    <div class="crow"><button type="button" class="chip sm" data-color="" aria-pressed="${cur ? 'false' : 'true'}"><span class="cdot" style="background:var(--ink)"></span>Default</button>
+      ${recT.length ? html`<span class="clabel">Recent</span>${recT.map((c) => sw(c, 'text'))}` : ''}
+      <label class="chip sm cmine"><span class="cdot rainbow"></span>Your own<input type="color" data-custom="text" value="${cur && cur.startsWith('#') ? cur.slice(0, 7).toLowerCase() : '#2b5684'}"></label></div>
     <div class="pop-head">Highlight</div>
-    <div class="pop-row wrap">${HIGHLIGHTS.map((c) => html`<button type="button" class="swatch" data-hl="${c}" style="background:${c}" aria-label="Highlight ${c}"></button>`)}<button type="button" class="swatch none" data-hl="" aria-label="No highlight"></button></div>
-    <button type="button" class="pop-item" data-reset>Reset colour</button>`}`, { label: 'Colour', width: 300 });
-  p.el.querySelectorAll('[data-color]').forEach((b) => { b.onclick = () => { editor.chain().focus().setColor(b.dataset.color).run(); p.close(); }; });
-  p.el.querySelectorAll('[data-hl]').forEach((b) => { b.onclick = () => { const c = b.dataset.hl; (c ? editor.chain().focus().setHighlight({ color: c }) : editor.chain().focus().unsetHighlight()).run(); p.close(); }; });
+    ${HL_PALETTE.map((r) => html`<div class="cgrid one" aria-label="${r.name} highlights">${r.colors.map((c) => sw(c, 'hl'))}</div>`)}
+    <div class="crow"><button type="button" class="chip sm" data-hl="" aria-pressed="${curHl ? 'false' : 'true'}"><span class="cdot none"></span>None</button>
+      ${recH.length ? html`<span class="clabel">Recent</span>${recH.map((c) => sw(c, 'hl'))}` : ''}
+      <label class="chip sm cmine"><span class="cdot rainbow"></span>Your own<input type="color" data-custom="hl" value="#fff475"></label></div>
+    <button type="button" class="pop-item" data-reset>Clear colour and highlight</button>
+  </div>`}`, { label: 'Colour', width: 330, cls: 'tall' });
+  const setText = (c) => { (c ? editor.chain().focus().setColor(c) : editor.chain().focus().unsetColor()).run(); if (c) rememberColour(c, 'text').then(() => opts.onPicked?.()); };
+  const setHl = (c) => { (c ? editor.chain().focus().setHighlight({ color: c }) : editor.chain().focus().unsetHighlight()).run(); if (c) rememberColour(c, 'hl'); };
+  p.el.querySelectorAll('[data-color]').forEach((b) => { b.onclick = () => { setText(b.dataset.color); p.close(); }; });
+  p.el.querySelectorAll('[data-hl]').forEach((b) => { b.onclick = () => { setHl(b.dataset.hl); p.close(); }; });
+  p.el.querySelectorAll('[data-custom]').forEach((inp) => {
+    inp.onchange = () => { const c = inp.value.toUpperCase(); if (inp.dataset.custom === 'hl') setHl(c); else setText(c); p.close(); };
+  });
   p.el.querySelector('[data-reset]').onclick = () => { editor.chain().focus().unsetColor().unsetHighlight().run(); p.close(); };
 }
 
@@ -234,7 +268,9 @@ export function mountFormatBar(bar, editor, opts = {}) {
 // record), the row below holds the text settings (font, size, colour, more).
 // It's always there, so the text never jumps when you start typing.
 
-const QUICK_COLOURS = ['#2B5684', '#B0413E', '#2F8A72', '#C0802F', '#8C67B0'];
+const QUICK_COLOURS = ['#2B5684', '#C4554D', '#548164', '#CC782F', '#8A67AB'];
+// The quick colours: the ones you used last, topped up with a few classics.
+const quickColours = (n) => [...new Set([...recentColours('text'), ...QUICK_COLOURS].map((c) => c.toUpperCase()))].slice(0, n);
 
 export function mountNoteBars(tools, props, editor, opts = {}) {
   const wide = !!opts.wide;
@@ -249,10 +285,23 @@ export function mountNoteBars(tools, props, editor, opts = {}) {
   props.innerHTML = `${html`
     <button type="button" class="pen-chip" data-act="font" aria-label="Font"><span class="fc-aa">Aa</span><span id="fb-font">Spectral</span>${raw(icons.chevron({ size: 14 }))}</button>
     <div class="tg fb-size" role="group" aria-label="Text size"><button type="button" class="tool sm" data-act="smaller" aria-label="Smaller text">−</button><span id="fb-size">18</span><button type="button" class="tool sm" data-act="larger" aria-label="Larger text">+</button></div>
-    <div class="tg colours" role="group" aria-label="Text colour"><button type="button" class="ink-swatch" data-tcol="" style="--c:var(--ink)" aria-label="Default colour"></button>${QUICK_COLOURS.slice(0, wide ? 5 : 3).map((c) => html`<button type="button" class="ink-swatch" data-tcol="${c}" style="--c:${dark ? opts.tone(c) : c}" aria-label="Text colour ${c}"></button>`)}<button type="button" class="ink-swatch more" data-act="colour" aria-label="More colours and highlight"></button></div>
+    <div class="tg colours" role="group" aria-label="Text colour"></div>
     <div class="tg">${wide ? '' : html`${T('italic', 'italic', 'Italic', true)}${T('underline', 'underline', 'Underline', true)}`}${T('strike', 'strike', 'Strikethrough', true)}${wide ? '' : T('numbers', 'numbers', 'Numbered list', true)}${T('outdent', 'outdent', 'Indent less')}${T('indent', 'indent', 'Indent more')}${T('align', 'align', 'Alignment')}</div>
     ${opts.hideKeyboard ? html`<div class="tg">${T('hidekb', 'keyboardDown', 'Hide keyboard')}</div>` : ''}`}`;
   props.hidden = false;
+  // Default, then the colours you used last, then the full picker.
+  const drawQuick = () => {
+    const box = props.querySelector('.colours');
+    if (!box) return;
+    // Only when a new colour joins, so swatches don't shuffle as you tap them.
+    const want = quickColours(wide ? 5 : 3);
+    const shown = [...box.querySelectorAll('[data-tcol]')].map((x) => x.dataset.tcol).filter(Boolean);
+    if (shown.length && want.every((c) => shown.includes(c))) return;
+    box.innerHTML = `${html`<button type="button" class="ink-swatch" data-tcol="" style="--c:var(--ink)" aria-label="Default colour"></button>${want.map((c) => html`<button type="button" class="ink-swatch" data-tcol="${c}" style="--c:${dark ? opts.tone(c) : c}" aria-label="${colourName(c)}"></button>`)}<button type="button" class="ink-swatch more" data-act="colour" aria-label="More colours and highlight"></button>`}`;
+    refresh?.();
+  };
+  let refresh = null;
+  drawQuick();
 
   const onDown = (e) => { if (e.target.closest('button')) e.preventDefault(); };
   const onClick = async (e) => {
@@ -266,6 +315,7 @@ export function mountNoteBars(tools, props, editor, opts = {}) {
     if (b.dataset.tcol !== undefined) {
       const c = b.dataset.tcol;
       (c ? ch().setColor(c) : ch().unsetColor()).run();
+      if (c) rememberColour(c, 'text').then(drawQuick);
       refresh();
       return;
     }
@@ -289,7 +339,7 @@ export function mountNoteBars(tools, props, editor, opts = {}) {
       case 'italic': ch().toggleItalic().run(); break;
       case 'underline': ch().toggleUnderline().run(); break;
       case 'strike': ch().toggleStrike().run(); break;
-      case 'colour': colourMenu(editor, b); break;
+      case 'colour': colourMenu(editor, b, { ...opts, onPicked: drawQuick }); break;
       case 'bullets': ch().toggleBulletList().run(); break;
       case 'numbers': ch().toggleOrderedList().run(); break;
       case 'checklist': ch().toggleTaskList().run(); break;
@@ -312,7 +362,7 @@ export function mountNoteBars(tools, props, editor, opts = {}) {
     tooltips(bar);
   }
 
-  const refresh = () => {
+  refresh = () => {
     const name = STYLES.slice(0, 3).find((s) => s.active(editor))?.name
       || (editor.isActive('bulletList') ? 'Bullets' : editor.isActive('orderedList') ? 'Numbers' : editor.isActive('taskList') ? 'Checklist' : editor.isActive('callout') ? 'Callout' : editor.isActive('blockquote') ? 'Quote' : 'Body');
     const st = tools.querySelector('#fb-style');

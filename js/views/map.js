@@ -24,6 +24,7 @@ export function mount(main, params, ctx) {
     <div class="map-bottom">
       <p class="map-stats" id="map-stats"></p>
       <p class="drop-hint">${icons.image({ size: 16 })}Drag screenshots onto the map to capture</p>
+      <button type="button" class="btn btn-sm map-org" id="map-org" aria-label="Organise: file notes into regions, and add regions they need">${icons.sparkle({ size: 18 })}Organise</button>
       <button type="button" class="icon-btn round" id="map-fit" aria-label="Fit map to screen">${icons.target()}</button>
     </div>
   </div>`}`;
@@ -46,6 +47,7 @@ export function mount(main, params, ctx) {
     if (e.key === 'Enter' && q.value.trim()) ctx.navigate(`#/notes?q=${encodeURIComponent(q.value.trim())}`);
   });
   $('#map-fit', main).onclick = () => map.fit();
+  $('#map-org', main).onclick = () => import('./organise.js').then((M) => M.organiseSheet());
 
   function drawChips() {
     const chips = $('#map-chips', main);

@@ -179,6 +179,8 @@ const dotI8 = (q, c) => { let s = 0; for (let i = 0; i < DIM; i++) s += q[i] * c
 const dotF = (a, b) => { let s = 0; for (let i = 0; i < DIM; i++) s += a[i] * b[i]; return s; };
 
 export const indexReady = () => index.size > 0;
+// A note's meaning as one unit vector (or null if not worked out yet).
+export const noteVector = (id) => index.get(id)?.mean || null;
 export const hasVector = (id) => index.has(id);
 
 const qCache = new Map();

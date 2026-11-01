@@ -8,7 +8,9 @@ import { state } from '../vault.js';
 import * as V from '../vault.js';
 import { stickerDef, stickerSVG, svgImage, labelDef, tapePattern, postitColor } from '../stickers.js';
 import { labelMap } from '../model.js';
-import { isDarkUI } from '../theme.js';
+import { isDarkUI, darkInk, darkHighlight } from '../theme.js';
+
+export { darkInk };
 
 // ---- Dark pages -------------------------------------------------------------------
 // In dark mode pages are drawn on dark paper, with dark ink shown light and
@@ -25,45 +27,6 @@ export function pageDark(page) {
   return page.color === 'night' || (isDarkUI() && state.device?.darkPaper !== false);
 }
 
-const toneCache = new Map();
-export function darkInk(c) {
-  if (typeof c !== 'string' || c[0] !== '#') return c;
-  const hit = toneCache.get(c);
-  if (hit) return hit;
-  let hex = c.slice(1);
-  if (hex.length === 3) hex = [...hex].map((x) => x + x).join('');
-  if (hex.length !== 6 && hex.length !== 8) return c;
-  const alpha = hex.length === 8 ? hex.slice(6) : '';
-  const [r, g, b] = [0, 2, 4].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
-  const max = Math.max(r, g, b);
-  const min = Math.min(r, g, b);
-  const l = (max + min) / 2;
-  let h = 0;
-  let sat = 0;
-  if (max !== min) {
-    const d = max - min;
-    sat = l > 0.5 ? d / (2 - max - min) : d / (max + min);
-    h = max === r ? (g - b) / d + (g < b ? 6 : 0) : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
-    h /= 6;
-  }
-  let L = l;
-  let S = sat;
-  if (sat < 0.25 || l < 0.22) {
-    // Black, greys and near-black navy read as soft white.
-    if (l < 0.6) { L = 0.9 - l * 0.3; S = Math.min(sat, 0.18); }
-  } else if (l < 0.66) {
-    L = 0.62 + l * 0.18;
-    S = Math.min(sat, 0.72);
-  }
-  const f = (n) => {
-    const k = (n + h * 12) % 12;
-    const a = S * Math.min(L, 1 - L);
-    return Math.round((L - a * Math.max(-1, Math.min(k - 3, 9 - k, 1))) * 255).toString(16).padStart(2, '0');
-  };
-  const out = `#${f(0)}${f(8)}${f(4)}${alpha}`.toUpperCase();
-  toneCache.set(c, out);
-  return out;
-}
 const tint = (c) => (dark ? darkInk(c) : c);
 
 // ---- Pens -------------------------------------------------------------------------
@@ -478,7 +441,7 @@ export function drawRichText(ctx, doc, x, y, width, { size = 20, font = 'Overpas
           italic: !!m.italic,
           under: !!m.underline,
           strike: !!m.strike,
-          color: m.highlight ? (m.textStyle?.color || '#1B2A38') : tint(m.textStyle?.color || style.color || color),
+          color: m.highlight && !dark ? (m.textStyle?.color || '#1B2A38') : tint(m.textStyle?.color || style.color || color),
           hl: m.highlight ? (m.highlight.color || '#FFF1B8') : null,
           size: m.textStyle?.fontSize ? (parseFloat(m.textStyle.fontSize) / 18) * style.size : style.size,
           family: m.textStyle?.fontFamily ? (FONT_CSS[m.textStyle.fontFamily] || base) : style.family,
@@ -536,7 +499,7 @@ export function drawRichText(ctx, doc, x, y, width, { size = 20, font = 'Overpas
           if (def) { const img = svgImage(stickerSVG(def), redraw); if (img.complete && img.naturalWidth) ctx.drawImage(img, xx, baseY - w.h * 0.85, w.w, w.h); }
         } else {
           ctx.font = fontOf(w);
-          if (w.hl) { ctx.fillStyle = w.hl; ctx.fillRect(xx, baseY - w.size * 0.92, w.ww, w.size * 1.18); }
+          if (w.hl) { ctx.fillStyle = dark ? darkHighlight(w.hl) : w.hl; ctx.fillRect(xx, baseY - w.size * 0.92, w.ww, w.size * 1.18); }
           ctx.fillStyle = w.color;
           ctx.fillText(w.text, xx, baseY);
           if (w.under || w.strike) {

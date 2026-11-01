@@ -15,6 +15,10 @@ export const PALETTE = {
   olive: { light: ['#7C8A2F', '#556019'], dark: ['#A5B44F', '#CBD68C'] },
   teal: { light: ['#2A8C9C', '#1C5F6A'], dark: ['#4FB2C2', '#93D3DD'] },
   rose: { light: ['#B8578E', '#8A3466'], dark: ['#D27BAD', '#E9AFD0'] },
+  indigo: { light: ['#5C6BC0', '#3B478F'], dark: ['#8592DA', '#B9C1EC'] },
+  amber: { light: ['#B8860B', '#7D5A05'], dark: ['#D9A92E', '#ECCB7A'] },
+  moss: { light: ['#4F7F3A', '#355A26'], dark: ['#78A862', '#AFCF9F'] },
+  slate: { light: ['#5F7486', '#3E4F5E'], dark: ['#8EA2B3', '#BFCCD7'] },
 };
 export const UNSORTED = { light: ['#8A96A1', '#51606C'], dark: ['#7D8C99', '#A7B4B0'] };
 

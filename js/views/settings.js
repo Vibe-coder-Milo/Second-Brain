@@ -11,8 +11,9 @@ import { confirmSheet } from '../ui.js';
 import { syncFields, readSyncFields } from './gate.js';
 import { icons } from '../icons.js';
 import { themePref, applyTheme } from '../theme.js';
+import { appVersion, checkForUpdate } from '../appupdate.js';
 
-const COLOR_NAMES = { ochre: 'Ochre', sea: 'Sea green', chart: 'Chart blue', plum: 'Plum', brick: 'Brick', olive: 'Olive', teal: 'Teal', rose: 'Rose' };
+const COLOR_NAMES = { ochre: 'Ochre', sea: 'Sea green', chart: 'Chart blue', plum: 'Plum', brick: 'Brick', olive: 'Olive', teal: 'Teal', rose: 'Rose', indigo: 'Indigo', amber: 'Amber', moss: 'Moss', slate: 'Slate' };
 
 export function mount(main, params, ctx) {
   let editingSync = !state.device?.sync;
@@ -127,6 +128,7 @@ export function mount(main, params, ctx) {
         <h2 id="s-ai">On-device intelligence</h2>
         <p class="hint">Search by meaning, related notes, reading handwriting and transcribing recordings run on this device with small models that come with the app. Nothing you write or record is sent anywhere.</p>
         <label class="check"><input type="checkbox" id="s-sem" ${state.device?.semantic !== false ? raw('checked') : ''}> Search by meaning and related notes</label>
+        <label class="check"><input type="checkbox" id="s-org" ${state.device?.organise !== false ? raw('checked') : ''}> Organise new notes on the map by themselves: file each in the region it fits, and add a region (like Property & home) when nothing fits</label>
         <p class="status-line" id="s-sem-status" aria-live="polite"></p>
         <div class="btn-row"><button type="button" class="btn btn-sm" data-act="sem-rebuild">Rebuild the index</button></div>
         <label class="check"><input type="checkbox" id="s-hand" ${state.device?.readHand !== false ? raw('checked') : ''}> Read my handwriting, so it can be searched</label>
@@ -147,6 +149,7 @@ export function mount(main, params, ctx) {
         <h2 id="s-about">This device</h2>
         <p class="hint">${usage || 'Storage use unknown'}. ${persisted ? 'Storage is protected from automatic clean-up.' : 'On iPhone and iPad, add this app to your Home Screen so the system keeps its storage.'}</p>
         <p class="hint">Text in images is read on this device. Nothing is uploaded except encrypted sync to your own GitHub repo.</p>
+        <div class="set-row"><span class="hint" id="s-version" style="font-weight:400">Version …</span><button type="button" class="btn btn-sm" data-act="check-update">Check for updates</button></div>
         <div class="btn-row"><button type="button" class="btn btn-danger" data-act="wipe">Erase this device</button></div>
       </section>
     </div>`}`;
@@ -285,6 +288,14 @@ export function mount(main, params, ctx) {
       on('[data-act=sem-rebuild]', async () => { await S.clearIndex(); S.buildSoon(0); toast('Rebuilding'); });
     });
     $('#s-hand', main).onchange = async (e) => { await V.updateDevice({ readHand: e.target.checked }); };
+    $('#s-org', main).onchange = async (e) => { await V.updateDevice({ organise: e.target.checked }); };
+    appVersion().then((v) => { const e = $('#s-version', main); if (e) e.textContent = v; });
+    on('[data-act=check-update]', async (b) => {
+      b.disabled = true;
+      const coming = await checkForUpdate();
+      b.disabled = false;
+      toast(coming ? 'Downloading the new version…' : 'You have the latest version.');
+    });
     main.querySelectorAll('[data-theme-pick]').forEach((x) => {
       x.onclick = () => {
         applyTheme(x.dataset.themePick);

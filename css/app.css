@@ -392,3 +392,11 @@ select { appearance: none; -webkit-appearance: none; padding-right: 36px; backgr
 
 .spin { animation: spin 1s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* ---------- A new version is ready ---------- */
+.update-bar {
+  position: fixed; left: 50%; top: calc(env(safe-area-inset-top) + 10px); transform: translateX(-50%); z-index: 120;
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: center; max-width: calc(100% - 24px);
+  padding: 10px 12px 10px 16px; border-radius: 14px; background: var(--surface); color: var(--ink); border: 1px solid var(--field);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18); font-size: 14.5px;
+}

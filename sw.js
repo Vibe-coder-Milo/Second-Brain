@@ -2,7 +2,7 @@
 // your notes live in encrypted on-device storage, not in this cache.
 // Bump VERSION whenever app files change.
 
-const VERSION = 'sb-v6';
+const VERSION = 'sb-v7';
 const SHELL = [
   './',
   './index.html',
@@ -32,6 +32,7 @@ const SHELL = [
   './js/ai-worker.js',
   './js/ai.js',
   './js/app.js',
+  './js/appupdate.js',
   './js/boarddraw.js',
   './js/claude.js',
   './js/connections.js',
@@ -53,6 +54,7 @@ const SHELL = [
   './js/model.js',
   './js/notework.js',
   './js/ocr.js',
+  './js/organiser.js',
   './js/pdf.js',
   './js/recorder.js',
   './js/scan.js',
@@ -75,6 +77,7 @@ const SHELL = [
   './js/views/note.js',
   './js/views/notebooks.js',
   './js/views/notes.js',
+  './js/views/organise.js',
   './js/views/recordings.js',
   './js/views/review.js',
   './js/views/scanner.js',

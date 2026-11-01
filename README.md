@@ -46,7 +46,8 @@ Every sync is one commit, so the data repo's history doubles as version history.
 - **Typed notes**
   - Styles: Title, Heading, Subheading, body text, bulleted, numbered and checklist lists, quote, callout box, post-it, divider. Type `/` anywhere for the style menu, or use shortcuts as you type: `#`, `##`, `###`, `-`, `1.`, `[ ]`, `>`, `!`, `---`.
   - **Toolbar**: the same two rows at the top as handwritten notes. The top row: undo and redo, text style, bold, lists, the tag button (adds a label) and **Insert** (+). The row below: font, size, colours and the rest. It's there while reading too, so nothing jumps when you start typing.
-  - Formatting: bold, italic, underline, strikethrough, text colour and highlight, seven fonts, sizes and alignment.
+  - Formatting: bold, italic, underline, strikethrough, seven fonts, sizes and alignment.
+  - **Colours**: 30 text colours (ten hues, each bright, classic or deep), soft and marker highlights, the colours you used last (they also sit in the toolbar), and any colour of your own. In dark mode they're shown brightened so they stay readable.
   - **Insert** (the + button, or `/`): tables with shading, images, stickers, post-its, due dates and links to notes.
   - **Fields** from a section's table view (dates, impact, people and so on) are folded away below the text; tap **Fields** to see or change them.
   - Links: `[[` links to another note.
@@ -75,11 +76,13 @@ Every sync is one commit, so the data repo's history doubles as version history.
 - **Version history**: every sync is a commit, so each note (and each handwritten page) can be compared with earlier versions and restored.
 - **Export**: a note or notebook as PDF or Markdown, or everything as a Markdown zip (Settings).
 - **Map**: each region is a territory; notes cluster around it, links are lines, dashed amber lines are suggested links. Tap a dot to open the note (on iPad it opens beside the map). Drag screenshots onto the map on iPad or a computer to capture them.
+- **Organiser** (Organise on the map or in the inbox): reads your notes on this device and files each into the region it fits. When notes need a new home it adds a region, such as Property & home, Health & fitness, Money & admin or Side projects. You see the plan first and can untick anything. With **Organise new notes by themselves** on (Settings → On-device intelligence), new captures are filed once you've finished with them, but only when the organiser is sure. Anything moved can be put back with **Undo** in the inbox. Nothing leaves the device.
 - **Ask Claude**
   - **Sweep my Claude chats** copies a request that asks Claude to go through your chats since the last sweep and keep only what's worth keeping (decisions, ideas, open questions, wins), skipping lookups and one-off tasks.
   - **Ask about your notes** copies your question plus the regions you choose, or just the notes closest in meaning to your question.
   - Paste into any Claude chat, then **Import Claude's reply**. You review every new note, update and skipped chat before anything is saved.
   - Handwritten notes share their text boxes, post-its and the handwriting read on your device, whiteboards share an outline of what's on them, and recordings share their transcripts. Sealed notes and notebooks are never included.
+- **Updates**: when a new version of the app is ready, a bar offers to switch to it (you'll unlock again). Settings → This device shows the version and has **Check for updates**.
 - **Appearance** (Settings): match the device, or always light or dark. In dark mode, handwritten pages and whiteboards go dark too, with dark ink shown light and colours brightened, so there's no bright white page in a dark app. PDFs and images you export always use light paper. You can keep pages light in dark mode if you prefer.
 - **Settings**: sync, appearance, auto-lock, passphrase, sealed notes, regions, labels, encrypted backup, Markdown export.
 

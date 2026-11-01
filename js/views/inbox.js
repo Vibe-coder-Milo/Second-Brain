@@ -1,12 +1,14 @@
 // Inbox: new captures waiting to be filed.
 
-import { html, fmtDate, snippet, toast } from '../util.js';
+import { html, raw, fmtDate, snippet, toast } from '../util.js';
 import { state, fileNote, fileURL, saveNotes } from '../vault.js';
 import { displayTitle, guessRegions, regionColors, SOURCE_LABEL } from '../model.js';
 import { regionPicker } from '../ui.js';
 import { icons } from '../icons.js';
 
 export function mount(main, params, ctx) {
+  let moves = null;
+  import('./organise.js').then((M) => { moves = M; draw(); });
   const draw = () => {
     const items = [...state.notes.values()].filter((n) => n.inbox).sort((a, b) => b.createdAt - a.createdAt);
     const regions = state.config.regions;
@@ -17,13 +19,16 @@ export function mount(main, params, ctx) {
       return out.slice(0, 2);
     };
     const withSuggestion = items.filter((n) => n.suggestedRegion && regions.some((r) => r.id === n.suggestedRegion));
+    const recent = moves ? moves.recentMovesHtml() : '';
+    const bindRecent = moves?.bindRecentMoves;
 
     main.innerHTML = `${html`<div class="page">
       <div class="page-head">
         <div><h1 class="page-title">Inbox</h1><p class="page-sub">${items.length ? `${items.length} capture${items.length === 1 ? '' : 's'} to sort` : 'All sorted'}</p></div>
       </div>
       ${items.length ? html`<div class="btn-row">
-        <a class="btn btn-block" href="#/ask?preset=sort" style="flex:1">${icons.ask({ size: 18 })}Sort all with Claude</a>
+        <button type="button" class="btn btn-primary" data-action="organise" style="flex:1">${icons.sparkle({ size: 18 })}Organise on this device</button>
+        <a class="btn" href="#/ask?preset=sort" style="flex:1">${icons.ask({ size: 18 })}Sort all with Claude</a>
         ${withSuggestion.length > 1 ? html`<button type="button" class="btn" data-action="file-suggested" style="flex:1">File ${withSuggestion.length} as suggested</button>` : ''}
       </div>` : ''}
       ${items.length ? html`<ul class="rows">${items.map((n) => row(n, suggestionFor(n)))}</ul>` : html`<div class="empty">
@@ -31,7 +36,11 @@ export function mount(main, params, ctx) {
         <p style="margin:0">New captures land here until you file them into a region.</p>
         <button type="button" class="btn btn-primary" data-action="capture">${icons.plus({ size: 20 })}Capture something</button>
       </div>`}
+      ${raw(recent)}
     </div>`}`;
+    bindRecent?.(main);
+    const org = main.querySelector('[data-action=organise]');
+    if (org) org.onclick = () => import('./organise.js').then((M) => M.organiseSheet());
 
     main.querySelectorAll('[data-file-in]').forEach((b) => {
       b.onclick = async () => {
@@ -86,6 +95,6 @@ export function mount(main, params, ctx) {
 
   draw();
   return {
-    onEvent(evt) { if (['note', 'delete', 'remote', 'sealed', 'config', 'ocr'].includes(evt.type)) draw(); },
+    onEvent(evt) { if (['note', 'delete', 'remote', 'sealed', 'config', 'ocr', 'device'].includes(evt.type)) draw(); },
   };
 }

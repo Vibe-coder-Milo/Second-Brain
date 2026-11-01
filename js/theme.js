@@ -33,3 +33,77 @@ export function onTheme(fn) {
 }
 
 mql.addEventListener?.('change', () => { if (!document.documentElement.dataset.theme) window.dispatchEvent(new Event('sb-theme')); });
+
+// ---- Colours on dark backgrounds ------------------------------------------------
+
+const toneCache = new Map();
+// Colour as [r, g, b] (0-1) and any alpha suffix, from #RGB, #RRGGBB(AA) or rgb().
+function parseColour(c) {
+  if (typeof c !== 'string') return null;
+  const m = /^rgba?\(\s*(\d+)[,\s]+(\d+)[,\s]+(\d+)/i.exec(c);
+  if (m) return { rgb: [m[1], m[2], m[3]].map((v) => Number(v) / 255), alpha: '' };
+  if (c[0] !== '#') return null;
+  let hex = c.slice(1);
+  if (hex.length === 3) hex = [...hex].map((x) => x + x).join('');
+  if (hex.length !== 6 && hex.length !== 8) return null;
+  return { rgb: [0, 2, 4].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255), alpha: hex.length === 8 ? hex.slice(6) : '' };
+}
+function toHsl([r, g, b]) {
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  let h = 0;
+  let s = 0;
+  if (max !== min) {
+    const d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    h = max === r ? (g - b) / d + (g < b ? 6 : 0) : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+    h /= 6;
+  }
+  return [h, s, l];
+}
+function hslHex(h, S, L) {
+  const f = (n) => {
+    const k = (n + h * 12) % 12;
+    const a = S * Math.min(L, 1 - L);
+    return Math.round((L - a * Math.max(-1, Math.min(k - 3, 9 - k, 1))) * 255).toString(16).padStart(2, '0');
+  };
+  return `#${f(0)}${f(8)}${f(4)}`.toUpperCase();
+}
+
+// How a pen or text colour shows on a dark page: dark ink reads as soft
+// white, colours are brightened a little.
+export function darkInk(c) {
+  const hit = toneCache.get(c);
+  if (hit) return hit;
+  const p = parseColour(c);
+  if (!p) return c;
+  const { alpha } = p;
+  const [h, sat, l] = toHsl(p.rgb);
+  let L = l;
+  let S = sat;
+  if (sat < 0.25 || l < 0.22) {
+    // Black, greys and near-black navy read as soft white.
+    if (l < 0.6) { L = 0.9 - l * 0.3; S = Math.min(sat, 0.18); }
+  } else if (l < 0.66) {
+    L = 0.62 + l * 0.18;
+    S = Math.min(sat, 0.72);
+  }
+  const out = `${hslHex(h, S, L)}${alpha.toUpperCase()}`;
+  toneCache.set(c, out);
+  return out;
+}
+
+// A highlight colour for dark mode: a deep, muted version of the same hue,
+// so highlighted text stays light and readable (like Notion's dark mode).
+const hlCache = new Map();
+export function darkHighlight(c) {
+  const hit = hlCache.get(c);
+  if (hit) return hit;
+  const p = parseColour(c);
+  if (!p) return c;
+  const [h, s] = toHsl(p.rgb);
+  const out = s < 0.12 ? '#3A4652' : hslHex(h, Math.min(0.55, s * 0.6 + 0.12), 0.27);
+  hlCache.set(c, out);
+  return out;
+}

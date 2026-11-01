@@ -7,6 +7,7 @@ import { startAutoSync, scheduleSync } from './sync.js';
 import { runOcrQueue } from './ocr.js';
 import { isWide, toast } from './util.js';
 import { applyTheme } from './theme.js';
+import { registerSW } from './appupdate.js';
 import { closeAllSheets, passphraseSheet, closePopover } from './ui.js';
 import { renderShell, refreshChrome } from './views/shell.js';
 import { renderUnlock, renderOnboarding } from './views/gate.js';
@@ -133,6 +134,7 @@ function startUnlocked() {
   runOcrQueue().catch(() => {});
   startAutoLock();
   import('./semantic.js').then((S) => S.buildSoon(5000)).catch(() => {});
+  import('./organiser.js').then((O) => O.autoSoon(25000)).catch(() => {});
 }
 
 async function boot() {
@@ -149,6 +151,8 @@ async function boot() {
     }
     if (evt.type === 'remote') runOcrQueue().catch(() => {});
     if (['note', 'remote', 'delete', 'sealed', 'ocr'].includes(evt.type)) import('./semantic.js').then((S) => S.buildSoon(8000)).catch(() => {});
+    // New captures land in the inbox; the organiser files them once they settle.
+    if (['note', 'remote', 'ocr'].includes(evt.type)) import('./organiser.js').then((O) => O.autoSoon()).catch(() => {});
   });
   window.addEventListener('hashchange', route);
   document.addEventListener('click', (e) => {
@@ -195,17 +199,7 @@ function startAutoLock() {
 // ---- Service worker (offline + home-screen app) ----------------------------
 
 function registerServiceWorker() {
-  if (!('serviceWorker' in navigator) || location.protocol === 'file:') return;
-  navigator.serviceWorker.register('sw.js').then((reg) => {
-    reg.addEventListener('updatefound', () => {
-      const w = reg.installing;
-      w?.addEventListener('statechange', () => {
-        if (w.state === 'installed' && navigator.serviceWorker.controller) {
-          toast('An update is ready. It applies next time you open the app.', { ms: 5000 });
-        }
-      });
-    });
-  }).catch(() => {});
+  registerSW();
 }
 
 window.addEventListener('resize', () => {
