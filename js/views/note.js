@@ -12,6 +12,7 @@ import { confirmSheet, menuSheet, notePicker, regionPicker, passphraseSheet, dat
 import { icons } from '../icons.js';
 import { focusButtonHtml, toggleFocus, enterNote, leaveNote } from '../focus.js';
 import { linkedWith, mentions, related, subNotes } from '../connections.js';
+import { miniMapHtml } from '../minimap.js';
 import { notebookPicker } from './notebooks.js';
 import { mountPlayer } from './recordings.js';
 import { makeEditors, valHtml, fmtVal } from './tableview.js';
@@ -402,6 +403,7 @@ function mountTyped(el, params, ctx) {
     const sugg = [...suggestions.map((s) => ({ other: state.notes.get(s.id), reason: s.reason })), ...incoming.map((o) => ({ other: o, reason: o.suggested.find((s) => s.id === n.id)?.reason }))];
     box.innerHTML = `${html`<section class="connections" aria-labelledby="conn-h">
       <h2 id="conn-h" class="conn-title">Connections</h2>
+      ${raw(miniMapHtml(n.id, { href: (x) => href({ id: x }), wide: !compact && isWide() }))}
       ${kids.length || n.notebook ? html`<div class="conn-group"><h3><span class="kind-line" style="--k:var(--c-sub)"></span>Sub-notes${kids.length ? html` <span class="count">${kids.length}</span>` : ''}</h3>
         <ul class="links-list">${kids.map((k) => html`<li><a href="${href(k)}">${icons.sub({ size: 16 })}<span style="flex:1;min-width:0">${displayTitle(k)}</span><span class="rn">${kindName(k)}</span></a></li>`)}</ul>
         <div class="btn-row"><button type="button" class="btn btn-sm" data-sub="note">${icons.plus({ size: 16 })}Typed sub-note</button><button type="button" class="btn btn-sm" data-sub="ink">${icons.pen({ size: 16 })}Handwritten sub-note</button></div></div>` : ''}

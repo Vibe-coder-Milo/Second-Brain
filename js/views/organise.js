@@ -73,7 +73,7 @@ export function recentMovesHtml() {
   const name = (rid) => state.config.regions.find((r) => r.id === rid)?.name || 'a region';
   return String(html`<section class="org-recent" aria-labelledby="org-r-h"><h2 id="org-r-h" class="section-title">${icons.history({ size: 16 })}Recently organised</h2>
     <ul class="rows">${log.map((e) => html`<li class="row org-move"><div class="row-main"><a class="row-title" href="#/note/${e.note}">${e.title}</a>
-      <p class="row-snippet">${e.by === 'organiser' ? 'Organiser' : 'You'} filed it in ${name(e.to)}${e.created ? ' (new region)' : ''}, ${fmtAgo(e.at)}</p></div>
+      <p class="row-snippet">${e.link ? `The assistant linked them, ${fmtAgo(e.at)}` : html`${e.by === 'organiser' ? 'Organiser' : 'You'} filed it in ${name(e.to)}${e.created ? ' (new region)' : ''}, ${fmtAgo(e.at)}`}</p></div>
       <button type="button" class="btn btn-sm btn-ghost" data-undo="${e.id}">Undo</button></li>`)}</ul></section>`);
 }
 

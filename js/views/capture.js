@@ -15,7 +15,7 @@ export function openCapture({ files = [], text = '' } = {}, ctx) {
 
   const s = openSheet(`${html`<form id="cap" novalidate style="display:flex;flex-direction:column;gap:18px">
     <div class="sheet-head"><button type="button" class="btn btn-ghost side" data-cancel style="justify-content:flex-start;padding:0">Cancel</button><h2>Capture</h2><span class="side"></span></div>
-    <div class="cap-kinds"><button type="button" class="btn" data-kind="note">${icons.lines({ size: 18 })}Typed note</button><button type="button" class="btn" data-kind="ink">${icons.pen({ size: 18 })}Handwritten</button><button type="button" class="btn" data-kind="board">${icons.board({ size: 18 })}Whiteboard</button></div>
+    <div class="cap-kinds"><button type="button" class="btn" data-kind="note">${icons.lines({ size: 18 })}Typed note</button><button type="button" class="btn" data-kind="ink">${icons.pen({ size: 18 })}Handwritten</button><button type="button" class="btn" data-kind="board">${icons.board({ size: 18 })}Whiteboard</button><button type="button" class="btn" data-kind="pdf">${icons.pdf({ size: 18 })}Mark up a PDF</button></div>
     <div class="field"><label class="sr-only" for="cap-text">Thought</label>
       <textarea id="cap-text" class="serif" rows="4" placeholder="What’s on your mind?">${text}</textarea></div>
     <div class="field" style="gap:10px">
@@ -104,9 +104,23 @@ export function openCapture({ files = [], text = '' } = {}, ctx) {
   };
   el.querySelectorAll('[data-kind]').forEach((b) => {
     b.onclick = () => {
-      s.close();
       const r = dest ? `region=${dest}` : '';
       const k = b.dataset.kind;
+      if (k === 'pdf') {
+        const inp = document.createElement('input');
+        inp.type = 'file';
+        inp.accept = 'application/pdf,.pdf';
+        inp.onchange = async () => {
+          const f = inp.files?.[0];
+          if (!f) return;
+          s.close();
+          (await import('../handoff.js')).handOff(f);
+          ctx.navigate(`#/note/new?kind=ink${r ? `&${r}` : ''}`);
+        };
+        inp.click();
+        return;
+      }
+      s.close();
       ctx.navigate(k === 'ink' || k === 'board' ? `#/note/new?kind=${k}${r ? `&${r}` : ''}` : `#/note/new${r ? `?${r}` : ''}`);
     };
   });

@@ -104,6 +104,14 @@ export function mountNotebook(el, params, ctx) {
   document.body.classList.add('nb-open');
 
   const nb = () => state.notebooks.get(id);
+  // Drop a PDF on the notebook to mark it up.
+  el.addEventListener('dragover', (e) => { if ([...(e.dataTransfer?.items || [])].some((i) => i.kind === 'file')) e.preventDefault(); });
+  el.addEventListener('drop', (e) => {
+    const f = [...(e.dataTransfer?.files || [])].find((x) => x.type === 'application/pdf' || /\.pdf$/i.test(x.name));
+    if (!f) return;
+    e.preventDefault();
+    openPdf(f);
+  });
 
   // The note beside the notebook uses its own navigation, so links to notes in
   // this notebook open in the pane instead of taking over the screen.
@@ -184,12 +192,13 @@ export function mountNotebook(el, params, ctx) {
           <button type="button" class="btn" data-newnote="note">${icons.lines({ size: 18 })}Typed</button>
           <button type="button" class="btn" data-newnote="board">${icons.board({ size: 18 })}Whiteboard</button>
           <button type="button" class="btn" data-act="table">${icons.table({ size: 18 })}Table view</button>
+          <button type="button" class="btn" data-pdf>${icons.pdf({ size: 18 })}Mark up a PDF</button>
         </div>
         <nav class="nb-tree-wrap" aria-label="Notes in ${b.title}">${treeHtml(b)}</nav>
         <button type="button" class="nb-add-sec" data-act="add-section">${icons.plus({ size: 18 })}Add section</button>
       </div>
       ${wide ? html`<div class="nb-pane" id="nb-pane">${current || tableSec ? '' : html`<div class="nb-pane-empty">${raw(coverSVG(b, { width: 150, label: false }))}<p class="serif">${n ? 'Pick a note, or start a new one.' : 'Start your first page.'}</p>
-        <div class="btn-row"><button type="button" class="btn" data-newnote="ink">${icons.pen({ size: 18 })}Handwritten</button><button type="button" class="btn" data-newnote="note">${icons.lines({ size: 18 })}Typed</button><button type="button" class="btn" data-newnote="board">${icons.board({ size: 18 })}Whiteboard</button></div></div>`}</div>` : ''}
+        <div class="btn-row"><button type="button" class="btn" data-newnote="ink">${icons.pen({ size: 18 })}Handwritten</button><button type="button" class="btn" data-newnote="note">${icons.lines({ size: 18 })}Typed</button><button type="button" class="btn" data-newnote="board">${icons.board({ size: 18 })}Whiteboard</button><button type="button" class="btn" data-pdf>${icons.pdf({ size: 18 })}Mark up a PDF</button></div></div>`}</div>` : ''}
     </div>`}`;
     bind();
     paintPhotoCovers(el);
@@ -226,6 +235,16 @@ export function mountNotebook(el, params, ctx) {
 
   function bind() {
     el.querySelectorAll('[data-newnote]').forEach((btn) => { btn.onclick = () => newNoteIn(btn.dataset.newnote); });
+    // A PDF opens as a handwritten note with its pages to draw, circle and highlight on.
+    el.querySelectorAll('[data-pdf]').forEach((btn) => {
+      btn.onclick = () => {
+        const inp = document.createElement('input');
+        inp.type = 'file';
+        inp.accept = 'application/pdf,.pdf';
+        inp.onchange = () => { const f = inp.files?.[0]; if (f) openPdf(f); };
+        inp.click();
+      };
+    });
     el.querySelector('[data-act=more]').onclick = () => more();
     el.querySelector('[data-act=edit]').onclick = async () => { await notebookSheet(nb()); };
     el.querySelector('[data-act=add-section]').onclick = () => addSection();
@@ -245,6 +264,12 @@ export function mountNotebook(el, params, ctx) {
     const b = nb();
     const cur = current && state.notes.get(current);
     return (cur?.section && b.sections.some((s) => s.id === cur.section) ? cur.section : null) || b.sections.find((s) => !collapsed.has(s.id))?.id || b.sections[0].id;
+  }
+
+  async function openPdf(file) {
+    const { handOff } = await import('../handoff.js');
+    handOff(file);
+    newNoteIn('ink');
   }
 
   function newNoteIn(kind, section = lastSection()) {

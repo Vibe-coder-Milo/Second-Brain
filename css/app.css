@@ -451,3 +451,6 @@ select { appearance: none; -webkit-appearance: none; padding-right: 36px; backgr
 .lp p { margin: 0; }
 .lp-kind { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
 .lp-notes a { color: var(--ink); font-weight: 600; }
+
+.time-chip { gap: 6px; }
+.time-chip[aria-pressed='true'] { background: var(--ink); color: var(--on-ink); border-color: var(--ink); }

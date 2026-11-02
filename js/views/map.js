@@ -17,6 +17,9 @@ const saveShown = (v) => { try { localStorage.setItem(SHOWN_KEY, JSON.stringify(
 
 export function mount(main, params, ctx) {
   let regionFilter = null;
+  let since = 0; // only notes worked on since then (0: any time)
+  const TIMES = [[0, 'Any time'], [7, 'Past week'], [30, 'Past month'], [90, 'Past 3 months'], [365, 'Past year']];
+  let sinceDays = 0;
   let showing = null; // { text, ids } from "Show" on something noticed
   let pickedId = null; // a note picked on the map (card at the bottom)
   main.innerHTML = `${html`<div class="mapview" id="mapview">
@@ -85,8 +88,22 @@ export function mount(main, params, ctx) {
   // ---- Region chips -------------------------------------------------------------
   function drawChips() {
     const chips = $('#map-chips', main);
-    chips.innerHTML = `${html`<button type="button" class="chip" aria-pressed="${regionFilter ? 'false' : 'true'}" data-r="">All</button>
+    chips.innerHTML = `${html`<button type="button" class="chip time-chip" data-time aria-haspopup="true" aria-pressed="${sinceDays ? 'true' : 'false'}">${icons.history({ size: 15 })}${TIMES.find((t) => t[0] === sinceDays)[1]}</button>
+      <button type="button" class="chip" aria-pressed="${regionFilter ? 'false' : 'true'}" data-r="">All</button>
       ${state.config.regions.map((r) => html`<button type="button" class="chip" aria-pressed="${regionFilter === r.id ? 'true' : 'false'}" data-r="${r.id}"><span class="dot" style="background:${regionColors(r).dot}"></span>${r.name}</button>`)}`}`;
+    chips.querySelector('[data-time]').onclick = (e) => {
+      const p = popover(e.currentTarget, `${html`<div class="pop-head">Notes worked on</div>${TIMES.map(([d, name]) => html`<button type="button" class="pop-item" data-days="${d}" aria-pressed="${d === sinceDays ? 'true' : 'false'}">${name}</button>`)}`}`, { label: 'When', width: 220 });
+      p.el.querySelectorAll('[data-days]').forEach((b) => {
+        b.onclick = () => {
+          sinceDays = Number(b.dataset.days);
+          since = sinceDays ? Date.now() - sinceDays * 86400000 : 0;
+          map.setFilter({ since: since || null });
+          p.close();
+          drawChips();
+          drawStats();
+        };
+      });
+    };
     chips.querySelectorAll('[data-r]').forEach((b) => {
       b.onclick = () => {
         regionFilter = b.dataset.r || null;
@@ -265,7 +282,10 @@ export function mount(main, params, ctx) {
   const onDrop = (e) => {
     e.preventDefault();
     view.classList.remove('dropping');
-    const files = [...(e.dataTransfer?.files || [])].filter((f) => f.type.startsWith('image/'));
+    const all = [...(e.dataTransfer?.files || [])];
+    const pdf = all.find((f) => f.type === 'application/pdf' || /\.pdf$/i.test(f.name));
+    if (pdf) { import('../handoff.js').then((H) => { H.handOff(pdf); ctx.navigate('#/note/new?kind=ink'); }); return; }
+    const files = all.filter((f) => f.type.startsWith('image/'));
     if (files.length) ctx.openCapture({ files });
   };
   view.addEventListener('dragover', onDragOver);
@@ -291,6 +311,8 @@ export function mount(main, params, ctx) {
   drawSync();
   drawNotice();
   setNote(params.note);
+  // Opened from a note's own map: just that note's neighbourhood.
+  if (params.focus && state.notes.has(params.focus)) setTimeout(() => { if (!gone) { map.focusOn(params.focus, 1); map.select(params.focus); drawState(); } }, 300);
 
   let redraw = null;
   return {

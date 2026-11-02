@@ -7,7 +7,7 @@
 // Each kind has its own colour, the same on the map and in notes.
 
 import { state } from './vault.js';
-import { displayTitle, wikiTitles, titleIndex, labelMap } from './model.js';
+import { displayTitle, wikiTitles, titleIndex, labelMap, noteText } from './model.js';
 import { similarNotes } from './semantic.js';
 
 export const KINDS = [
@@ -86,3 +86,61 @@ export function labelsInUse() {
 }
 
 export const titleOf = (id) => { const n = state.notes.get(id); return n ? displayTitle(n) : ''; };
+
+// ---- Themes ----------------------------------------------------------------------
+// Inside a region, notes joined by links or close meaning form a theme. Each
+// theme is named from the words its notes share that are rare elsewhere
+// (e.g. "Renovation & condo" inside Property & home).
+
+const STOP = new Set('the and for with that this from have has had was were are you your our their they them then than into onto about after before over under more most less very just also only even still need needs want wants will would could should can may might must not but all any some each other others same such own one two three four five six seven eight nine ten first last next new old good great big small get got make made take took give gave see saw know knew think thought say said tell told ask asked use used work works working note notes page pages week weeks day days month months year years time times today tomorrow yesterday thing things lot lots way ways back here there where when what which who whom whose why how out off per via etc yes yeah okay ok much many few well really maybe check sure like dont doesnt didnt isnt cant wont im ive its lets'.split(' '));
+const tokens = (t) => (String(t || '').toLowerCase().match(/[a-z][a-z0-9&'-]{2,}/g) || []).map((w) => w.replace(/'s$/, '')).filter((w) => !STOP.has(w));
+
+export function themes(edges, { minSize = 3 } = {}) {
+  const notes = [...state.notes.values()];
+  const N = notes.length || 1;
+  const df = new Map();
+  const words = new Map();
+  for (const n of notes) {
+    const set = new Set([...tokens(displayTitle(n)), ...tokens(noteText(n)).slice(0, 400)]);
+    words.set(n.id, set);
+    for (const w of set) df.set(w, (df.get(w) || 0) + 1);
+  }
+  const titleWords = (n) => new Set(tokens(displayTitle(n)));
+  const out = [];
+  for (const r of state.config.regions) {
+    const ids = new Set(notes.filter((n) => !n.inbox && n.region === r.id).map((n) => n.id));
+    if (ids.size < minSize) continue;
+    const adj = new Map([...ids].map((id) => [id, new Set()]));
+    for (const e of edges) if (e.kind !== 'label' && ids.has(e.a) && ids.has(e.b)) { adj.get(e.a).add(e.b); adj.get(e.b).add(e.a); }
+    const seen = new Set();
+    for (const id of ids) {
+      if (seen.has(id) || !adj.get(id).size) continue;
+      const comp = [];
+      const stack = [id];
+      seen.add(id);
+      while (stack.length) { const x = stack.pop(); comp.push(x); for (const y of adj.get(x)) if (!seen.has(y)) { seen.add(y); stack.push(y); } }
+      if (comp.length < minSize || comp.length > Math.max(minSize, ids.size - 1)) continue;
+      // Named for words every note in it shares (rare ones first), or else
+      // for its most connected note.
+      const inTheme = new Map();
+      for (const x of comp) for (const w of words.get(x) || []) inTheme.set(w, (inTheme.get(w) || 0) + 1);
+      const regionWords = new Set(tokens(r.name));
+      const shared = [...inTheme].filter(([w, c]) => c === comp.length && !regionWords.has(w))
+        .map(([w]) => [w, Math.log(N / (df.get(w) || 1) + 1) * (comp.some((x) => titleWords(state.notes.get(x)).has(w)) ? 1.5 : 1)])
+        .filter(([, sc]) => sc > 0.9).sort((p, q) => q[1] - p[1]).map(([w]) => w).slice(0, 2);
+      let name;
+      if (shared.length) {
+        // Keep short words written in capitals that way (HDB, CPF, ETF).
+        const texts = comp.map((x) => `${displayTitle(state.notes.get(x))} ${noteText(state.notes.get(x))}`).join(' ');
+        const show = (w, i) => (w.length <= 5 && new RegExp(`\\b${w.toUpperCase()}\\b`).test(texts) ? w.toUpperCase() : i === 0 ? w[0].toUpperCase() + w.slice(1) : w);
+        name = shared.map(show).join(' & ');
+      } else {
+        const hub = comp.map((x) => [x, adj.get(x).size]).sort((p, q) => q[1] - p[1] || displayTitle(state.notes.get(p[0])).length - displayTitle(state.notes.get(q[0])).length)[0][0];
+        name = displayTitle(state.notes.get(hub));
+        if (name.length > 28) name = `${name.slice(0, 27)}…`;
+      }
+      out.push({ region: r.id, ids: comp, name });
+    }
+  }
+  return out;
+}

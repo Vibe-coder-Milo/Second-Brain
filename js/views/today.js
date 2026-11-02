@@ -89,6 +89,7 @@ export function mount(el, params, ctx) {
           <span class="wd-n">${x.toLocaleDateString(undefined, { weekday: 'short' })}</span><span class="wd-d">${x.getDate()}</span><span class="wd-dot ${busy(iso) ? 'on' : ''}"></span></button></li>`;
       })}</ol>
       <div id="t-inbox"></div>
+      ${isToday ? html`<div id="t-week"></div>` : ''}
       <section class="today-sec" aria-labelledby="t-due-h">
         <div class="sec-head"><h2 class="section-title" id="t-due-h">${isToday ? 'Due today' : `Due ${longDay(day)}`}</h2><a class="sec-link" href="#/tasks">All tasks</a></div>
         <ul class="task-list" id="t-tasks"></ul>
@@ -122,7 +123,28 @@ export function mount(el, params, ctx) {
     drawInbox();
     drawTasks();
     drawCaptures();
+    drawWeek();
     mountEditor();
+  }
+
+  // Your map this week: what's new, what the assistant did, one thing to look at.
+  const weekKey = () => { const d = new Date(); const j = new Date(d.getFullYear(), 0, 1); return `${d.getFullYear()}-${Math.ceil(((d - j) / 86400000 + j.getDay() + 1) / 7)}`; };
+  const weekHidden = () => { try { return localStorage.getItem('sb-week-hidden') === weekKey(); } catch { return false; } };
+  async function drawWeek() {
+    const box = $('#t-week', el);
+    if (!box) return;
+    if (weekHidden() || state.notes.size < 3) { box.innerHTML = ''; return; }
+    const A = await import('../mapassist.js');
+    if (destroyed || !$('#t-week', el)) return;
+    const d = A.weekDigest();
+    if (!d) { box.innerHTML = ''; return; }
+    box.innerHTML = `${html`<section class="week-card" aria-labelledby="t-week-h">
+      <div class="wk-head"><h2 class="section-title" id="t-week-h">${icons.sparkle({ size: 16 })}Your map this week</h2><button type="button" class="icon-btn bare sm" data-wk-hide aria-label="Hide until next week">${icons.close({ size: 16 })}</button></div>
+      <ul class="wk-lines">${d.lines.map((l) => html`<li>${l}</li>`)}</ul>
+      ${d.tip ? html`<p class="wk-tip">${d.tip.text}</p>` : ''}
+      <div class="btn-row"><a class="btn btn-sm" href="#/map">${icons.map({ size: 16 })}Open the map</a></div>
+    </section>`}`;
+    box.querySelector('[data-wk-hide]').onclick = () => { try { localStorage.setItem('sb-week-hidden', weekKey()); } catch { /* private mode */ } box.innerHTML = ''; };
   }
 
   function go(iso) {

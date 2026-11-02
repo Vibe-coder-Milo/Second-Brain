@@ -135,6 +135,13 @@ function startUnlocked() {
   startAutoLock();
   import('./semantic.js').then((S) => S.buildSoon(5000)).catch(() => {});
   import('./organiser.js').then((O) => O.autoSoon(25000)).catch(() => {});
+  // When meanings are worked out, the assistant can link very alike notes (if asked to).
+  let linkTimer = null;
+  import('./semantic.js').then((S) => S.onSemantic((st) => {
+    if (st.building || !st.total) return;
+    clearTimeout(linkTimer);
+    linkTimer = setTimeout(() => import('./mapassist.js').then((A) => A.autoLink()).catch(() => {}), 2500);
+  })).catch(() => {});
 }
 
 async function boot() {

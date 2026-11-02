@@ -128,6 +128,7 @@ export function mount(main, params, ctx) {
         <h2 id="s-ai">On-device intelligence</h2>
         <p class="hint">Search by meaning, related notes, reading handwriting and transcribing recordings run on this device with small models that come with the app. Nothing you write or record is sent anywhere.</p>
         <label class="check"><input type="checkbox" id="s-sem" ${state.device?.semantic !== false ? raw('checked') : ''}> Search by meaning and related notes</label>
+        <label class="check"><input type="checkbox" id="s-autolink" ${state.device?.autoLink === true ? raw('checked') : ''}> Link notes that are very alike by themselves (you can undo each link in the inbox)</label>
         <label class="check"><input type="checkbox" id="s-org" ${state.device?.organise !== false ? raw('checked') : ''}> Organise new notes on the map by themselves: file each in the region it fits, and add a region (like Property & home) when nothing fits</label>
         <p class="status-line" id="s-sem-status" aria-live="polite"></p>
         <div class="btn-row"><button type="button" class="btn btn-sm" data-act="sem-rebuild">Rebuild the index</button></div>
@@ -291,6 +292,10 @@ export function mount(main, params, ctx) {
     });
     $('#s-hand', main).onchange = async (e) => { await V.updateDevice({ readHand: e.target.checked }); };
     $('#s-org', main).onchange = async (e) => { await V.updateDevice({ organise: e.target.checked }); };
+    $('#s-autolink', main).onchange = async (e) => {
+      await V.updateDevice({ autoLink: e.target.checked });
+      if (e.target.checked) { const n = await (await import('../mapassist.js')).autoLink(); if (n) toast(`Linked ${n} pair${n === 1 ? '' : 's'} of notes`); }
+    };
     appVersion().then((v) => { const e = $('#s-version', main); if (e) e.textContent = v; });
     on('[data-act=check-update]', async (b) => {
       b.disabled = true;

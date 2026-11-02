@@ -150,12 +150,14 @@ export class InkSurface {
     this.drawing = null;
     this.penSeen = false;
     this.layers = { hidden: new Set(), locked: new Set(), active: 'ink', paperHidden: false, names: {} };
-    host.innerHTML = `<div class="ink-scroll"><div class="ink-page"><canvas class="ink-bg"></canvas><canvas class="ink-main"></canvas><canvas class="ink-wet"></canvas><div class="ink-overlay"></div></div></div>`;
+    host.innerHTML = `<div class="ink-scroll"><div class="ink-page"><canvas class="ink-bg"></canvas><canvas class="ink-main"></canvas><canvas class="ink-wet"></canvas><canvas class="ink-laser" aria-hidden="true"></canvas><div class="ink-overlay"></div></div></div>`;
     this.scroll = host.querySelector('.ink-scroll');
     this.pageEl = host.querySelector('.ink-page');
     this.bg = host.querySelector('.ink-bg');
     this.main = host.querySelector('.ink-main');
     this.wet = host.querySelector('.ink-wet');
+    this.laser = host.querySelector('.ink-laser');
+    this.lasers = [];
     this.overlay = host.querySelector('.ink-overlay');
     this.raf = 0;
     this.view = { x: 0, y: 0, w: 1, h: 1 };
@@ -336,7 +338,7 @@ export class InkSurface {
     let dpr = window.devicePixelRatio || 1;
     if (v.w * v.h * dpr * dpr > MAX_PX) dpr = Math.sqrt(MAX_PX / (v.w * v.h));
     this.dpr = dpr;
-    for (const c of [this.bg, this.main, this.wet]) {
+    for (const c of [this.bg, this.main, this.wet, this.laser]) {
       c.width = Math.max(1, Math.round(v.w * dpr));
       c.height = Math.max(1, Math.round(v.h * dpr));
       Object.assign(c.style, { left: `${v.x}px`, top: `${v.y}px`, width: `${v.w}px`, height: `${v.h}px` });
@@ -438,7 +440,7 @@ export class InkSurface {
 
   bind() {
     const el = this.pageEl;
-    const fingerDraws = () => !!this.opts.getTool().fingerDraw && !this.penSeen;
+    const fingerDraws = () => (!!this.opts.getTool().fingerDraw || this.opts.getTool().tool === 'laser') && !this.penSeen;
     const moving = () => this.opts.getTool().tool === 'move';
     const updateTouchAction = () => { el.style.touchAction = fingerDraws() || this.drawing || moving() ? 'none' : 'pan-x pan-y'; };
     this.updateTouchAction = updateTouchAction;
@@ -497,7 +499,8 @@ export class InkSurface {
   isDrawPointer(e) {
     if (e.pointerType === 'pen') { if (!this.penSeen) { this.penSeen = true; this.updateTouchAction(); } return true; }
     if (e.pointerType === 'mouse') return e.button === 0;
-    return !!this.opts.getTool().fingerDraw && !this.penSeen;
+    const t = this.opts.getTool();
+    return (!!t.fingerDraw || t.tool === 'laser') && !this.penSeen;
   }
 
   // Replay mode: writing after the playback point fades, and a tap on writing
@@ -563,7 +566,7 @@ export class InkSurface {
     const drawPtr = this.isDrawPointer(e);
 
     // Dragging the current selection, with a finger or with the lasso.
-    if (this.sel && this.inSelection(x, y) && !(drawPtr && ['pen', 'hl', 'eraser', 'shapes'].includes(tool.tool))) {
+    if (this.sel && this.inSelection(x, y) && !(drawPtr && ['pen', 'hl', 'eraser', 'shapes', 'laser'].includes(tool.tool))) {
       e.preventDefault();
       this.pageEl.setPointerCapture?.(e.pointerId);
       this.startMove(e, x, y, 'move');
@@ -582,6 +585,7 @@ export class InkSurface {
     this.pageEl.setPointerCapture?.(e.pointerId);
     const pr = e.pointerType === 'pen' ? (e.pressure || 0.5) : 0.5;
     const t = tool.tool;
+    if (t === 'laser') { this.laserDown(e, x, y); return; }
     if (['pen', 'shapes', 'hl', 'text'].includes(t) && this.writeBlocked()) { toast(this.writeBlocked()); return; }
     if (t === 'pen' || t === 'shapes' || t === 'hl') {
       const hl = t === 'hl';
@@ -620,6 +624,10 @@ export class InkSurface {
         if (dist([x, y], d.last) > 2.5 / this.scale) { d.last = [x, y]; d.still = Date.now(); this.armHold(); }
       }
       this.drawWet();
+    } else if (d.kind === 'laser') {
+      const now = performance.now();
+      for (const ev of (evs.length ? evs : [e])) d.trail.pts.push([...this.toPage(ev), now]);
+      this.laserLoop();
     } else if (d.kind === 'erase') {
       const tool = this.opts.getTool();
       for (const ev of (evs.length ? evs : [e])) { const [x, y] = this.toPage(ev); this.eraseAt(x, y, tool); }
@@ -648,6 +656,7 @@ export class InkSurface {
     clearTimeout(this.holdTimer);
     this.drawing = null;
     this.updateTouchAction();
+    if (d.kind === 'laser') { d.trail.end = performance.now(); this.laserLoop(); return; }
     if (d.kind === 'stroke') this.commitStroke(d);
     else if (d.kind === 'erase') { if (d.any) this.changed(); else this.undoStack.pop(); }
     else if (d.kind === 'lasso') this.finishLasso(d);
@@ -665,8 +674,68 @@ export class InkSurface {
     clearTimeout(this.holdTimer);
     this.drawing = null;
     this.updateTouchAction();
+    if (d.kind === 'laser') { d.trail.end = performance.now(); return; }
     if (d.kind === 'move') this.endMove(d);
     this.clearWet();
+  }
+
+  // ---------- Laser pointer ----------
+  // A glowing line to point things out while you talk. It isn't saved: the
+  // tail fades as you go, and the whole line a moment after you lift.
+  laserDown(e, x, y) {
+    const trail = { pts: [[x, y, performance.now()]], end: null };
+    this.lasers.push(trail);
+    this.drawing = { pointerId: e.pointerId, kind: 'laser', trail };
+    this.laserLoop();
+  }
+  laserLoop() {
+    if (this.laserRaf) return;
+    const frame = () => {
+      this.laserRaf = 0;
+      if (!this.page) return;
+      const now = performance.now();
+      const HOLD = 1400; // after lifting, stays this long
+      const FADE = 700; // then fades over this long
+      const TAIL = 3000; // while drawing, older parts of the line fade
+      const c = this.ctxFor(this.laser);
+      c.clearRect(0, 0, PAGE_W, this.page.h);
+      this.lasers = this.lasers.filter((tr) => !tr.end || now - tr.end < HOLD + FADE);
+      const k = this.dpr || 1;
+      for (const tr of this.lasers) {
+        const life = tr.end ? Math.max(0, Math.min(1, 1 - (now - tr.end - HOLD) / FADE)) : 1;
+        const p = tr.pts;
+        if (!p.length) continue;
+        c.save();
+        c.lineCap = 'round';
+        c.lineJoin = 'round';
+        const seg = (core) => {
+          for (let i = 1; i < p.length; i++) {
+            const age = tr.end ? 0 : now - p[i][2];
+            const a = life * (age > TAIL ? Math.max(0, 1 - (age - TAIL) / 900) : 1);
+            if (a <= 0.01) continue;
+            c.globalAlpha = a;
+            c.beginPath();
+            c.moveTo(p[i - 1][0], p[i - 1][1]);
+            c.lineTo(p[i][0], p[i][1]);
+            c.stroke();
+          }
+          if (p.length === 1) { c.globalAlpha = life; c.beginPath(); c.arc(p[0][0], p[0][1], core ? 1.2 : 3.2, 0, 6.3); c.fill(); }
+        };
+        // Red glow, then a bright core.
+        c.shadowColor = 'rgba(255, 40, 40, 0.95)';
+        c.shadowBlur = 14 * k;
+        c.strokeStyle = c.fillStyle = '#FF3B30';
+        c.lineWidth = 5.5;
+        seg(false);
+        c.shadowBlur = 0;
+        c.strokeStyle = c.fillStyle = '#FFE1DE';
+        c.lineWidth = 1.8;
+        seg(true);
+        c.restore();
+      }
+      if (this.lasers.length) this.laserRaf = requestAnimationFrame(frame);
+    };
+    this.laserRaf = requestAnimationFrame(frame);
   }
 
   // ---------- Strokes ----------
@@ -1382,6 +1451,7 @@ export class InkSurface {
   }
 
   destroy() {
+    cancelAnimationFrame(this.laserRaf);
     this.offTheme?.();
     this.scroll.removeEventListener('scroll', this.onScroll);
     this.endEdit();

@@ -17,6 +17,7 @@ import { mountPlayer } from './recordings.js';
 import { PENS, HL, INK_COLORS, HL_COLORS, DEFAULT_FAVS, mm, renderPageCanvas, layerView, noteLayers, layerOf, drawStroke, drawPaper, SMOOTHING, strokeBox, setInkTone, pageDark, darkInk } from '../editor/inkdraw.js';
 import { isDarkUI } from '../theme.js';
 import { linkedWith, mentions, related, subNotes } from '../connections.js';
+import { miniMapHtml } from '../minimap.js';
 import { notebookPicker, textSheet } from './notebooks.js';
 
 const activeLayers = new Map(); // note id -> the layer you're writing on (this session)
@@ -75,6 +76,10 @@ export function mount(el, params, ctx) {
     draw();
     document.body.classList.add('inking');
     enterNote();
+    // A PDF handed over from a notebook or Capture: its pages to mark up.
+    const { takeHandOff } = await import('../handoff.js');
+    const pdf = takeHandOff();
+    if (pdf) await importPdf(pdf);
     // Catch up on reading pages written before (or on another device).
     if (handOn()) setTimeout(() => { if (note()) readNote(id).catch(() => {}); }, 2000);
   }
@@ -326,7 +331,7 @@ export function mount(el, params, ctx) {
     const penName = PENS[tool.pen]?.name || 'Fountain';
     box.innerHTML = `${html`
       ${wide ? html`<div class="tg">${A('undo', 'undo', 'Undo')}${A('redo', 'redo', 'Redo')}</div>` : ''}
-      <div class="tg">${T('move', 'hand', 'Move: drag stickers, post-its, tables and writing')}${T('pen', 'pen', `Pen (${penName})`)}${T('hl', 'highlighter', 'Highlighter')}${T('eraser', 'eraser', 'Eraser')}${T('lasso', 'lasso', 'Lasso: select by drawing around')}${wide ? T('shapes', 'shapes', 'Shapes: lines and boxes come out straight') : ''}${T('text', 'textbox', 'Text box')}</div>
+      <div class="tg">${T('move', 'hand', 'Move: drag stickers, post-its, tables and writing')}${T('pen', 'pen', `Pen (${penName})`)}${T('hl', 'highlighter', 'Highlighter')}${T('eraser', 'eraser', 'Eraser')}${T('lasso', 'lasso', 'Lasso: select by drawing around')}${wide ? T('laser', 'laser', 'Laser pointer: point things out, it fades away') : ''}${wide ? T('shapes', 'shapes', 'Shapes: lines and boxes come out straight') : ''}${T('text', 'textbox', 'Text box')}</div>
       <div class="tg">${A('label', 'tag', 'Add a label you can search for')}${A('insert', 'plus', 'Insert: post-it, sticker, table, photo, scan')}</div>
       ${wide ? html`<div class="tg">${A('record', 'mic', isRecording() ? 'Stop recording' : 'Record audio', `aria-pressed="${isRecording() ? 'true' : 'false'}"`)}<button type="button" class="tool wide" data-act="layers" aria-label="Layers">${icons.layers({ size: 20 })}<span>Layers</span></button><button type="button" class="tool wide" data-act="zoomstrip" aria-label="Writing window: write large, it lands small" aria-pressed="${zoom ? 'true' : 'false'}">${icons.zoomBox({ size: 20 })}<span>Zoom</span></button></div>` : ''}`}`;
     box.querySelector('[data-act=record]')?.classList.add('rec-tool');
@@ -392,6 +397,8 @@ export function mount(el, params, ctx) {
       inner = html`<span class="props-hint">Drag anything to move it. Tap it for more options.</span>`;
     } else if (t === 'text') {
       inner = html`<span class="props-hint">Tap the page where the text box should go</span>`;
+    } else if (t === 'laser') {
+      inner = html`<span class="props-hint laser-hint"><span class="laser-dot"></span>Draw to point things out. It fades away, nothing is saved</span>${wide ? '' : html`<button type="button" class="chip sm" data-act="laser-off">Done</button>`}`;
     }
     props.hidden = !inner;
     props.innerHTML = `${inner}`;
@@ -408,6 +415,7 @@ export function mount(el, params, ctx) {
     on('colours', (b) => (tool.tool === 'hl' ? hlPop(b) : penPop(b)));
     on('hl-only', () => { tool.hlOnly = !tool.hlOnly; saveTool(); drawTools(); });
     on('paste', () => surface?.paste(30));
+    on('laser-off', () => setTool('pen'));
     tooltips(props);
   }
 
@@ -436,6 +444,7 @@ export function mount(el, params, ctx) {
       ${I('pdf', 'pdf', 'PDF', 'Adds its pages to write on')}
       ${wide ? '' : html`<div class="pop-head">More tools</div>
       ${I('shapes', 'shapes', 'Shapes', 'Lines and boxes come out straight')}
+      ${I('laser', 'laser', 'Laser pointer', 'Point things out; it fades away')}
       ${I('zoomstrip', 'zoomBox', zoom ? 'Close the writing window' : 'Writing window', 'Write large, it lands small')}
       ${I('layers', 'layers', 'Layers')}
       ${I('record', 'mic', isRecording() ? 'Stop recording' : 'Record audio')}`}`}`, { label: 'Insert', width: 300, cls: 'tall' });
@@ -450,6 +459,7 @@ export function mount(el, params, ctx) {
         if (a === 'table') tableSheet(anchor);
         if (a === 'scan') scanPages();
         if (a === 'shapes') setTool('shapes');
+        if (a === 'laser') setTool('laser');
         if (a === 'zoomstrip') toggleZoom();
         if (a === 'layers') layersPop(anchor);
         if (a === 'record') record();
@@ -1068,6 +1078,7 @@ export function mount(el, params, ctx) {
     const rel = related(n);
     const kids = subNotes(n);
     const s = openSheet(`${html`<div class="sheet-head"><span class="side"></span><h2>Connections</h2><span class="side"><button type="button" class="btn btn-ghost btn-sm" data-close>Done</button></span></div>
+      ${raw(miniMapHtml(n.id, { wide: isWide() }))}
       ${kids.length ? html`<h3 class="section-title">Sub-notes</h3><ul class="links-list">${kids.map((k) => html`<li><a href="#/note/${k.id}">${icons.sub({ size: 16 })}<span style="flex:1">${displayTitle(k)}</span></a></li>`)}</ul>` : ''}
       ${linked.length ? html`<h3 class="section-title">Linked</h3><ul class="links-list">${linked.map((x) => html`<li><a href="#/note/${x.note.id}"><span style="flex:1">${displayTitle(x.note)}</span></a></li>`)}</ul>` : ''}
       ${ment.length ? html`<h3 class="section-title">Mentioned, not linked</h3><ul class="links-list">${ment.map((m) => html`<li><a href="#/note/${m.note.id}"><span style="flex:1">${displayTitle(m.note)}</span></a><button type="button" class="btn btn-sm" data-acc="${m.note.id}">Link</button></li>`)}</ul>` : ''}

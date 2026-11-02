@@ -6,7 +6,7 @@
 
 import { state } from './vault.js';
 import * as V from './vault.js';
-import { connections, titleOf } from './mapdata.js';
+import { connections, titleOf, themes } from './mapdata.js';
 
 const STRONG = new Set(['link', 'sub', 'board']);
 const listOf = (ids) => {
@@ -50,6 +50,10 @@ export function noticed(max = 4) {
   for (const gIds of groups.slice(0, 2)) {
     out.push({ id: `group:${gIds.slice().sort()[0]}`, kind: 'group', text: `${gIds.length} notes seem to belong together: ${listOf(gIds)}.`, ids: gIds, action: { name: 'Link them', run: () => linkGroup(gIds) } });
   }
+
+  // 1b. A theme inside a region, named for you.
+  const th = themes(edges).sort((a, b) => b.ids.length - a.ids.length)[0];
+  if (th) out.push({ id: `theme:${th.region}:${th.name}`, kind: 'theme', text: `A theme in ${regionName(th.region)}: ${th.name} (${th.ids.length} notes).`, ids: th.ids });
 
   // 2. Bridges: a note that ties regions together (through links you made).
   const bridges = [];
@@ -96,4 +100,63 @@ export async function notRelated(a, b) {
     const n = state.notes.get(x);
     if (n && !n.dismissed.includes(y)) await V.saveNote({ ...n, dismissed: [...n.dismissed, y], suggested: n.suggested.filter((s) => s.id !== y) }, { touch: false });
   }
+}
+
+// ---- The week on your map ----------------------------------------------------------
+
+const DAY = 86400000;
+// What changed on the map in the last 7 days, in a few short lines (for Today).
+export function weekDigest(now = Date.now()) {
+  const since = now - 7 * DAY;
+  const notes = [...state.notes.values()];
+  const fresh = notes.filter((n) => (n.createdAt || 0) >= since);
+  const touched = notes.filter((n) => (n.updatedAt || 0) >= since);
+  if (!fresh.length && !touched.length) return null;
+  const byRegion = new Map();
+  for (const n of fresh) { const k = n.inbox ? null : n.region; byRegion.set(k, (byRegion.get(k) || 0) + 1); }
+  const top = [...byRegion].filter(([k]) => k).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([k, c]) => `${c} in ${regionName(k)}`);
+  const inbox = byRegion.get(null) || 0;
+  const log = (state.device?.organiserLog || []).filter((e) => e.at >= since);
+  const madeRegions = [...new Set(log.filter((e) => e.created).map((e) => regionName(e.created)).filter(Boolean))];
+  const filedByAssistant = log.filter((e) => e.by === 'organiser' && !e.link).length;
+  const linkedByAssistant = log.filter((e) => e.link).length;
+  const { edges } = connections();
+  const freshIds = new Set(fresh.map((n) => n.id));
+  const newLinks = edges.filter((e) => (e.kind === 'link' || e.kind === 'sub' || e.kind === 'board') && (freshIds.has(e.a) || freshIds.has(e.b))).length;
+  const newRelated = edges.filter((e) => e.kind === 'related' && (freshIds.has(e.a) || freshIds.has(e.b))).length;
+  const lines = [];
+  if (fresh.length) lines.push(`${fresh.length} new note${fresh.length === 1 ? '' : 's'}${top.length ? `: ${top.join(', ')}` : ''}${inbox ? `${top.length ? ', ' : ': '}${inbox} still in the inbox` : ''}.`);
+  else lines.push(`${touched.length} note${touched.length === 1 ? '' : 's'} worked on, nothing new.`);
+  if (madeRegions.length) lines.push(`New region${madeRegions.length === 1 ? '' : 's'} on your map: ${madeRegions.join(', ')}.`);
+  if (newLinks || newRelated) lines.push(`${newLinks ? `${newLinks} new link${newLinks === 1 ? '' : 's'}` : ''}${newLinks && newRelated ? ' and ' : ''}${newRelated ? `${newRelated} related note${newRelated === 1 ? '' : 's'} found for you` : ''}.`.replace(/^./, (c) => c.toUpperCase()));
+  if (filedByAssistant || linkedByAssistant) lines.push(`The assistant ${filedByAssistant ? `filed ${filedByAssistant} note${filedByAssistant === 1 ? '' : 's'}` : ''}${filedByAssistant && linkedByAssistant ? ' and ' : ''}${linkedByAssistant ? `linked ${linkedByAssistant} pair${linkedByAssistant === 1 ? '' : 's'}` : ''} for you.`);
+  const tip = noticed(4).find((x) => x.kind === 'group' || x.kind === 'theme' || x.kind === 'bridge');
+  return { lines, tip, fresh: fresh.length };
+}
+
+// ---- Linking by itself (an option) -----------------------------------------------------
+
+// Pairs of notes so alike they're almost certainly about the same thing.
+export const AUTO_LINK_MIN = 0.5;
+export const autoLinkOn = () => state.device?.autoLink === true;
+export async function autoLink() {
+  if (!autoLinkOn() || state.status !== 'unlocked') return 0;
+  const { similarNotes } = await import('./semantic.js');
+  const done = new Set();
+  const made = [];
+  for (const n of state.notes.values()) {
+    if (n.sealed) continue;
+    for (const { note: o, score } of similarNotes(n, { limit: 2, min: AUTO_LINK_MIN }) || []) {
+      const k = [n.id, o.id].sort().join('|');
+      if (done.has(k) || o.sealed || n.links.includes(o.id) || o.links.includes(n.id) || n.dismissed?.includes(o.id) || o.dismissed?.includes(n.id)) continue;
+      done.add(k);
+      made.push({ a: n.id, b: o.id, score });
+    }
+  }
+  if (!made.length) return 0;
+  for (const m of made) await V.linkNotes(m.a, m.b);
+  const at = Date.now();
+  const entries = made.map((m) => ({ id: `${at}-${m.a}-${m.b}`, at, link: true, note: m.a, other: m.b, title: `${titleOf(m.a)} and ${titleOf(m.b)}`, by: 'organiser' }));
+  await V.updateDevice({ organiserLog: [...entries, ...(state.device?.organiserLog || [])].slice(0, 40) });
+  return made.length;
 }

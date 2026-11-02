@@ -1032,3 +1032,36 @@ td.tv-tags, td.tv-select { min-width: 150px; }
 .kind-line { display: inline-block; width: 18px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 2px; background: var(--k); }
 .kind-line.dash { background: repeating-linear-gradient(90deg, var(--k) 0 5px, transparent 5px 8px); }
 .links-list.k-link .lt { color: var(--c-link); font-weight: 600; }
+
+/* ---------- Laser pointer ---------- */
+.ink-page canvas.ink-laser { pointer-events: none; }
+.laser-hint { display: inline-flex; align-items: center; gap: 8px; }
+.laser-dot { width: 10px; height: 10px; border-radius: 50%; background: #FF3B30; box-shadow: 0 0 8px 2px rgba(255, 59, 48, 0.7); flex-shrink: 0; }
+
+/* ---------- Mark up a PDF ---------- */
+.nb-new [data-pdf] { grid-column: 1 / -1; }
+.cap-kinds { grid-template-columns: 1fr 1fr; }
+
+/* ---------- A note's own map ---------- */
+.minimap { border: 1px solid var(--line); border-radius: 14px; background: var(--surface); padding: 10px 12px 8px; }
+.mm-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.mm-head h3 { margin: 0; font-size: 13px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.minimap > svg { width: 100%; height: auto; display: block; margin: 4px 0; }
+.mm-l { stroke-width: 2; stroke-linecap: round; }
+.mm-l.dash { stroke-dasharray: 5 4; }
+.mm-l.faint { opacity: 0.45; stroke-width: 1.4; }
+.minimap circle { stroke: var(--surface); stroke-width: 2; }
+.minimap .mm-me { stroke: var(--ink); stroke-width: 2.5; }
+.mm-t { font: 500 12.5px var(--sans); fill: var(--ink); paint-order: stroke; stroke: var(--surface); stroke-width: 4px; stroke-linejoin: round; }
+.mm-t.me { font: 600 14px var(--serif); }
+.mm-t.far { font-size: 11px; fill: var(--muted); }
+.minimap a:hover .mm-t { text-decoration: underline; }
+.mm-key { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 0; font-size: 12px; color: var(--muted); }
+.mm-key > span { display: inline-flex; align-items: center; gap: 6px; }
+
+/* ---------- Your map this week (Today) ---------- */
+.week-card { border: 1px solid var(--line); border-radius: 16px; background: var(--surface); padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
+.wk-head { display: flex; align-items: center; justify-content: space-between; }
+.wk-head .section-title { display: inline-flex; align-items: center; gap: 6px; margin: 0; }
+.wk-lines { margin: 0; padding-left: 18px; font-size: 14.5px; line-height: 1.5; }
+.wk-tip { margin: 0; padding: 8px 10px; border-radius: 10px; background: color-mix(in srgb, var(--c-related) 12%, transparent); font-size: 14px; }

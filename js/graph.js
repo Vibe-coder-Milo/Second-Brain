@@ -7,7 +7,7 @@
 import { state } from './vault.js';
 import { displayTitle, regionColors, searchNotes, labelMap } from './model.js';
 import { cssVar } from './util.js';
-import { connections, KINDS, DEFAULT_SHOWN } from './mapdata.js';
+import { connections, KINDS, DEFAULT_SHOWN, themes } from './mapdata.js';
 
 // Hubs sit on a ring; with more regions the ring grows so they don't crowd.
 const ringRadius = (slots) => Math.max(240, slots * 42);
@@ -24,6 +24,7 @@ export function createMap(el, handlers = {}) {
   let focus = null; // { id, depth, ids: Set }
   let reveal = null; // replay: show notes created up to this time
   let counts = {};
+  let themeList = [];
   let firstFit = true;
   let theme = readTheme();
 
@@ -296,6 +297,27 @@ export function createMap(el, handlers = {}) {
         ctx.stroke();
       });
     }
+    // Themes: a dashed ring and a name around notes that belong together.
+    for (const th of themeList) {
+      const pts = th.ids.map((id) => nodeCache.get(id)).filter((n) => n && Number.isFinite(n.x) && nodeVisible(n));
+      if (pts.length < 3) continue;
+      const reg = state.config.regions.find((r) => r.id === th.region);
+      const c = regionColors(reg);
+      const mx = pts.reduce((s, n) => s + n.x, 0) / pts.length;
+      const my = pts.reduce((s, n) => s + n.y, 0) / pts.length;
+      const rx = Math.max(22, ...pts.map((n) => Math.abs(n.x - mx))) + 14;
+      const ry = Math.max(18, ...pts.map((n) => Math.abs(n.y - my))) + 14;
+      const dim = active() || (filter.regions && !filter.regions.has(th.region));
+      ctx.save();
+      ctx.setLineDash([4 / scale, 4 / scale]);
+      ctx.strokeStyle = withAlpha(c.dot, dim ? 0.15 : 0.55);
+      ctx.lineWidth = 1.2 / scale;
+      ctx.beginPath();
+      ctx.ellipse(mx, my, rx, ry, 0, 0, 2 * Math.PI);
+      ctx.stroke();
+      ctx.restore();
+      if (!dim && scale > 0.45) label(ctx, th.name, mx, my - ry - 5 / scale, { font: `italic 600 ${12 / scale}px ${theme.sans}`, color: c.text, scale, align: 'center' });
+    }
     ctx.restore();
   }
 
@@ -350,6 +372,7 @@ export function createMap(el, handlers = {}) {
     // Labels only join the layout when they're shown, so they don't pull notes around.
     const C = connections(state.notes, { labels: shown.has('label') });
     counts = C.counts;
+    themeList = themes(C.edges);
     const lm = labelMap(state.config);
     neighbours = new Map();
     const link = (a, b) => {
@@ -396,8 +419,9 @@ export function createMap(el, handlers = {}) {
 
   function computeMatches() {
     const { regions, query } = filter;
-    if (!regions && !query && !filter.ids) { matches = null; return; }
+    if (!regions && !query && !filter.ids && !filter.since) { matches = null; return; }
     let pool = [...state.notes.values()];
+    if (filter.since) pool = pool.filter((n) => (n.updatedAt || n.createdAt || 0) >= filter.since);
     if (filter.ids) pool = pool.filter((n) => filter.ids.has(n.id));
     if (regions) pool = pool.filter((n) => !n.inbox && regions.has(n.region));
     if (query) pool = searchNotes(pool, query, 10000);
@@ -465,6 +489,7 @@ export function createMap(el, handlers = {}) {
     },
     shown: () => [...shown],
     counts: () => ({ ...counts }),
+    themes: () => themeList.map((t) => ({ ...t })),
     // Only this note and what it connects to (depth 1 or 2).
     focusOn(id, depth = 1) {
       focus = id ? { id, depth, ids: reach(id, depth) } : null;

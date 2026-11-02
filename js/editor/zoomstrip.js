@@ -147,6 +147,7 @@ export class ZoomStrip {
       e.preventDefault();
       cv.setPointerCapture(e.pointerId);
       const tool = this.getTool();
+      if (tool.tool === 'laser') return; // the laser is for the page itself
       const [x, y] = this.toPage(e);
       if (tool.tool === 'eraser') {
         this.s.beginExternalErase();

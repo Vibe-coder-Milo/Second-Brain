@@ -183,6 +183,14 @@ export async function undo(entryId) {
   const log = organiserLog();
   const e = log.find((x) => x.id === entryId);
   if (!e) return false;
+  // A link the assistant made: unlink, and don't make it again.
+  if (e.link) {
+    await V.unlinkNotes(e.note, e.other);
+    const { notRelated } = await import('./mapassist.js');
+    await notRelated(e.note, e.other);
+    await V.updateDevice({ organiserLog: log.filter((x) => x.id !== entryId) });
+    return true;
+  }
   const n = state.notes.get(e.note);
   if (n && n.region === e.to) await V.saveNote({ ...n, region: e.from.region, inbox: e.from.inbox }, { touch: false });
   const rest = log.filter((x) => x.id !== entryId);
