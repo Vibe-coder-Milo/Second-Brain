@@ -9,7 +9,7 @@
 import * as V from './vault.js';
 import { state } from './vault.js';
 import { displayTitle, wikiTitles, titleIndex, labelMap, noteText } from './model.js';
-import { nearLists, indexVersion } from './semantic.js';
+import { nearLists, nearVersion } from './semantic.js';
 
 export const KINDS = [
   { id: 'link', name: 'Your links', css: '--c-link', fallback: '#2F6FB5', width: 1.9 },
@@ -32,7 +32,8 @@ const key = (a, b) => (a < b ? `${a}|${b}` : `${b}|${a}`);
 const memo = new Map();
 export function connections(notesMap = state.notes, { labels = false } = {}) {
   if (notesMap !== state.notes) return compute(notesMap, labels);
-  const k = `${V.rev}|${indexVersion()}|${labels}`;
+  const near = nearLists(); // may start bringing them up to date
+  const k = `${V.rev}|${nearVersion()}|${labels}|${near.size}`;
   if (memo.get(labels)?.k !== k) memo.set(labels, { k, v: compute(notesMap, labels) });
   return memo.get(labels).v;
 }
@@ -64,7 +65,7 @@ function compute(notesMap, labels) {
   for (const n of notes) {
     for (const s of n.suggested || []) if (!taken.has(key(n.id, s.id)) && !dismissed(n.id, s.id)) add(n.id, s.id, 'related', s.reason || 'Suggested by Claude');
   }
-  const near = nearLists({ limit: RELATED_PER_NOTE + 2, min: RELATED_MIN });
+  const near = nearLists();
   for (const n of notes) {
     let k = 0;
     for (const { id, score } of near.get(n.id) || []) {
@@ -117,17 +118,28 @@ export function themes(edges, { minSize = 3 } = {}) {
   return v.map((t) => ({ ...t }));
 }
 
+// Each note's words, kept until the note changes (a saved note is a new object).
+const wordCache = new WeakMap();
+const titleCache = new WeakMap();
+const wordsOfNote = (n) => {
+  let w = wordCache.get(n);
+  if (!w) { w = new Set([...tokens(displayTitle(n)), ...tokens(noteText(n)).slice(0, 400)]); wordCache.set(n, w); }
+  return w;
+};
+const titleWordsOf = (n) => {
+  let w = titleCache.get(n);
+  if (!w) { w = new Set(tokens(displayTitle(n))); titleCache.set(n, w); }
+  return w;
+};
+
 function findThemes(edges, minSize) {
   const notes = [...state.notes.values()];
   const N = notes.length || 1;
-  const df = new Map();
-  const words = new Map();
-  for (const n of notes) {
-    const set = new Set([...tokens(displayTitle(n)), ...tokens(noteText(n)).slice(0, 400)]);
-    words.set(n.id, set);
-    for (const w of set) df.set(w, (df.get(w) || 0) + 1);
-  }
-  const titleWords = (n) => new Set(tokens(displayTitle(n)));
+  const words = { get: (id) => { const n = state.notes.get(id); return n ? wordsOfNote(n) : null; } };
+  // How many notes use a word: only counted for the few words that could name a theme.
+  const dfMemo = new Map();
+  const df = { get: (w) => { if (!dfMemo.has(w)) { let c = 0; for (const n of notes) if (wordsOfNote(n).has(w)) c++; dfMemo.set(w, c); } return dfMemo.get(w); } };
+  const titleWords = (n) => titleWordsOf(n);
   const out = [];
   for (const r of state.config.regions) {
     const ids = new Set(notes.filter((n) => !n.inbox && n.region === r.id).map((n) => n.id));

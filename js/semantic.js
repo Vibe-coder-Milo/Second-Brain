@@ -93,6 +93,7 @@ const asFloat = (c) => { const f = new Float32Array(DIM); for (let i = 0; i < DI
 async function loadSaved() {
   if (loaded || !state.keys.m) return;
   loaded = true;
+  await loadNear();
   for (const r of await local.all()) {
     if (!r.id.startsWith('emb:')) continue;
     const id = r.id.slice(4);
@@ -138,7 +139,8 @@ export async function buildIndex() {
           const vecs = [];
           for (let i = 0; i < ps.length; i += 8) vecs.push(...await embed(ps.slice(i, i + 8)));
           const chunks = vecs.map(toInt8);
-          index.set(n.id, { hash: h, chunks, mean: meanOf(vecs) });
+          // The same (rounded) numbers that are saved, so results match after unlocking again.
+          index.set(n.id, { hash: h, chunks, mean: meanOf(chunks.map(asFloat)) });
           ver++;
           if (!n.sealed && state.keys.m) {
             const rid = `emb:${n.id}`;
@@ -167,6 +169,9 @@ export async function buildIndex() {
 export function forgetIndex() {
   index.clear();
   ver++;
+  nearGen++;
+  near = { map: new Map(), hashes: new Map(), ver: -1 };
+  nearLoaded = false;
   loaded = false;
   semState.done = 0;
   semState.total = 0;
@@ -174,7 +179,7 @@ export function forgetIndex() {
 
 export async function clearIndex() {
   forgetIndex();
-  for (const r of await local.all()) if (r.id.startsWith('emb:')) await local.del(r.id);
+  for (const r of await local.all()) if (r.id.startsWith('emb:') || r.id === NEAR_ID) await local.del(r.id);
 }
 
 // ---- Queries ----------------------------------------------------------------------
@@ -215,26 +220,164 @@ export async function searchByMeaning(query, { limit = 12, min = 0.18, pool = nu
 
 export const indexVersion = () => ver;
 
-// For every note, the notes closest in meaning, worked out in one pass (each
-// pair once) and kept until the index changes. The map, the note mini-map and
-// the assistant all read from this, so it isn't redone on every save.
-let near = { ver: -1, limit: 0, min: 0, map: new Map() };
-export function nearLists({ limit = 4, min = 0.3 } = {}) {
-  if (near.ver === ver && near.limit === limit && near.min === min) return near.map;
-  const ids = [...index.keys()];
+// ---- Notes close in meaning ---------------------------------------------------------
+// For every note, the few notes closest in meaning (the map, each note's
+// mini-map and the assistant read these). Worked out for all pairs once, then
+// kept up to date as notes change: only the changed notes are compared again.
+// Saved encrypted on this device, so opening the app doesn't redo it. Big
+// jobs (thousands of notes) run in small slices, so the app never freezes.
+
+const NEAR = { limit: 4, min: 0.32 };
+const NEAR_ID = 'near:lists';
+let near = { map: new Map(), hashes: new Map(), ver: -1 };
+let nearGen = 0;
+let nearBusy = false;
+let nearAgain = false;
+let nearLoaded = false;
+
+// The version of the index the lists reflect (changes when they're updated).
+export const nearVersion = () => near.ver;
+
+function topInsert(list, id, sc) {
+  if (sc < NEAR.min) return;
+  if (list.length >= NEAR.limit && sc <= list[list.length - 1].score) return;
+  let i = list.length;
+  while (i > 0 && list[i - 1].score < sc) i--;
+  list.splice(i, 0, { id, score: sc });
+  if (list.length > NEAR.limit) list.pop();
+}
+
+// All pairs, a slice at a time (each pair once).
+function allPairs(ids) {
   const vs = ids.map((id) => index.get(id).mean);
   const lists = ids.map(() => []);
-  for (let i = 0; i < ids.length; i++) {
-    const a = vs[i];
-    for (let j = i + 1; j < ids.length; j++) {
-      const s = dotF(a, vs[j]);
-      if (s >= min) { lists[i].push([j, s]); lists[j].push([i, s]); }
-    }
+  let i = 0;
+  return {
+    step(ms) {
+      const t0 = performance.now();
+      while (i < ids.length) {
+        const a = vs[i];
+        const li = lists[i];
+        for (let j = i + 1; j < ids.length; j++) {
+          const sc = dotF(a, vs[j]);
+          if (sc >= NEAR.min) { topInsert(li, ids[j], sc); topInsert(lists[j], ids[i], sc); }
+        }
+        i++;
+        if (performance.now() - t0 > ms) break;
+      }
+      return i >= ids.length;
+    },
+    result: () => new Map(ids.map((id, k) => [id, lists[k]])),
+  };
+}
+
+// Only what changed: fresh rows for changed notes, offered to everyone else;
+// a list that lost a neighbour it needed is worked out again.
+function patchPairs(ids, changed, gone) {
+  const map = new Map(near.map);
+  const bad = new Set([...changed, ...gone]);
+  for (const id of gone) map.delete(id);
+  const redo = new Set();
+  for (const [id, list] of map) {
+    if (bad.has(id)) continue;
+    if (!list.some((x) => bad.has(x.id))) continue;
+    map.set(id, list.filter((x) => !bad.has(x.id)));
+    if (list.length >= NEAR.limit) redo.add(id);
   }
-  const map = new Map();
-  ids.forEach((id, i) => map.set(id, lists[i].sort((p, q) => q[1] - p[1]).slice(0, limit).map(([j, s]) => ({ id: ids[j], score: s }))));
-  near = { ver, limit, min, map };
+  const vec = (id) => index.get(id).mean;
+  for (const c of changed) {
+    const a = vec(c);
+    const row = [];
+    for (const o of ids) {
+      if (o === c) continue;
+      const sc = dotF(a, vec(o));
+      if (sc < NEAR.min) continue;
+      topInsert(row, o, sc);
+      if (!bad.has(o) && !redo.has(o)) { const l = map.get(o) ? [...map.get(o)] : []; topInsert(l, c, sc); map.set(o, l); }
+    }
+    map.set(c, row);
+  }
+  for (const r of redo) {
+    const a = vec(r);
+    const row = [];
+    for (const o of ids) if (o !== r) topInsert(row, o, dotF(a, vec(o)));
+    map.set(r, row);
+  }
   return map;
+}
+
+// Bring the lists up to date: straight away when it's quick, otherwise in
+// the background (the map and the rest update when it's done).
+function refreshNear() {
+  if (nearBusy) { nearAgain = true; return; }
+  const gen = nearGen;
+  const target = ver;
+  const ids = [...index.keys()];
+  const changed = ids.filter((id) => near.hashes.get(id) !== index.get(id).hash);
+  const gone = [...near.hashes.keys()].filter((id) => !index.has(id));
+  const finish = (map) => {
+    near = { map, hashes: new Map(ids.map((id) => [id, index.get(id).hash])), ver: target };
+    saveNearSoon();
+  };
+  const full = !near.hashes.size || changed.length > ids.length * 0.25;
+  const cost = full ? (ids.length * ids.length) / 2 : (changed.length + gone.length + 4) * ids.length;
+  if (!full) { finish(patchPairs(ids, changed, gone)); return; }
+  if (cost <= 3e5) { const job = allPairs(ids); job.step(Infinity); finish(job.result()); return; }
+  nearBusy = true;
+  (async () => {
+    try {
+      const job = allPairs(ids);
+      while (!job.step(20)) {
+        await new Promise((r) => setTimeout(r, 0));
+        if (gen !== nearGen) return;
+      }
+      if (gen !== nearGen) return;
+      finish(job.result());
+      tell();
+    } finally {
+      nearBusy = false;
+      if (nearAgain && gen === nearGen) { nearAgain = false; refreshNear(); }
+    }
+  })();
+}
+
+// A fresh full answer, worked out on the spot (to check the kept lists).
+export function nearFull() {
+  const job = allPairs([...index.keys()]);
+  job.step(Infinity);
+  return job.result();
+}
+export const nearBusyNow = () => nearBusy;
+
+export function nearLists() {
+  if (near.ver !== ver) refreshNear();
+  return near.map;
+}
+
+// Kept encrypted on this device (sealed notes left out: theirs are only ever in memory).
+let saveT = null;
+function saveNearSoon() {
+  clearTimeout(saveT);
+  saveT = setTimeout(async () => {
+    if (!state.keys.m) return;
+    const open = (id) => !state.notes.get(id)?.sealed;
+    const rows = [];
+    for (const [id, list] of near.map) if (open(id)) rows.push([id, list.filter((x) => open(x.id)).map((x) => [x.id, Math.round(x.score * 1e4)])]);
+    const hashes = [...near.hashes].filter(([id]) => open(id));
+    const body = JSON.stringify({ v: 1, limit: NEAR.limit, min: NEAR.min, rows, hashes });
+    try { await local.put({ id: NEAR_ID, k: 'm', data: await C.encryptBytes(state.keys.m, NEAR_ID, new TextEncoder().encode(body)) }); } catch { /* next time */ }
+  }, 4000);
+}
+async function loadNear() {
+  if (nearLoaded || !state.keys.m) return;
+  nearLoaded = true;
+  try {
+    const rec = await local.get(NEAR_ID);
+    if (!rec) return;
+    const o = JSON.parse(new TextDecoder().decode(await C.decryptBytes(state.keys.m, NEAR_ID, rec.data)));
+    if (o.v !== 1 || o.limit !== NEAR.limit || o.min !== NEAR.min) return;
+    near = { map: new Map(o.rows.map(([id, l]) => [id, l.map(([x, sc]) => ({ id: x, score: sc / 1e4 }))])), hashes: new Map(o.hashes), ver: -1 };
+  } catch { /* worked out again */ }
 }
 
 // Notes closest in meaning to this one (no model call needed).

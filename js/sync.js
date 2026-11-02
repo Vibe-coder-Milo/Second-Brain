@@ -32,6 +32,14 @@ export class GitHub {
       const e = new Error(`GitHub ${res.status}`);
       e.status = res.status;
       try { e.detail = (await res.json()).message; } catch { e.detail = ''; }
+      // GitHub asking to slow down (too many uploads), not a problem with the token.
+      const after = Number(res.headers.get('retry-after'));
+      const left = res.headers.get('x-ratelimit-remaining');
+      const reset = Number(res.headers.get('x-ratelimit-reset'));
+      if (res.status === 429 || (res.status === 403 && (after || left === '0' || /rate limit/i.test(e.detail || '')))) {
+        e.code = 'RATE_LIMIT';
+        e.retryAt = after ? Date.now() + after * 1000 : left === '0' && reset ? reset * 1000 + 1000 : Date.now() + 65000;
+      }
       throw e;
     }
     return res.status === 204 ? null : res.json();
@@ -107,6 +115,60 @@ async function pool(items, n, fn) {
   await Promise.all(workers);
 }
 
+// ---- Staying within GitHub's limits --------------------------------------------
+// GitHub allows about 80 uploads a minute and 500 an hour. Big imports (a
+// pile of PDFs) are uploaded in batches under those limits, a few minutes
+// apart; everyday edits go first, so they never wait behind an import.
+const PER_MIN = 70;
+const PER_HOUR = 440;
+const BATCH = 60;
+const UP_KEY = 'sb-gh-uploads';
+const upTimes = () => { try { return (JSON.parse(localStorage.getItem(UP_KEY)) || []).filter((t) => Date.now() - t < 3600000); } catch { return []; } };
+function spend(n) {
+  const t = upTimes();
+  const now = Date.now();
+  for (let i = 0; i < n; i++) t.push(now);
+  try { localStorage.setItem(UP_KEY, JSON.stringify(t.slice(-PER_HOUR * 2))); } catch { /* private mode */ }
+}
+// How many uploads can go now, and when more can.
+export function uploadRoom() {
+  const t = upTimes().sort((a, b) => a - b);
+  const now = Date.now();
+  const lastMin = t.filter((x) => now - x < 60000);
+  const room = Math.min(BATCH, PER_MIN - lastMin.length, PER_HOUR - t.length);
+  let nextAt = now;
+  if (PER_HOUR - t.length <= 4) nextAt = t[Math.max(0, t.length - PER_HOUR + 8)] + 3600000;
+  else if (PER_MIN - lastMin.length <= 4) nextAt = lastMin[0] + 61000;
+  return { room: Math.max(0, room), nextAt };
+}
+
+// Pushes in the order to send them: each note with its files (files first,
+// so a note never arrives before its pages), small bundles first.
+function orderPushes(pushes) {
+  const owner = new Map();
+  for (const n of [...state.notes.values(), ...state.notebooks.values()]) {
+    for (const f of n.files || []) owner.set(f.id, n.id);
+    for (const p of n.pages || []) { owner.set(p.id, n.id); if (p.bg) owner.set(p.bg, n.id); }
+    for (const r of n.recordings || []) if (r.fileId) owner.set(r.fileId, n.id);
+    if (n.cover?.photo) owner.set(n.cover.photo, n.id);
+  }
+  const bundles = new Map();
+  for (const p of pushes) {
+    const key = p.kind === 'notes' ? p.rec.id : owner.get(p.rec.id) || `file:${p.rec.id}`;
+    if (!bundles.has(key)) bundles.set(key, []);
+    bundles.get(key).push(p);
+  }
+  const list = [...bundles.values()].map((b) => b.sort((x, y) => (x.kind === 'notes') - (y.kind === 'notes')));
+  list.sort((a, b) => a.length - b.length);
+  return list.flat();
+}
+
+let resumeTimer = null;
+function resumeAt(t) {
+  clearTimeout(resumeTimer);
+  resumeTimer = setTimeout(() => syncNow({ quiet: true }).catch(() => {}), Math.max(1500, t - Date.now()));
+}
+
 let running = null;
 let again = false;
 
@@ -136,12 +198,26 @@ async function syncOnce({ quiet = false } = {}) {
       if (done) {
         const now = Date.now();
         await meta.set('lastSyncAt', now);
-        setSync({ state: 'idle', lastSyncAt: now, message: '' });
+        if (done.left) {
+          // More to upload: carry on when GitHub's limits allow.
+          const { room, nextAt } = uploadRoom();
+          const at = room > 8 ? Date.now() + 1500 : nextAt;
+          setSync({ state: 'uploading', lastSyncAt: now, left: done.left, resumeAt: at, message: '' });
+          resumeAt(at);
+          return;
+        }
+        setSync({ state: 'idle', lastSyncAt: now, left: 0, message: '' });
         return;
       }
     }
     throw new Error('Sync kept colliding with another device. Try again in a moment.');
   } catch (e) {
+    if (e.code === 'RATE_LIMIT') {
+      // Not an error: wait and carry on.
+      setSync({ state: 'uploading', resumeAt: e.retryAt, message: '' });
+      resumeAt(e.retryAt);
+      return;
+    }
     console.error('sync failed', e);
     setSync({ state: navigator.onLine ? 'error' : 'offline', message: explainError(e) });
     if (!quiet) throw e;
@@ -338,9 +414,24 @@ async function attemptSync(gh) {
     pushes.push({ kind: 'notes', rec: await records.get(copy.id) });
   }
 
-  // ---- Push.
+  // ---- Push (in batches within GitHub's limits).
   const pushed = [];
+  let left = 0;
   if (pushes.length || deletes.length || pushKeyring) {
+    const { room, nextAt } = uploadRoom();
+    const take = Math.max(0, room - 3 - (pushKeyring ? 1 : 0)); // the tree, commit and ref count too
+    if (!take && pushes.length) {
+      const e = new Error('Waiting for GitHub');
+      e.code = 'RATE_LIMIT';
+      e.retryAt = nextAt;
+      throw e;
+    }
+    const ordered = orderPushes(pushes);
+    const batch = ordered.slice(0, take);
+    left = ordered.length - batch.length;
+    pushes.length = 0;
+    pushes.push(...batch);
+    spend(batch.length + 3 + (pushKeyring ? 1 : 0));
     await pool(pushes, 4, async ({ kind, rec }) => {
       const content = kind === 'notes' ? textToB64(JSON.stringify(rec.env)) : bytesToB64(packFile(rec));
       const blob = await gh.createBlob(content);
@@ -397,7 +488,7 @@ async function attemptSync(gh) {
 
   await meta.set('lastHead', head);
   if (pulls.length || conflicts.length || localGone.length) emit({ type: 'remote' });
-  return true;
+  return left ? { left } : true;
 }
 
 const CONTENT_KEYS = ['body', 'doc', 'font', 'kind', 'notebook', 'section', 'parent', 'daily', 'type', 'region', 'inbox', 'sealed', 'tags', 'links', 'url', 'chat', 'suggestedRegion', 'dismissed', 'props'];

@@ -19,6 +19,7 @@ export function syncSummary() {
   const s = state.sync;
   switch (s.state) {
     case 'syncing': return { icon: icons.cloudSync({ size: 16, sw: 2 }), text: 'Syncing…' };
+    case 'uploading': return { icon: icons.cloudSync({ size: 16, sw: 2 }), text: s.left ? `Uploading, ${s.left} left` : 'Uploading, a moment…', ok: true };
     case 'idle': return { icon: icons.cloud({ size: 16, sw: 2 }), text: `Synced ${fmtAgo(s.lastSyncAt)}, encrypted`, ok: true };
     case 'offline': return { icon: icons.cloudOff({ size: 16, sw: 2 }), text: 'Offline, saved on this device' };
     case 'error': return { icon: icons.cloudErr({ size: 16, sw: 2 }), text: 'Sync needs attention' };

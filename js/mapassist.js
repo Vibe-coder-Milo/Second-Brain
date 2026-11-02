@@ -141,12 +141,15 @@ export const AUTO_LINK_MIN = 0.5;
 export const autoLinkOn = () => state.device?.autoLink === true;
 export async function autoLink() {
   if (!autoLinkOn() || state.status !== 'unlocked') return 0;
-  const { similarNotes } = await import('./semantic.js');
+  const { nearLists } = await import('./semantic.js');
+  const near = nearLists();
   const done = new Set();
   const made = [];
   for (const n of state.notes.values()) {
     if (n.sealed) continue;
-    for (const { note: o, score } of similarNotes(n, { limit: 2, min: AUTO_LINK_MIN }) || []) {
+    for (const { id, score } of (near.get(n.id) || []).slice(0, 2)) {
+      const o = state.notes.get(id);
+      if (!o || score < AUTO_LINK_MIN) continue;
       const k = [n.id, o.id].sort().join('|');
       if (done.has(k) || o.sealed || n.links.includes(o.id) || o.links.includes(n.id) || n.dismissed?.includes(o.id) || o.dismissed?.includes(n.id)) continue;
       done.add(k);

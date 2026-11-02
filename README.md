@@ -13,6 +13,14 @@ A private, encrypted map of your notes, screenshots and ideas. Capture on your i
 - **Sealed notes** have their own second passphrase, stay hidden until you open them, and are never included in anything shared with Claude.
 - **Claude only sees what you copy into a chat.** The app builds the request; you paste it; you import the reply and approve every change.
 
+## How much it holds
+
+There's no limit on the number of notes. What matters in practice:
+- **This device**: Safari lets the app use up to about 60% of the device's storage. Typed and handwritten notes are tiny; imported PDFs and photos are what take space. The app asks the browser to keep its storage for good (Settings → This device shows how much is used).
+- **Speed**: tested with 10,000 notes. Unlocking takes about a second, All notes and search stay quick, and the map settles in a few seconds. Notes close in meaning are worked out once, then only for the notes that change, and kept between sessions.
+- **GitHub** (sync): keep the data repo under about 1 GB (GitHub's guidance). GitHub accepts about 500 uploads an hour, so after a big import the rest goes up in batches over a while; new edits always go first.
+- **One PDF** can bring in up to 300 pages; split bigger ones.
+
 ## One-time setup
 
 ### 1. Publish the app (GitHub Pages)

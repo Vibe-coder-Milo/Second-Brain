@@ -378,6 +378,7 @@ export function createMap(el, handlers = {}) {
     counts = C.counts;
     themeList = themes(C.edges);
     const lm = labelMap(state.config);
+    const labelNodes = new Set();
     neighbours = new Map();
     const link = (a, b) => {
       if (!neighbours.has(a)) neighbours.set(a, new Set());
@@ -391,7 +392,7 @@ export function createMap(el, handlers = {}) {
         const def = lm.get(lid.slice(6)) || { id: lid.slice(6), name: lid.slice(6), color: theme.kinds.label };
         const ln = get(lid, () => ({ id: lid, labelNode: true, x: (Math.random() - 0.5) * 80, y: (Math.random() - 0.5) * 80 }));
         ln.label = def;
-        if (!nodes.includes(ln)) nodes.push(ln);
+        if (!labelNodes.has(ln)) { labelNodes.add(ln); nodes.push(ln); }
       }
       links.push({ source: e.a, target: e.b, kind: e.kind, why: e.why });
       if (shown.has(e.kind)) {
@@ -463,9 +464,24 @@ export function createMap(el, handlers = {}) {
   window.addEventListener('sb-theme', onScheme);
 
   let lastShape = '';
-  // Order doesn't matter (a saved note moves to the end of the list).
-  const shapeOf = (d) => `${d.nodes.map((n) => n.id).sort().join(',')}#${d.links.map((l) => `${idOf(l.source)}>${idOf(l.target)}:${l.kind}:${l.region?.color || ''}`).sort().join(',')}`;
-  { const d = build(); lastShape = shapeOf(d); g.graphData(d); }
+  // Order doesn't matter (a saved note moves to the end of the list), so it's
+  // a sum of each piece's hash: quick even with thousands of notes.
+  const h32 = (str) => { let h = 0x811c9dc5; for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 0x01000193); } return h >>> 0; };
+  const shapeOf = (d) => {
+    let a = 0;
+    let b = 0;
+    for (const n of d.nodes) a = (a + h32(n.id)) >>> 0;
+    for (const l of d.links) b = (b + h32(`${idOf(l.source)}>${idOf(l.target)}:${l.kind}:${l.region?.color || ''}`)) >>> 0;
+    return `${d.nodes.length}:${a}:${d.links.length}:${b}`;
+  };
+  // Big maps (thousands of notes): fewer warm-up steps, and the layout
+  // settles within a few seconds instead of running on.
+  const setData = (d) => {
+    const big = d.nodes.length > 1500;
+    g.warmupTicks(big ? 14 : 80).cooldownTime(big ? 5000 : 15000).d3AlphaDecay(big ? 0.045 : 0.0228);
+    g.graphData(d);
+  };
+  { const d = build(); lastShape = shapeOf(d); setData(d); }
   // Frame the map straight away (positions come from the warm-up ticks), then
   // again once the layout settles.
   setTimeout(() => { if (firstFit) fitView(0); }, 60);
@@ -484,7 +500,7 @@ export function createMap(el, handlers = {}) {
       const sig = shapeOf(d);
       if (sig === lastShape) { refresh(); return; }
       lastShape = sig;
-      g.graphData(d);
+      setData(d);
     },
     select(id, { center = false } = {}) {
       selectedId = id;
@@ -504,7 +520,7 @@ export function createMap(el, handlers = {}) {
       shown = new Set(kinds);
       const d = build();
       lastShape = shapeOf(d);
-      g.graphData(d);
+      setData(d);
     },
     shown: () => [...shown],
     counts: () => ({ ...counts }),

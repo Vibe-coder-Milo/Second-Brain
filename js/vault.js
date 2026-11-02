@@ -139,6 +139,7 @@ export async function unlockWithKey(key) {
 }
 
 async function opened() {
+  requestPersistence(); // ask again each time: keeps the browser from clearing it to free space
   await loadAll();
   state.status = 'unlocked';
   emit({ type: 'unlock' });

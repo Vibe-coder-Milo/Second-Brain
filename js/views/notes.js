@@ -5,8 +5,11 @@ import { state, sealedState } from '../vault.js';
 import { displayTitle, regionColors, searchNotes, typeName } from '../model.js';
 import { icons } from '../icons.js';
 
+const FIRST = 150;
+
 export function mount(main, params, ctx) {
   let p = { ...params };
+  let moreObs = null;
 
   const draw = (keepFocus = false) => {
     const regions = state.config.regions;
@@ -32,10 +35,25 @@ export function mount(main, params, ctx) {
         <a class="chip" href="#/notes${q ? `?q=${encodeURIComponent(q)}` : ''}" aria-pressed="${!region ? 'true' : 'false'}">All</a>
         ${regions.map((r) => html`<a class="chip" href="#/notes?region=${r.id}${q ? `&q=${encodeURIComponent(q)}` : ''}" aria-pressed="${region?.id === r.id ? 'true' : 'false'}"><span class="dot" style="background:${regionColors(r).dot}"></span>${r.name}</a>`)}
       </div>
-      ${list.length ? html`<ul class="rows">${list.map(row)}</ul>` : html`<div class="empty" id="nq-empty"><p class="serif">${q ? 'No exact matches' : 'Nothing here yet'}</p><p style="margin:0">${q ? 'Try fewer words, or search for text inside a screenshot.' : region ? `File notes from your inbox into ${region.name}, or start a new one.` : 'Capture something to get started.'}</p></div>`}
+      ${list.length ? html`<ul class="rows" id="nq-rows">${list.slice(0, FIRST).map(row)}</ul>${list.length > FIRST ? html`<p class="hint more-rows" id="nq-more">Showing ${FIRST} of ${list.length}…</p>` : ''}` : html`<div class="empty" id="nq-empty"><p class="serif">${q ? 'No exact matches' : 'Nothing here yet'}</p><p style="margin:0">${q ? 'Try fewer words, or search for text inside a screenshot.' : region ? `File notes from your inbox into ${region.name}, or start a new one.` : 'Capture something to get started.'}</p></div>`}
       ${q ? html`<section class="meaning" id="nq-meaning" aria-live="polite"></section>` : ''}
     </div>`}`;
     if (q) meaning(q, list, region);
+    // Long lists: the rest come in as you scroll, a couple of hundred at a time.
+    moreObs?.disconnect();
+    const more = $('#nq-more', main);
+    if (more) {
+      let shown = FIRST;
+      moreObs = new IntersectionObserver((es) => {
+        if (!es.some((e) => e.isIntersecting)) return;
+        const ul = $('#nq-rows', main);
+        if (!ul) return;
+        ul.insertAdjacentHTML('beforeend', String(html`${list.slice(shown, shown + 200).map(row)}`));
+        shown += 200;
+        if (shown >= list.length) { moreObs.disconnect(); more.remove(); } else more.textContent = `Showing ${shown} of ${list.length}…`;
+      }, { rootMargin: '600px 0px' });
+      moreObs.observe(more);
+    }
 
     const input = $('#nq', main);
     input.addEventListener('input', debounce(() => {
@@ -89,6 +107,7 @@ export function mount(main, params, ctx) {
   draw();
   return {
     update(np) { p = { ...np }; draw(); },
+    destroy() { moreObs?.disconnect(); },
     onEvent(evt) { if (['note', 'delete', 'remote', 'sealed', 'config'].includes(evt.type)) { const f = document.activeElement?.id === 'nq'; draw(f); } },
   };
 }

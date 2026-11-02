@@ -114,7 +114,8 @@ export function mount(main, params, ctx) {
         <h2 id="s-sync">Sync with GitHub</h2>
         ${sync && !editingSync ? html`
           <p class="status-line ${s.state === 'error' ? 'error' : ''}">${s.state === 'error' ? icons.cloudErr({ size: 18 }) : icons.cloud({ size: 18 })}
-            ${s.state === 'syncing' ? 'Syncing…' : s.state === 'error' ? s.message : s.state === 'offline' ? 'Offline. Changes will sync when you’re back online.' : `Synced ${fmtAgo(s.lastSyncAt)}`}</p>
+            ${s.state === 'syncing' ? 'Syncing…' : s.state === 'uploading' ? `Uploading in batches${s.left ? `, ${s.left} left` : ''}` : s.state === 'error' ? s.message : s.state === 'offline' ? 'Offline. Changes will sync when you’re back online.' : `Synced ${fmtAgo(s.lastSyncAt)}`}</p>
+          ${s.state === 'uploading' ? html`<p class="hint">GitHub accepts about 500 uploads an hour, so after a big import (lots of PDF pages) the rest goes up in batches${s.resumeAt && s.resumeAt - Date.now() > 90000 ? `, next at ${new Date(s.resumeAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}` : ''}. New edits go first. It carries on whenever the app is open.</p>` : ''}
           <p class="hint">Encrypted notes sync to <strong>${sync.owner}/${sync.repo}</strong> (${sync.branch}). GitHub only ever sees scrambled data.</p>
           <div class="btn-row">
             <button type="button" class="btn" data-act="sync-now">Sync now</button>
