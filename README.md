@@ -68,6 +68,7 @@ Every sync is one commit, so the data repo's history doubles as version history.
   - **One at a time**: keep scrolling past the end of a page for the next one (and back past the top for the one before), use Previous and Next under the page, or the keys. Tap **Page 3 of 40** to see every page and jump to one.
   - A note opens at the page you were last on.
   - **Long PDFs** stay quick: only the pages near the screen are drawn and kept in memory, so a 300-page PDF costs about the same as a 3-page one; page pictures in the page list come in as you scroll; and a PDF page keeps its shape on an endless page.
+  - **Bring in notes from Notability** (or GoodNotes): Notebooks → **Bring in notes**. In Notability's library tap ⋯ → Select Notes, pick them, Export → PDF → Save to Files; then choose them all here (or a .zip of PDFs, whose folders become sections). Each PDF becomes a handwritten note in the notebook you pick, looking exactly as it did, with room to keep writing; typed text in them is searchable and the PDF's date is kept. Picking several PDFs in a notebook's Mark up a PDF does the same.
   - **Mark up a PDF**: from a notebook (Mark up a PDF), from Capture, or by dragging a PDF onto a notebook or the map. It opens as a handwritten note with the PDF's pages to draw, circle (hold at the end of a shape so it snaps), highlight and type on. The PDF's text is searchable.
   - **Laser pointer** (on iPhone: + → More tools): draw to point things out while you talk or share your screen. A glowing red line with a tail; it fades a moment after you lift, and nothing is saved.
   - **Layers**: Ink, Highlights and your own (say "Review notes"). Hide or lock a layer, pick which one you're writing on, move a selection to another layer, and export only the visible layers.
@@ -132,6 +133,7 @@ js/editor/zoomstrip.js  the writing window
 js/stickers.js        the sticker library
 js/covers.js, coverart.js  notebook covers (coverart.js holds the newer artwork)
 js/export.js, pdf.js  PDF and Markdown export, PDF import
+js/bulkimport.js      bringing in many PDFs at once (Notability exports)
 js/views/*.js         one file per screen
 sw.js                 offline cache
 vendor/, fonts/       bundled libraries and typefaces

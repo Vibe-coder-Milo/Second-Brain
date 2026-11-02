@@ -192,7 +192,7 @@ let lastActive = Date.now();
 let hiddenAt = null;
 function startAutoLock() {
   const touch = () => { lastActive = Date.now(); };
-  ['pointerdown', 'keydown', 'wheel', 'touchstart'].forEach((t) => window.addEventListener(t, touch, { passive: true }));
+  ['pointerdown', 'keydown', 'wheel', 'touchstart', 'sb-busy'].forEach((t) => window.addEventListener(t, touch, { passive: true }));
   const limit = () => (state.device?.autoLockMin || 10) * 60000;
   setInterval(() => {
     if (state.status === 'unlocked' && Date.now() - lastActive > limit()) V.lock();

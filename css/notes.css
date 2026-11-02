@@ -1085,3 +1085,20 @@ td.tv-tags, td.tv-select { min-width: 150px; }
 /* Cover collections in the notebook sheet */
 .cover-groups { margin: 0 0 4px; }
 .cover-groups .chip { flex-shrink: 0; }
+
+/* Bringing in notes (Notability PDFs) */
+.imp-body { display: flex; flex-direction: column; gap: 14px; }
+.imp-steps { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 10px; line-height: 1.5; }
+.kbd { display: inline-block; min-width: 1.6em; padding: 0 4px; border: 1px solid var(--line); border-radius: 5px; text-align: center; font-weight: 700; }
+.imp-count { margin: 0; font-size: 17px; }
+.imp-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; max-height: 220px; overflow: auto; }
+.imp-list li { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.imp-list li > span:first-of-type { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.imp-dest { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; }
+.imp-dest > div { flex: 1; min-width: 0; }
+.imp-dest-t { margin: 0; font-weight: 600; }
+.imp-now { margin: 0; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.imp-bar { height: 8px; border-radius: 99px; background: var(--field); overflow: hidden; }
+.imp-bar > span { display: block; height: 100%; width: 0; background: var(--ink); border-radius: 99px; transition: width 0.3s ease; }
+.imp-done { display: flex; align-items: center; gap: 10px; color: var(--good); }
+.imp-done p { color: var(--ink); }

@@ -32,6 +32,18 @@ export async function importPdfPages(file, { sealed = false, onProgress } = {}) 
     if (e?.name === 'PasswordException') throw new Error('That PDF has a password. Remove it first, then import.');
     throw new Error('Couldn’t read that PDF.');
   }
+  // When the PDF was made (Notability and others write this), to keep the
+  // note's date when it comes over.
+  let created = null;
+  try {
+    const m = String((await doc.getMetadata())?.info?.CreationDate || '').match(/D:(\d{4})(\d{2})?(\d{2})?(\d{2})?(\d{2})?(\d{2})?(Z|[+-])?(\d{2})?'?(\d{2})?/);
+    if (m) {
+      const [, y, mo = '01', d = '01', h = '00', mi = '00', se = '00', z, oh = '00', om = '00'] = m;
+      let t = Date.UTC(+y, +mo - 1, +d, +h, +mi, +se);
+      if (z === '+' || z === '-') t -= (z === '+' ? 1 : -1) * (+oh * 60 + +om) * 60000;
+      if (t > Date.UTC(1995, 0, 1) && t < Date.now() + 86400000) created = t;
+    }
+  } catch { /* no date */ }
   const count = doc.numPages || 0;
   const total = Math.min(count, MAX_PAGES);
   const pages = [];
@@ -62,5 +74,5 @@ export async function importPdfPages(file, { sealed = false, onProgress } = {}) 
   }
   await (task.destroy ? task.destroy() : doc.destroy?.());
   const text = texts.map((t, i) => (t ? `Page ${i + 1}: ${t}` : '')).filter(Boolean).join('\n\n').slice(0, 200000);
-  return { pages, text, skipped: Math.max(0, count - total) };
+  return { pages, text, skipped: Math.max(0, count - total), created };
 }

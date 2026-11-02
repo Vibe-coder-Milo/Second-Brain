@@ -51,6 +51,7 @@ export function mount(el, params, ctx) {
         <div class="head-actions">
           ${all.length > 1 ? html`<label class="sr-only" for="sh-sort">Sort</label><select id="sh-sort" class="region-select">
             ${[['recent', 'Recent'], ['name', 'Name'], ['region', 'Region']].map(([v, n]) => html`<option value="${v}" ${sort === v ? raw('selected') : ''}>${n}</option>`)}</select>` : ''}
+          <button type="button" class="btn btn-sm" data-import aria-label="Bring in notes from Notability or PDFs">${icons.download({ size: 18 })}<span class="hide-sm">Bring in notes</span></button>
           <button type="button" class="btn btn-primary btn-sm hide-sm" data-new>${icons.plus({ size: 18 })}New notebook</button>
         </div>
       </div>
@@ -71,9 +72,11 @@ export function mount(el, params, ctx) {
       </ul>
       ${state.hiddenSealed && V.sealedState() === 'locked' ? html`<p class="hint">Sealed notebooks are hidden. <button type="button" class="link-btn" data-action="toggle-sealed">Open sealed notes</button></p>` : ''}
       ${!all.length ? html`<p class="hint">A notebook holds handwritten pages and typed notes, split into sections, with sub-notes inside notes. Each notebook lives in a region, so its notes join that part of your map.</p>` : ''}
+      <p class="hint">Coming from Notability or GoodNotes? <button type="button" class="link-btn" data-import2>Bring in your notes as PDFs</button>, many at once.</p>
     </div>`}`;
     el.querySelectorAll('[data-new]').forEach((b) => { b.onclick = async () => { const nb = await notebookSheet(); if (nb) ctx.navigate(`#/notebook/${nb.id}`); }; });
     el.querySelectorAll('[data-r]').forEach((b) => { b.onclick = () => { region = b.dataset.r; draw(); }; });
+    el.querySelectorAll('[data-import], [data-import2]').forEach((b) => { b.onclick = async () => { const { importSheet } = await import('./importsheet.js'); importSheet({ ctx }); }; });
     const so = $('#sh-sort', el);
     if (so) so.onchange = () => { sort = so.value; V.updateDevice({ nbSort: sort }).catch(() => {}); draw(); };
     paintPhotoCovers(el);
@@ -107,10 +110,10 @@ export function mountNotebook(el, params, ctx) {
   // Drop a PDF on the notebook to mark it up.
   el.addEventListener('dragover', (e) => { if ([...(e.dataTransfer?.items || [])].some((i) => i.kind === 'file')) e.preventDefault(); });
   el.addEventListener('drop', (e) => {
-    const f = [...(e.dataTransfer?.files || [])].find((x) => x.type === 'application/pdf' || /\.pdf$/i.test(x.name));
-    if (!f) return;
+    const fs = [...(e.dataTransfer?.files || [])].filter((x) => x.type === 'application/pdf' || /\.(pdf|zip)$/i.test(x.name));
+    if (!fs.length) return;
     e.preventDefault();
-    openPdf(f);
+    if (fs.length > 1 || /\.zip$/i.test(fs[0].name)) bulk(fs); else openPdf(fs[0]);
   });
 
   // The note beside the notebook uses its own navigation, so links to notes in
@@ -241,7 +244,8 @@ export function mountNotebook(el, params, ctx) {
         const inp = document.createElement('input');
         inp.type = 'file';
         inp.accept = 'application/pdf,.pdf';
-        inp.onchange = () => { const f = inp.files?.[0]; if (f) openPdf(f); };
+        inp.multiple = true;
+        inp.onchange = () => { const fs = [...(inp.files || [])]; if (fs.length > 1) bulk(fs); else if (fs[0]) openPdf(fs[0]); };
         inp.click();
       };
     });
@@ -264,6 +268,12 @@ export function mountNotebook(el, params, ctx) {
     const b = nb();
     const cur = current && state.notes.get(current);
     return (cur?.section && b.sections.some((s) => s.id === cur.section) ? cur.section : null) || b.sections.find((s) => !collapsed.has(s.id))?.id || b.sections[0].id;
+  }
+
+  // Several PDFs (or a zip): each becomes its own note in this notebook.
+  async function bulk(files) {
+    const { importSheet } = await import('./importsheet.js');
+    importSheet({ files, notebook: id, section: lastSection(), ctx });
   }
 
   async function openPdf(file) {
