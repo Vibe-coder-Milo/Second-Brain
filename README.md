@@ -9,6 +9,7 @@ A private, encrypted map of your notes, screenshots and ideas. Capture on your i
 - **Text in screenshots is read on your device** (Tesseract). Nothing is uploaded for that.
 - **Search by meaning, related notes, reading handwriting and transcription run on your device too.** The small AI models are bundled in this repo and run in your browser; your notes and recordings never leave the device for them. The meaning index is stored encrypted, and sealed notes are only indexed while they're open.
 - **No third-party requests.** Fonts and libraries are bundled here. The only network calls the app makes are to `api.github.com` for your own sync repo.
+- **Touch ID or Face ID (optional, per device).** Turn it on in Settings → Security. A passkey on that device gives back a secret only after your fingerprint, face or the device's passcode (WebAuthn's PRF extension), and that secret locks a second copy of your key. The copy stays on that device: it's never synced and never in backups. Your passphrase still works, is asked for every 30 days so you don't forget it, and sealed notes always need their own passphrase. The device's passcode can stand in for Touch ID or Face ID, so keep it to yourself. Needs iPadOS or iOS 18 or later (or a browser with passkey PRF support).
 - **Sealed notes** have their own second passphrase, stay hidden until you open them, and are never included in anything shared with Claude.
 - **Claude only sees what you copy into a chat.** The app builds the request; you paste it; you import the reply and approve every change.
 
@@ -95,7 +96,7 @@ Every sync is one commit, so the data repo's history doubles as version history.
 - **Updates**: when a new version of the app is ready, a bar offers to switch to it (you'll unlock again). Settings → This device shows the version and has **Check for updates**.
 - **Appearance** (Settings): match the device, or always light or dark. In dark mode, handwritten pages and whiteboards go dark too, with dark ink shown light and colours brightened, so there's no bright white page in a dark app. PDFs and images you export always use light paper. You can keep pages light in dark mode if you prefer.
 - **Speed and battery**: the app loads only what the first screen needs (the map's drawing library and the reader for Claude's answers come in when you open them), the map sits still when nothing's moving instead of redrawing all the time, and how notes connect is worked out once per change and shared by the map, each note's mini-map and the assistant.
-- **Settings**: sync, appearance, auto-lock, passphrase, sealed notes, regions, labels, encrypted backup, Markdown export.
+- **Settings**: sync, appearance, auto-lock, Touch ID or Face ID unlock, passphrase, sealed notes, regions, labels, encrypted backup, Markdown export.
 
 ## Editing the app
 
@@ -108,6 +109,7 @@ css/notes.css         notebooks, editors, stickers, Today, Tasks, Labels
 js/app.js             routing, lock state
 js/vault.js           encrypted storage and note operations
 js/crypto.js          encryption
+js/deviceunlock.js    unlock with Touch ID or Face ID (passkey PRF)
 js/sync.js            GitHub sync (Git Data API)
 js/graph.js           the map
 js/claude.js          Ask Claude requests and reply import

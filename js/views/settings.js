@@ -7,11 +7,82 @@ import { meta } from '../db.js';
 import { PALETTE } from '../model.js';
 import { passphraseStrength } from '../crypto.js';
 import { probe, syncNow, explainError } from '../sync.js';
-import { confirmSheet } from '../ui.js';
+import { confirmSheet, openSheet } from '../ui.js';
+import * as C from '../crypto.js';
+import * as B from '../deviceunlock.js';
 import { syncFields, readSyncFields } from './gate.js';
 import { icons } from '../icons.js';
 import { themePref, applyTheme } from '../theme.js';
 import { appVersion, checkForUpdate } from '../appupdate.js';
+
+// Turning on Touch ID / Face ID: check the passphrase, make a passkey, then
+// lock a copy of the key with it. Each step that asks for Touch ID or Face ID
+// starts from a tap (Safari needs that).
+function bioSetup() {
+  return new Promise((resolve) => {
+    let opener = null;
+    let credId = null;
+    let done = false;
+    const s = openSheet(`${html`<div class="stack bio-setup" style="display:flex;flex-direction:column;gap:16px">
+      <h2 class="page-title" style="font-size:26px">Unlock with ${B.bioName}</h2>
+      <ol class="bio-steps"><li>Enter your passphrase, to show it’s you.</li><li>Confirm with ${B.bioName}.</li></ol>
+      <form id="bio-f" style="display:flex;flex-direction:column;gap:14px" novalidate>
+        <div class="field"><label for="bio-p">Passphrase</label><input id="bio-p" type="password" autocomplete="current-password"></div>
+        <button class="btn btn-primary btn-block" type="submit">Continue</button>
+      </form>
+      <div id="bio-go" hidden style="display:flex;flex-direction:column;gap:12px">
+        <p class="muted" id="bio-msg" style="margin:0">Now confirm with ${B.bioName}.</p>
+        <button class="btn btn-primary btn-block btn-bio" type="button" id="bio-btn">${icons.fingerprint({ size: 22 })}Use ${B.bioName}</button>
+      </div>
+      <p class="error" id="bio-err" role="alert" hidden></p>
+      <button class="btn btn-ghost btn-block" type="button" data-cancel>Cancel</button>
+    </div>`}`, { label: `Unlock with ${B.bioName}`, onClose: () => { opener?.discard(); resolve(done); } });
+    const $s = (sel) => s.el.querySelector(sel);
+    const fail = (e) => { $s('#bio-err').textContent = e.message || 'That didn’t work.'; $s('#bio-err').hidden = false; };
+    $s('[data-cancel]').onclick = () => s.close();
+    $s('#bio-f').onsubmit = async (e) => {
+      e.preventDefault();
+      const p = $s('#bio-p').value;
+      if (!p) return;
+      const sub = $s('#bio-f [type=submit]');
+      sub.disabled = true;
+      sub.textContent = 'Checking…';
+      $s('#bio-err').hidden = true;
+      try {
+        opener = await C.openForDevice(state.keyring.main, p);
+        $s('#bio-f').hidden = true;
+        $s('#bio-go').hidden = false;
+        $s('#bio-btn').focus();
+      } catch (ex) {
+        fail(ex.code === 'WRONG_PASSPHRASE' ? { message: 'That passphrase doesn’t match.' } : ex);
+        sub.disabled = false;
+        sub.textContent = 'Continue';
+      }
+    };
+    $s('#bio-btn').onclick = async () => {
+      const b = $s('#bio-btn');
+      b.disabled = true;
+      $s('#bio-err').hidden = true;
+      try {
+        if (!credId) credId = await B.register();
+        try {
+          await B.finish(opener, credId);
+        } catch (ex) {
+          // Safari wants a fresh tap for the second ask.
+          if (ex.code !== 'NotAllowedError') throw ex;
+          $s('#bio-msg').textContent = `One more time to finish: confirm with ${B.bioName} again.`;
+          b.disabled = false;
+          return;
+        }
+        done = true;
+        s.close();
+      } catch (ex) {
+        fail(ex);
+        b.disabled = false;
+      }
+    };
+  });
+}
 
 const COLOR_NAMES = { ochre: 'Ochre', sea: 'Sea green', chart: 'Chart blue', plum: 'Plum', brick: 'Brick', olive: 'Olive', teal: 'Teal', rose: 'Rose', indigo: 'Indigo', amber: 'Amber', moss: 'Moss', slate: 'Slate' };
 
@@ -31,6 +102,8 @@ export function mount(main, params, ctx) {
       if (est?.usage) usage = `${(est.usage / 1048576).toFixed(1)} MB used on this device`;
     } catch { /* ignore */ }
     const persisted = await navigator.storage?.persisted?.().catch(() => false);
+    const bioOk = await B.available().catch(() => false);
+    const bioOn = !!(await B.enrolment().catch(() => null));
     const counts = new Map();
     for (const n of state.notes.values()) if (n.region) counts.set(n.region, (counts.get(n.region) || 0) + 1);
 
@@ -77,6 +150,13 @@ export function mount(main, params, ctx) {
         <h2 id="s-sec">Security</h2>
         <div class="field"><label for="autolock">Lock automatically after</label>
           <select id="autolock">${[2, 5, 10, 30, 60].map((m) => html`<option value="${m}" ${state.device.autoLockMin === m ? raw('selected') : ''}>${m} minutes of no use</option>`)}</select></div>
+        <div class="bio-box">
+          <label class="check"><input type="checkbox" id="s-bio" ${bioOn ? raw('checked') : ''} ${bioOk || bioOn ? '' : raw('disabled')}> Unlock with ${B.bioName} on this device</label>
+          <p class="hint">${bioOn
+            ? `On. Your passphrase is still asked for every ${B.PASS_EVERY_DAYS} days so you don’t forget it, and sealed notes always need theirs. This device’s passcode can stand in for ${B.bioName}, so keep the passcode to yourself.`
+            : bioOk ? `Quicker than typing your passphrase. A passkey on this device, opened by ${B.bioName}, locks a copy of your key that never leaves this device.`
+              : 'Not available in this browser. On iPad and iPhone it needs iPadOS or iOS 18 or later.'}</p>
+        </div>
         <div class="btn-row">
           <button type="button" class="btn" data-act="lock">${icons.lock({ size: 16 })}Lock now</button>
           <button type="button" class="btn btn-ghost" data-act="pw" aria-expanded="${pwOpen ? 'true' : 'false'}">Change passphrase</button>
@@ -203,6 +283,19 @@ export function mount(main, params, ctx) {
     const al = $('#autolock', main);
     al.onchange = async () => { await V.updateDevice({ autoLockMin: Number(al.value) }); toast('Saved'); };
     on('[data-act=lock]', () => V.lock());
+    const bioBox = $('#s-bio', main);
+    if (bioBox) {
+      bioBox.onchange = async () => {
+        if (bioBox.checked) {
+          const ok = await bioSetup();
+          if (ok) { toast(`${B.bioName} unlock is on for this device`); draw(); } else bioBox.checked = false;
+        } else {
+          await B.disable();
+          toast(`${B.bioName} unlock is off for this device`);
+          draw();
+        }
+      };
+    }
     on('[data-act=pw]', () => { pwOpen = !pwOpen; draw(); });
     const pf = $('#pw-form', main);
     if (pf) {

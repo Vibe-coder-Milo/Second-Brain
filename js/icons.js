@@ -26,6 +26,7 @@ export const icons = {
   up: (o) => svg('<polyline points="6 15 12 9 18 15"/>', { sw: 2, size: 18, ...o }),
   close: (o) => svg('<line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/>', { sw: 2, ...o }),
   more: (o) => svg('<circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/>', { fill: 'currentColor', sw: 0, ...o }),
+  fingerprint: (o) => svg('<path d="M6.5 17.5c.8-1.6 1-3.2 1-5a4.5 4.5 0 0 1 9 0v1.5"/><path d="M12 12.5c0 3-.6 5.6-2 8"/><path d="M16.3 17.5c-.3 1.2-.7 2.3-1.3 3.3"/><path d="M4.2 14.5c.2-.7.3-1.3.3-2a7.5 7.5 0 0 1 12.6-5.5"/><path d="M19.2 10.5c.2.7.3 1.3.3 2v1"/>', o),
   lock: (o) => svg('<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>', { size: 14, sw: 2, ...o }),
   unlock: (o) => svg('<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 7.5-2"/>', { size: 14, sw: 2, ...o }),
   check: (o) => svg('<polyline points="5 12 10 17 19 7"/>', { size: 14, sw: 3, ...o }),

@@ -9,6 +9,12 @@ import { contourArt, icons } from '../icons.js';
 
 export async function renderUnlock(root) {
   const last = await meta.get('lastSyncAt');
+  // Touch ID / Face ID, if it's set up on this device (and the passphrase
+  // isn't due: it's asked for every 30 days so it isn't forgotten).
+  const B = await import('../deviceunlock.js');
+  const enrol = await B.enrolment().catch(() => null);
+  const bioOn = !!enrol && !B.passDue(enrol) && await B.available();
+  const due = !!enrol && B.passDue(enrol);
   root.innerHTML = `${html`<div class="gate">
     ${contourArt}
     <form id="unlock" novalidate>
@@ -16,12 +22,17 @@ export async function renderUnlock(root) {
         <h1>Second brain</h1>
         <p class="muted" style="margin:0">Locked. Your notes are encrypted on this device.</p>
       </div>
-      <div class="field">
-        <label for="pass">Passphrase</label>
-        <input id="pass" type="password" autocomplete="current-password" autofocus>
+      ${bioOn ? html`<button class="btn btn-primary btn-block btn-bio" type="button" id="bio">${icons.fingerprint({ size: 22 })}Unlock with ${B.bioName}</button>
+        <button class="btn btn-ghost btn-block" type="button" id="use-pass">Use passphrase instead</button>` : ''}
+      <div id="pass-box" ${bioOn ? 'hidden' : ''} style="display:flex;flex-direction:column;gap:16px">
+        <div class="field">
+          <label for="pass">Passphrase</label>
+          <input id="pass" type="password" autocomplete="current-password" ${bioOn ? '' : 'autofocus'}>
+        </div>
+        <button class="btn btn-primary btn-block" type="submit">Unlock</button>
+        ${due ? html`<p class="hint">It’s been a month, so enter your passphrase this time, to keep it fresh in your mind. ${B.bioName[0].toUpperCase() + B.bioName.slice(1)} works again after.</p>` : ''}
       </div>
       <p class="error" id="err" role="alert" hidden></p>
-      <button class="btn btn-primary btn-block" type="submit">Unlock</button>
       <p class="hint">There is no reset. Without your passphrase, nobody can open these notes, not even you.</p>
     </form>
     ${last ? html`<p class="foot"><span style="color:var(--good);display:inline-flex">${icons.cloud({ size: 16, sw: 2 })}</span>Last synced ${fmtDate(last)} at ${fmtTime(last)}, encrypted</p>` : ''}
@@ -29,6 +40,11 @@ export async function renderUnlock(root) {
   const form = $('#unlock', root);
   const err = $('#err', root);
   const btn = form.querySelector('[type=submit]');
+  const showPass = () => {
+    $('#pass-box', root).hidden = false;
+    $('#use-pass', root)?.remove();
+    $('#pass', root).focus();
+  };
   form.onsubmit = async (e) => {
     e.preventDefault();
     const p = $('#pass', root).value;
@@ -38,6 +54,7 @@ export async function renderUnlock(root) {
     err.hidden = true;
     try {
       await V.unlock(p);
+      B.passphraseUsed().catch(() => {});
     } catch (ex) {
       err.textContent = ex.code === 'WRONG_PASSPHRASE' ? 'That passphrase doesn’t match. Try again.' : (ex.message || 'Could not unlock.');
       err.hidden = false;
@@ -46,6 +63,29 @@ export async function renderUnlock(root) {
       $('#pass', root).select();
     }
   };
+  if (!bioOn) return;
+  const bio = $('#bio', root);
+  $('#use-pass', root).onclick = showPass;
+  let busy = false;
+  const tryBio = async (auto = false) => {
+    if (busy) return;
+    busy = true;
+    bio.disabled = true;
+    err.hidden = true;
+    try {
+      await B.unlock();
+    } catch (ex) {
+      bio.disabled = false;
+      // Opening the app tries straight away; if that's cancelled, the button is there.
+      if (!(auto && ex.code === 'NotAllowedError')) {
+        err.textContent = ex.message || 'Could not unlock.';
+        err.hidden = false;
+      }
+      if (ex.code === 'DEVICE_KEY_MISMATCH' || ex.code === 'NO_PRF') showPass();
+    } finally { busy = false; }
+  };
+  bio.onclick = () => tryBio(false);
+  if (document.visibilityState === 'visible') setTimeout(() => tryBio(true), 250);
 }
 
 export function renderOnboarding(root, step = 'choose') {

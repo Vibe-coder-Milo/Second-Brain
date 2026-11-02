@@ -126,6 +126,19 @@ function requestPersistence() {
 
 export async function unlock(passphrase) {
   state.keys.m = await C.unwrapKey(state.keyring.main, passphrase);
+  await opened();
+}
+
+// Unlock with a data key from elsewhere (Touch ID / Face ID). It must open
+// this vault's settings before it's used.
+export async function unlockWithKey(key) {
+  const cfg = await records.get(CONFIG_ID);
+  if (cfg?.env && !cfg.deleted) await C.decryptJSON(key, CONFIG_ID, cfg.env);
+  state.keys.m = key;
+  await opened();
+}
+
+async function opened() {
   await loadAll();
   state.status = 'unlocked';
   emit({ type: 'unlock' });

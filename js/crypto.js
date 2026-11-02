@@ -58,6 +58,51 @@ export async function unwrapKey(wrapped, passphrase) {
   return key;
 }
 
+// ---- Unlock with Touch ID / Face ID ------------------------------------------
+// The same data key can also be locked with a secret from a passkey on this
+// device (WebAuthn's PRF extension: the passkey only gives the secret after
+// your fingerprint, face or device passcode). That copy stays on this device.
+
+async function deviceKek(secret, salt) {
+  const base = await subtle.importKey('raw', secret, 'HKDF', false, ['deriveKey']);
+  return subtle.deriveKey({ name: 'HKDF', hash: 'SHA-256', salt, info: utf8('second-brain device unlock v1') }, base, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+}
+const DEVICE_AAD = utf8('second-brain device unlock');
+
+// Check the passphrase, then hold the data key just long enough to lock it
+// with the passkey's secret. Call discard() when done either way.
+export async function openForDevice(wrapped, passphrase) {
+  let raw = await unwrapRaw(wrapped, passphrase);
+  return {
+    async seal(secret) {
+      if (!raw) throw new Error('Start again.');
+      const salt = randomBytes(16);
+      const iv = randomBytes(12);
+      const kek = await deviceKek(secret, salt);
+      secret.fill(0);
+      const ct = await subtle.encrypt({ name: 'AES-GCM', iv, additionalData: DEVICE_AAD }, kek, raw);
+      return { v: 1, salt: bytesToB64(salt), iv: bytesToB64(iv), ct: bytesToB64(ct) };
+    },
+    discard() { raw?.fill(0); raw = null; },
+  };
+}
+
+export async function unwrapKeyFromDevice(blob, secret) {
+  const kek = await deviceKek(secret, b64ToBytes(blob.salt));
+  secret.fill(0);
+  let raw;
+  try {
+    raw = new Uint8Array(await subtle.decrypt({ name: 'AES-GCM', iv: b64ToBytes(blob.iv), additionalData: DEVICE_AAD }, kek, b64ToBytes(blob.ct)));
+  } catch {
+    const e = new Error('That didn’t match. Use your passphrase.');
+    e.code = 'DEVICE_KEY_MISMATCH';
+    throw e;
+  }
+  const key = await importDataKey(raw);
+  raw.fill(0);
+  return key;
+}
+
 // Re-protect the same data key with a new passphrase.
 export async function rewrapKey(wrapped, oldPass, newPass) {
   const raw = await unwrapRaw(wrapped, oldPass);
