@@ -42,7 +42,7 @@ Every sync is one commit, so the data repo's history doubles as version history.
 
 - **Today** is home: your week, what's due (late ones flagged), a quick "add a task", today's note (type straight into it), and everything you captured that day. Tap another day to look back or ahead.
 - **Capture** (the + button): a thought, screenshots or photos, and/or a link, which land in the **Inbox**. From the same sheet you can **scan paper**, or start a **typed note**, a **handwritten note** or a **whiteboard**.
-- **Notebooks**: a shelf of notebooks, each in a region, with a cover from the library (or your own photo, or a plain colour). Inside: sections, notes, and sub-notes under notes. On iPad the open note sits beside the notebook.
+- **Notebooks**: a shelf of notebooks, each in a region, with a cover from the library of 38 (Classic, Nature, Singapore & Asia, Patterns, Bold and Night collections: shophouses, an HDB estate, lanterns, koi, peaks at dawn, monstera, tartan, leather, art deco, aurora and more), your own photo, or a plain colour. Inside: sections, notes, and sub-notes under notes. On iPad the open note sits beside the notebook.
 - **More room to write** (iPad and computers): the side-panel button at the top of any note hides the side panel and a notebook's list, and the page grows to fill the space. It's remembered until you switch it back.
 - **Typed notes**
   - Styles: Title, Heading, Subheading, body text, bulleted, numbered and checklist lists, quote, callout box, post-it, divider. Type `/` anywhere for the style menu, or use shortcuts as you type: `#`, `##`, `###`, `-`, `1.`, `[ ]`, `>`, `!`, `---`.
@@ -128,7 +128,7 @@ js/editor/inkdraw.js  drawing pages, pens, stickers and layers
 js/editor/pagestack.js  the continuous view (pages one under another)
 js/editor/zoomstrip.js  the writing window
 js/stickers.js        the sticker library
-js/covers.js          notebook covers
+js/covers.js, coverart.js  notebook covers (coverart.js holds the newer artwork)
 js/export.js, pdf.js  PDF and Markdown export, PDF import
 js/views/*.js         one file per screen
 sw.js                 offline cache

@@ -7,7 +7,7 @@ import { state, notesIn } from '../vault.js';
 import { newNotebook, regionColors, displayTitle, PAPERS, PAPER_COLORS } from '../model.js';
 import { icons } from '../icons.js';
 import { openSheet, menuSheet, confirmSheet, passphraseSheet } from '../ui.js';
-import { COVERS, PLAIN_COLORS, coverSVG, coverName } from '../covers.js';
+import { COVERS, COVER_GROUPS, PLAIN_COLORS, coverSVG, coverName } from '../covers.js';
 import { compressImage } from '../images.js';
 
 const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
@@ -489,6 +489,7 @@ export function notebookSheet(existing = null) {
         </div>
         <div class="nbs-right">
           <span class="label">Cover</span>
+          <div class="chips scroll cover-groups" role="group" aria-label="Cover collections" id="nbs-groups"></div>
           <ul class="cover-grid" role="radiogroup" aria-label="Cover" id="nbs-covers"></ul>
           <div class="nbs-plain" id="nbs-plain" hidden><span class="label">Colour</span><div class="swatches">${PLAIN_COLORS.map(([n, c]) => html`<button type="button" class="swatch" data-pc="${c}" style="background:${c}" aria-label="${n}"></button>`)}<label class="swatch any" aria-label="Any colour"><input type="color" id="nbs-any" class="sr-only" value="${d.cover.color || '#2B5684'}"></label></div></div>
           <div class="nbs-ts"><span class="label">Title on cover</span>
@@ -503,9 +504,18 @@ export function notebookSheet(existing = null) {
     const name = $('#nbs-name', s.el);
 
     const preview = () => { $('#nbs-prev', s.el).innerHTML = coverSVG({ ...d, title: name.value.trim() || 'Notebook' }, { width: 180, photoUrl }); };
+    // Collections: all covers, a group of them, or your own (photo, plain colour).
+    let group = 'all';
+    const drawGroups = () => {
+      const opts = [['all', 'All'], ...COVER_GROUPS, ['own', 'Your own']];
+      $('#nbs-groups', s.el).innerHTML = `${html`${opts.map(([id, name]) => html`<button type="button" class="chip" data-cg="${id}" aria-pressed="${group === id ? 'true' : 'false'}">${name}</button>`)}`}`;
+      s.el.querySelectorAll('[data-cg]').forEach((b) => { b.onclick = () => { group = b.dataset.cg; drawGroups(); drawCovers(); }; });
+    };
     const drawCovers = () => {
       const st = d.cover.style;
-      const items = [...COVERS.map((c) => ({ id: c.id, nb: { ...d, title: '', cover: { ...d.cover, style: c.id } } })), { id: 'photo' }, { id: 'plain', nb: { ...d, title: '', cover: { ...d.cover, style: 'plain' } } }];
+      const own = [{ id: 'photo' }, { id: 'plain', nb: { ...d, title: '', cover: { ...d.cover, style: 'plain' } } }];
+      const art = COVERS.filter((c) => group === 'all' || c.group === group).map((c) => ({ id: c.id, nb: { ...d, title: '', cover: { ...d.cover, style: c.id } } }));
+      const items = group === 'own' ? own : group === 'all' ? [...art, ...own] : art;
       $('#nbs-covers', s.el).innerHTML = `${html`${items.map((it) => html`<li><button type="button" role="radio" aria-checked="${st === it.id ? 'true' : 'false'}" data-cover="${it.id}" class="cover-pick">
         ${it.id === 'photo'
           ? (photoUrl && st === 'photo' ? raw(coverSVG({ ...d, title: '' }, { width: 96, photoUrl, label: false })) : html`<span class="cover-photo-add">${icons.image({ size: 22 })}</span>`)
@@ -582,6 +592,7 @@ export function notebookSheet(existing = null) {
     };
     (async () => {
       if (d.cover.style === 'photo' && d.cover.photo) photoUrl = await V.fileURL(d.cover.photo);
+      drawGroups();
       drawCovers();
       preview();
     })();
