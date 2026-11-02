@@ -12,6 +12,7 @@ import { focusButtonHtml, toggleFocus, enterNote, leaveNote } from '../focus.js'
 import { openSheet, menuSheet, confirmSheet, popover, stickerDrawer, notePicker, passphraseSheet, labelPicker, tooltips } from '../ui.js';
 import { InkSurface, penExtras } from '../editor/ink.js';
 import { ZoomStrip } from '../editor/zoomstrip.js';
+import { PageStack } from '../editor/pagestack.js';
 import { startRecording, stopRecording, isRecording, recordingTime } from '../recorder.js';
 import { mountPlayer } from './recordings.js';
 import { PENS, HL, INK_COLORS, HL_COLORS, DEFAULT_FAVS, mm, renderPageCanvas, layerView, noteLayers, layerOf, drawStroke, drawPaper, SMOOTHING, strokeBox, setInkTone, pageDark, darkInk, fileImage } from '../editor/inkdraw.js';
@@ -39,6 +40,12 @@ export function mount(el, params, ctx) {
 
   const note = () => state.notes.get(id);
   const thumbCache = new Map();
+  // Continuous view: every page one under another (see pagestack.js).
+  let stack = null;
+  const fresh = new Map(); // pageId -> newest data of pages written on and left, until saved
+  const continuousOn = () => (state.device?.pageView || 'continuous') === 'continuous';
+  const pageData = async (pid) => fresh.get(pid) || V.loadPage(pid);
+  const cachedData = (pid) => fresh.get(pid) || V.peekPage(pid);
   // The last page open in each note, on this device.
   const LAST_KEY = 'sb-last-pages';
   const lastPages = () => { try { return JSON.parse(localStorage.getItem(LAST_KEY)) || {}; } catch { return {}; } };
@@ -113,6 +120,8 @@ export function mount(el, params, ctx) {
   function draw() {
     const n = note();
     const { nb, sec } = crumbs(n);
+    stack?.destroy();
+    stack = null;
     el.innerHTML = `${html`<div class="inkview" id="iv">
       <header class="ink-top">
         <button type="button" class="back" data-act="back">${icons.back()}<span class="hide-sm">${nb ? nb.title : 'Back'}</span></button>
@@ -156,7 +165,10 @@ export function mount(el, params, ctx) {
       onTextEditing: (ed) => textEditing(ed),
       pickColour: (anchor, cb) => colourPop(anchor, cb),
       sealed: () => !!note()?.sealed,
+      onLayout: () => stack?.sizeAll(),
     });
+    $('#iv-host', el).insertAdjacentHTML('beforeend', `<button type="button" class="ink-pageind" id="iv-ind" aria-label="All pages" hidden></button>`);
+    $('#iv-ind', el).onclick = () => pagesSheet();
     applyLayers();
     showPage(pageIdx);
     bindPageTurns(surface.scroll);
@@ -175,7 +187,7 @@ export function mount(el, params, ctx) {
     try {
       await showPage(to);
       const sc = surface?.scroll;
-      if (sc && dir < 0) sc.scrollTop = sc.scrollHeight;
+      if (sc && dir < 0 && !stack) sc.scrollTop = sc.scrollHeight;
     } finally { turning = false; }
   }
   function bindPageTurns(sc) {
@@ -185,7 +197,7 @@ export function mount(el, params, ctx) {
     let quiet = null;
     let held = false; // after a turn, the rest of that flick doesn't scroll the new page
     sc.addEventListener('wheel', (e) => {
-      if (e.ctrlKey || e.metaKey || note()?.pages.length < 2) return;
+      if (stack || e.ctrlKey || e.metaKey || note()?.pages.length < 2) return;
       clearTimeout(quiet);
       quiet = setTimeout(() => { pull = 0; held = false; }, 300);
       if (held) { e.preventDefault(); return; }
@@ -198,7 +210,7 @@ export function mount(el, params, ctx) {
     // Touch: drag on past the end (when fingers scroll rather than write).
     let t0 = null;
     sc.addEventListener('touchstart', (e) => {
-      const scrolls = (surface?.pageEl.style.touchAction || '').includes('pan');
+      const scrolls = !stack && (surface?.pageEl.style.touchAction || '').includes('pan');
       t0 = e.touches.length === 1 && scrolls ? { y: e.touches[0].clientY, end: atEnd(), top: atTop() } : null;
     }, { passive: true });
     sc.addEventListener('touchmove', (e) => {
@@ -264,6 +276,7 @@ export function mount(el, params, ctx) {
   function applyLayers() {
     const n = note();
     if (!n || !surface) return;
+    stack?.refresh();
     const ls = noteLayers(n);
     surface.setLayers({
       hidden: new Set(ls.filter((l) => l.hidden).map((l) => l.id)),
@@ -827,30 +840,107 @@ export function mount(el, params, ctx) {
   }
 
   // ---------- Pages ----------
-  async function showPage(i) {
+  async function showPage(i, { reveal = true } = {}) {
     const n = note();
     if (!n || !surface) return;
+    flush();
     await saving;
-    pageIdx = Math.max(0, Math.min(n.pages.length - 1, i));
-    const page = n.pages[pageIdx];
+    const idx = Math.max(0, Math.min(n.pages.length - 1, i));
+    const page = n.pages[idx];
     let data;
-    try { data = await V.loadPage(page.id); } catch (e) { console.warn(e); data = V.emptyPageData(); }
-    surface.setPage(page, data);
+    try { data = await pageData(page.id); } catch (e) { console.warn(e); data = V.emptyPageData(); }
+    if (!surface || !note()) return;
+    activate(idx, data, { reveal });
+  }
+
+  // Make page idx the live page (data already loaded). In the continuous
+  // view this is also called straight from a Pencil touch on another page.
+  function activate(idx, data, { reveal = false } = {}) {
+    const n = note();
+    if (!n || !surface) return;
+    if (pending) flush();
+    const prev = surface.page;
+    const page = n.pages[idx];
+    if (!page) return;
+    if (prev && prev.id !== page.id && surface.data) fresh.set(prev.id, surface.data);
+    pageIdx = idx;
+    syncStack();
+    if (stack) stack.place(idx, prev && prev.id !== page.id ? { page: prev } : null);
+    surface.setPage(page, data, { keepScroll: !!stack });
+    if (stack && reveal) stack.scrollToPage(idx);
     zoom?.reset();
     drawPageBar();
     rememberPage(page.id);
     // Get the pages either side ready, so turning the page is instant.
-    for (const k of [pageIdx + 1, pageIdx - 1]) {
+    for (const k of [idx + 1, idx - 1]) {
       const p = n.pages[k];
       if (!p) continue;
-      V.loadPage(p.id).catch(() => {});
+      pageData(p.id).catch(() => {});
       if (p.bg) fileImage(p.bg);
     }
-    const sub = $('#iv-sub', el);
-    if (sub) {
-      const { nb, sec } = crumbs(n);
-      sub.textContent = `${nb ? `${nb.title}${sec && nb.sections.length > 1 ? ` › ${sec.name}` : ''}, ` : ''}page ${pageIdx + 1} of ${n.pages.length}`;
+    showWhere(idx);
+  }
+
+  // The continuous view is on (and has more than one page to show): make
+  // sure the stack of pages matches the note.
+  function syncStack() {
+    const n = note();
+    if (!surface || !n) return;
+    const want = continuousOn() && n.pages.length > 1;
+    if (!want) {
+      if (stack) { stack.destroy(); stack = null; }
+      return;
     }
+    if (!stack) {
+      stack = new PageStack(surface, {
+        pages: () => note()?.pages || [],
+        data: pageData,
+        cached: cachedData,
+        view: () => layerView(note()),
+        viewKey: () => noteLayers(note()).filter((l) => l.hidden).map((l) => l.id).join(','),
+        canSwitch: () => !!surface && !surface.drawing && !surface.editing && !surface.sel && !zoom && !replay,
+        onWant: (i) => wantPage(i),
+        onActivateNow: (i, d) => activate(i, d),
+        onIndicator: (i) => { showWhere(i); flashIndicator(i); },
+      });
+    }
+    stack.sync(pageIdx);
+  }
+
+  // Scrolling settled on another page: make it the live one (the latest ask wins).
+  let wanted = -1;
+  let wanting = false;
+  async function wantPage(i) {
+    wanted = i;
+    if (wanting) return;
+    wanting = true;
+    try {
+      while (wanted !== pageIdx && wanted >= 0) {
+        const t = wanted;
+        await showPage(t, { reveal: false });
+        if (wanted === t) break;
+      }
+    } finally { wanting = false; wanted = -1; }
+  }
+
+  // "page 3 of 40" under the title, and the page pill while scrolling.
+  function showWhere(i) {
+    const n = note();
+    const sub = $('#iv-sub', el);
+    if (!sub || !n) return;
+    const { nb, sec } = crumbs(n);
+    sub.textContent = `${nb ? `${nb.title}${sec && nb.sections.length > 1 ? ` › ${sec.name}` : ''}, ` : ''}page ${i + 1} of ${n.pages.length}`;
+  }
+  let indTimer = null;
+  function flashIndicator(i) {
+    const ind = $('#iv-ind', el);
+    const n = note();
+    if (!ind || !n) return;
+    ind.textContent = `${i + 1} / ${n.pages.length}`;
+    ind.hidden = false;
+    ind.classList.add('on');
+    clearTimeout(indTimer);
+    indTimer = setTimeout(() => ind.classList.remove('on'), 1400);
   }
 
   function drawPageBar() {
@@ -860,6 +950,14 @@ export function mount(el, params, ctx) {
     scroll.querySelector('.ink-pagenav')?.remove();
     const nav = document.createElement('div');
     nav.className = 'ink-pagenav';
+    if (stack) {
+      // Every page is above; just the count (tap for all pages) and Add page.
+      nav.innerHTML = String(html`<button type="button" class="btn btn-sm btn-ghost pg-label" data-pg="all" aria-label="${n.pages.length} pages. See all pages">${n.pages.length} pages</button><button type="button" class="btn btn-sm" data-pg="add">${icons.plus({ size: 16 })}Add page</button>`);
+      scroll.appendChild(nav);
+      nav.querySelector('[data-pg=all]').onclick = () => pagesSheet();
+      nav.querySelector('[data-pg=add]').onclick = () => addPage({}, note().pages.length);
+      return;
+    }
     const endless = n.layout === 'scroll';
     nav.innerHTML = String(html`${n.pages.length > 1 || !endless ? html`<button type="button" class="btn btn-sm" data-pg="prev" ${pageIdx === 0 ? raw('disabled') : ''}>${icons.back({ size: 16 })}Previous</button>` : ''}
       ${endless && n.pages.length === 1 ? html`<span class="muted">Endless page</span>` : html`<button type="button" class="btn btn-sm btn-ghost pg-label" data-pg="all" aria-label="Page ${pageIdx + 1} of ${n.pages.length}. See all pages">Page ${pageIdx + 1} of ${n.pages.length}</button>`}
@@ -914,6 +1012,9 @@ export function mount(el, params, ctx) {
       <section class="paper-pick"><h3>Layout</h3>
         <div class="chips" role="radiogroup" aria-label="Layout"><button type="button" class="chip" role="radio" aria-checked="${n.layout !== 'scroll' ? 'true' : 'false'}" aria-pressed="${n.layout !== 'scroll' ? 'true' : 'false'}" data-layout="pages">A4 pages</button><button type="button" class="chip" role="radio" aria-checked="${n.layout === 'scroll' ? 'true' : 'false'}" aria-pressed="${n.layout === 'scroll' ? 'true' : 'false'}" data-layout="scroll">Endless scroll</button></div>
         <p class="hint">${n.layout === 'scroll' ? 'One long page that grows as you write. PDFs print it as A4 pieces.' : 'Fixed A4 pages. Endless scroll makes one long page that grows as you write.'}</p>
+        <h3>Showing pages</h3>
+        <div class="chips" role="radiogroup" aria-label="Showing pages"><button type="button" class="chip" role="radio" aria-checked="${continuousOn() ? 'true' : 'false'}" aria-pressed="${continuousOn() ? 'true' : 'false'}" data-view="continuous">One under another</button><button type="button" class="chip" role="radio" aria-checked="${continuousOn() ? 'false' : 'true'}" aria-pressed="${continuousOn() ? 'false' : 'true'}" data-view="single">One at a time</button></div>
+        <p class="hint">One under another: scroll through every page, like a PDF reader. One at a time: turn the pages. Applies to every note on this device.</p>
         <h3>Paper</h3>
         <div class="paper-tiles" role="radiogroup" aria-label="Paper">${PAPERS.map((p) => html`<button type="button" class="paper-tile" role="radio" aria-checked="${p.id === curPaper.paper ? 'true' : 'false'}" data-paper="${p.id}"><canvas width="66" height="92" aria-hidden="true" data-pprev="${p.id}"></canvas><span>${p.name}</span></button>`)}</div>
         <div class="chips" role="radiogroup" aria-label="Paper colour">${PAPER_COLORS.map((c) => html`<button type="button" class="chip" role="radio" aria-pressed="${c.id === curPaper.color ? 'true' : 'false'}" data-pcol="${c.id}"><span class="dot lg" style="background:${c.bg};border:1px solid var(--field)"></span>${c.name}</button>`)}</div>
@@ -956,6 +1057,15 @@ export function mount(el, params, ctx) {
     });
     paintPaperTiles();
     s.el.querySelectorAll('[data-layout]').forEach((b) => { b.onclick = async () => { await setLayout(b.dataset.layout); s.close(); }; });
+    s.el.querySelectorAll('[data-view]').forEach((b) => {
+      b.onclick = async () => {
+        s.close();
+        if ((state.device?.pageView || 'continuous') === b.dataset.view) return;
+        await V.updateDevice({ pageView: b.dataset.view });
+        syncStack();
+        await showPage(pageIdx);
+      };
+    });
     s.el.querySelector('[data-pdf]').onchange = async (e) => { const f = e.target.files?.[0]; if (!f) return; s.close(); await importPdf(f); };
     s.el.querySelector('[data-scan]').onclick = async () => { s.close(); await scanPages(); };
     s.el.querySelectorAll('[data-pm]').forEach((b) => { b.onclick = () => pageMenu(Number(b.dataset.pm), s); });
@@ -1106,6 +1216,7 @@ export function mount(el, params, ctx) {
       if (!n) return;
       try {
         await V.savePage(job.pageId, job.data, { sealed: n.sealed });
+        if (fresh.get(job.pageId) === job.data) fresh.delete(job.pageId);
         await summarise();
       } catch (e) { toast(e.message || 'Couldn’t save this page.'); }
     });
@@ -1303,10 +1414,22 @@ export function mount(el, params, ctx) {
       if (evt.type === 'page' && evt.id === n.pages[pageIdx]?.id && !pending && !surface?.drawing && !surface?.editing) {
         V.loadPage(evt.id).then((d) => surface?.replaceData(d));
       }
+      if (evt.type === 'page' && evt.id !== n.pages[pageIdx]?.id) { fresh.delete(evt.id); stack?.invalidate(evt.id); }
       if (evt.type === 'remote' || evt.type === 'note' || evt.type === 'sealed') {
         const sub = $('#iv-sub', el);
-        if (sub && pageIdx >= n.pages.length) showPage(n.pages.length - 1);
-        else if (sub) drawPageBar();
+        // Pages added, removed or moved: keep the live page the same page.
+        const live = surface?.page ? n.pages.findIndex((p) => p.id === surface.page.id) : -1;
+        if (sub && live < 0 && surface?.page) showPage(Math.min(pageIdx, n.pages.length - 1));
+        else if (sub && pageIdx >= n.pages.length) showPage(n.pages.length - 1);
+        else if (sub) {
+          if (live >= 0) pageIdx = live;
+          const had = !!stack;
+          syncStack();
+          if (stack && !had) surface.layout();
+          else if (stack) stack.place(pageIdx, null);
+          drawPageBar();
+          showWhere(pageIdx);
+        }
       }
       if (evt.type === 'config') surface?.render();
       if ((evt.type === 'note' || evt.type === 'remote') && evt.id === id) applyLayers();
@@ -1321,10 +1444,13 @@ export function mount(el, params, ctx) {
       window.removeEventListener('resize', onResize);
       window.removeEventListener('sb-theme', onThemeChange);
       document.removeEventListener('keydown', onPageKeys);
+      clearTimeout(indTimer);
       exitReplay();
       surface?.endEdit();
       flush().then(() => discardIfEmpty());
       fmt?.destroy();
+      stack?.destroy();
+      stack = null;
       surface?.destroy();
       surface = null;
       document.body.classList.remove('inking', 'editing');

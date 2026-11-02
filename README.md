@@ -63,8 +63,10 @@ Every sync is one commit, so the data repo's history doubles as version history.
   - **Layout**: A4 pages, or **endless scroll**: one long page that grows as you write (PDF export prints it as A4 pieces).
   - **Paper**: dot grid (the default), lined, narrow lined, squared, Cornell or blank, in white, ivory or dark. Change it under All pages: it changes every page of the note and becomes the paper for new notes.
   - Pages: add, reorder, bookmark. **Import a PDF** to write on it, a photo of paper, or **scan** pages straight in.
-  - **Turning pages**: keep scrolling past the end of a page for the next one (and back past the top for the one before), use Previous and Next under the page, or Page Up / Page Down and the arrow keys on a keyboard. Tap **Page 3 of 40** to see every page and jump to one. A note opens at the page you were last on.
-  - **Long PDFs** stay quick: only the pages near the one you're on are kept ready, page pictures come in as you scroll the page list, and a PDF page keeps its shape on an endless page.
+  - **Pages one under another** (the default): scroll through every page of a note, like a PDF reader. The page you're on is the one you write on; put the Pencil on any other page and it's ready straight away. A small "12 / 40" shows while you scroll (tap it for all pages). Page Up / Page Down and the arrow keys jump a page. Prefer turning pages? All pages → **Showing pages** → One at a time (for every note on this device).
+  - **One at a time**: keep scrolling past the end of a page for the next one (and back past the top for the one before), use Previous and Next under the page, or the keys. Tap **Page 3 of 40** to see every page and jump to one.
+  - A note opens at the page you were last on.
+  - **Long PDFs** stay quick: only the pages near the screen are drawn and kept in memory, so a 300-page PDF costs about the same as a 3-page one; page pictures in the page list come in as you scroll; and a PDF page keeps its shape on an endless page.
   - **Mark up a PDF**: from a notebook (Mark up a PDF), from Capture, or by dragging a PDF onto a notebook or the map. It opens as a handwritten note with the PDF's pages to draw, circle (hold at the end of a shape so it snaps), highlight and type on. The PDF's text is searchable.
   - **Laser pointer** (on iPhone: + → More tools): draw to point things out while you talk or share your screen. A glowing red line with a tail; it fades a moment after you lift, and nothing is saved.
   - **Layers**: Ink, Highlights and your own (say "Review notes"). Hide or lock a layer, pick which one you're writing on, move a selection to another layer, and export only the visible layers.
@@ -123,6 +125,7 @@ js/editor/rich.js     the typed-note editor (Tiptap)
 js/editor/toolbar.js  formatting bar and the / menu
 js/editor/ink.js      the handwriting surface
 js/editor/inkdraw.js  drawing pages, pens, stickers and layers
+js/editor/pagestack.js  the continuous view (pages one under another)
 js/editor/zoomstrip.js  the writing window
 js/stickers.js        the sticker library
 js/covers.js          notebook covers

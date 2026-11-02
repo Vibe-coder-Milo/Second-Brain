@@ -2,7 +2,7 @@
 // your notes live in encrypted on-device storage, not in this cache.
 // Bump VERSION whenever app files change.
 
-const VERSION = 'sb-v10';
+const VERSION = 'sb-v11';
 const SHELL = [
   './',
   './index.html',
@@ -41,6 +41,7 @@ const SHELL = [
   './js/db.js',
   './js/doc.js',
   './js/editor/ink.js',
+  './js/editor/pagestack.js',
   './js/editor/inkdraw.js',
   './js/editor/rich.js',
   './js/editor/toolbar.js',

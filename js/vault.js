@@ -434,6 +434,9 @@ export async function decodePageBytes(bytes) {
   return { ...emptyPageData(), ...data };
 }
 
+// A page's data if it's already loaded (no waiting), else null.
+export const peekPage = (pageId) => pageCache.get(pageId) || null;
+
 export async function loadPage(pageId) {
   if (pageCache.has(pageId)) return pageCache.get(pageId);
   const rec = await files.get(pageId);

@@ -181,7 +181,7 @@ export class InkSurface {
   }
 
   // ---------- Page ----------
-  setPage(page, data) {
+  setPage(page, data, { keepScroll = false } = {}) {
     this.endEdit();
     this.clearSelection();
     this.page = page;
@@ -189,7 +189,7 @@ export class InkSurface {
     this.undoStack = [];
     this.redoStack = [];
     this.layout();
-    this.scroll.scrollTop = 0;
+    if (!keepScroll) this.scroll.scrollTop = 0;
   }
   replaceData(data) {
     // A newer copy arrived from another device while this page is open.
@@ -352,6 +352,9 @@ export class InkSurface {
 
   layout() {
     if (!this.page) return;
+    // In the continuous view the other pages resize first, so this page's
+    // place on screen is right when its canvases are placed.
+    this.opts.onLayout?.();
     const s = this.scale;
     const w = Math.round(PAGE_W * s);
     const h = Math.round(this.page.h * s);
@@ -442,7 +445,10 @@ export class InkSurface {
     const el = this.pageEl;
     const fingerDraws = () => (!!this.opts.getTool().fingerDraw || this.opts.getTool().tool === 'laser') && !this.penSeen;
     const moving = () => this.opts.getTool().tool === 'move';
-    const updateTouchAction = () => { el.style.touchAction = fingerDraws() || this.drawing || moving() ? 'none' : 'pan-x pan-y'; };
+    const updateTouchAction = () => {
+      el.style.touchAction = fingerDraws() || this.drawing || moving() ? 'none' : 'pan-x pan-y';
+      this.scroll.style.setProperty('--page-touch', el.style.touchAction);
+    };
     this.updateTouchAction = updateTouchAction;
     updateTouchAction();
 
@@ -462,17 +468,23 @@ export class InkSurface {
 
     // Pinch to zoom (Safari), ctrl/cmd + wheel elsewhere.
     let startZoom = 1;
-    this.scroll.addEventListener('gesturestart', (e) => { e.preventDefault(); startZoom = this.zoom; });
+    // In the continuous view every page grows with the pinch, from the middle of the screen.
+    const zoomEl = () => this.zoomTarget || this.pageEl;
+    this.scroll.addEventListener('gesturestart', (e) => {
+      e.preventDefault();
+      startZoom = this.zoom;
+      const t = zoomEl();
+      t.style.transformOrigin = this.zoomTarget ? `50% ${this.scroll.scrollTop + this.scroll.clientHeight / 2 - t.offsetTop}px` : 'top center';
+    });
     this.scroll.addEventListener('gesturechange', (e) => {
       e.preventDefault();
       const z = Math.max(1, Math.min(3, startZoom * e.scale));
-      this.pageEl.style.transformOrigin = 'top center';
-      this.pageEl.style.transform = `scale(${z / this.zoom})`;
+      zoomEl().style.transform = `scale(${z / this.zoom})`;
       this.pendingZoom = z;
     });
     this.scroll.addEventListener('gestureend', (e) => {
       e.preventDefault();
-      this.pageEl.style.transform = '';
+      zoomEl().style.transform = '';
       if (this.pendingZoom) this.setZoom(this.pendingZoom);
       this.pendingZoom = null;
     });
