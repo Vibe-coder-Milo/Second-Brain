@@ -10,6 +10,7 @@ import { compressImage } from '../images.js';
 import { rerunOcr } from '../ocr.js';
 import { confirmSheet, menuSheet, notePicker, regionPicker, passphraseSheet, datePicker, labelPicker, labelChipHtml } from '../ui.js';
 import { icons } from '../icons.js';
+import { focusButtonHtml, toggleFocus, enterNote, leaveNote } from '../focus.js';
 import { linkedWith, mentions, related, subNotes } from '../connections.js';
 import { notebookPicker } from './notebooks.js';
 import { mountPlayer } from './recordings.js';
@@ -97,6 +98,7 @@ function mountTyped(el, params, ctx) {
   // ---------- Layout ----------
   function drawShell() {
     destroyEditor();
+    if (!compact) enterNote();
     const n = note();
     if (!n) {
       el.innerHTML = `${html`<div class="${compact ? '' : 'page'}" style="${compact ? 'padding:24px' : ''}"><div class="empty"><p class="serif">This note isn’t here</p><p style="margin:0">It may have been deleted, or it’s sealed and locked.</p><a class="btn" href="#/today">Back to Today</a></div></div>`}`;
@@ -112,6 +114,7 @@ function mountTyped(el, params, ctx) {
         <span class="save-state" id="n-save" aria-live="polite"></span>
         <div class="top-actions">
           ${wideBar ? '' : html`<button type="button" class="icon-btn bare" data-act="h-undo" aria-label="Undo">${icons.undo()}</button><button type="button" class="icon-btn bare" data-act="h-redo" aria-label="Redo">${icons.redo()}</button>`}
+          ${compact ? '' : raw(focusButtonHtml())}
           <button type="button" class="icon-btn bare" data-act="link" aria-label="Link to another note">${icons.link()}</button>
           ${compact ? html`<a class="icon-btn bare" href="#/note/${n.id}" aria-label="Open full note">${icons.external()}</a>` : ''}
           <button type="button" class="icon-btn bare" data-act="more" aria-label="More actions">${icons.more()}</button>
@@ -149,6 +152,7 @@ function mountTyped(el, params, ctx) {
     on('[data-act=close]', async () => { await flush(); ctx.navigate('#/map', { replace: true }); });
     on('[data-act=toggle-edit]', () => (editing ? stopEditing() : startEditing()));
     on('[data-act=link]', () => linkTo());
+    on('[data-act=focus]', () => toggleFocus());
     on('[data-act=h-undo]', () => { if (!editing) startEditing(); editor?.chain().focus().undo().run(); });
     on('[data-act=h-redo]', () => { if (!editing) startEditing(); editor?.chain().focus().redo().run(); });
     on('[data-act=more]', () => more());
@@ -398,16 +402,16 @@ function mountTyped(el, params, ctx) {
     const sugg = [...suggestions.map((s) => ({ other: state.notes.get(s.id), reason: s.reason })), ...incoming.map((o) => ({ other: o, reason: o.suggested.find((s) => s.id === n.id)?.reason }))];
     box.innerHTML = `${html`<section class="connections" aria-labelledby="conn-h">
       <h2 id="conn-h" class="conn-title">Connections</h2>
-      ${kids.length || n.notebook ? html`<div class="conn-group"><h3>Sub-notes${kids.length ? html` <span class="count">${kids.length}</span>` : ''}</h3>
+      ${kids.length || n.notebook ? html`<div class="conn-group"><h3><span class="kind-line" style="--k:var(--c-sub)"></span>Sub-notes${kids.length ? html` <span class="count">${kids.length}</span>` : ''}</h3>
         <ul class="links-list">${kids.map((k) => html`<li><a href="${href(k)}">${icons.sub({ size: 16 })}<span style="flex:1;min-width:0">${displayTitle(k)}</span><span class="rn">${kindName(k)}</span></a></li>`)}</ul>
         <div class="btn-row"><button type="button" class="btn btn-sm" data-sub="note">${icons.plus({ size: 16 })}Typed sub-note</button><button type="button" class="btn btn-sm" data-sub="ink">${icons.pen({ size: 16 })}Handwritten sub-note</button></div></div>` : ''}
-      ${linked.length ? html`<div class="conn-group"><h3>Linked <span class="count">${linked.length}</span></h3>
-        <ul class="links-list">${linked.map(({ note: o, explicit, context }) => html`<li><a href="${href(o)}"><span class="dot" style="background:${dot(o)}"></span><span style="flex:1;min-width:0"><span class="lt">${displayTitle(o)}</span>${context ? html`<span class="ctx">…${context.slice(0, 110)}</span>` : ''}</span></a>
+      ${linked.length ? html`<div class="conn-group"><h3><span class="kind-line" style="--k:var(--c-link)"></span>Linked <span class="count">${linked.length}</span></h3>
+        <ul class="links-list k-link">${linked.map(({ note: o, explicit, context }) => html`<li><a href="${href(o)}"><span class="dot" style="background:${dot(o)}"></span><span style="flex:1;min-width:0"><span class="lt">${displayTitle(o)}</span>${context ? html`<span class="ctx">…${context.slice(0, 110)}</span>` : ''}</span></a>
           ${explicit ? html`<button type="button" class="icon-btn bare" data-unlink="${o.id}" aria-label="Unlink ${displayTitle(o)}">${icons.close({ size: 16 })}</button>` : ''}</li>`)}</ul></div>` : ''}
       ${ment.length ? html`<div class="conn-group"><h3>Mentioned, not linked</h3>
         <ul class="links-list">${ment.map((m) => html`<li><a href="${href(m.note)}"><span class="dot" style="background:${dot(m.note)}"></span><span style="flex:1;min-width:0"><span class="lt">${displayTitle(m.note)}</span><span class="ctx">…${m.before}<mark>${m.match}</mark>${m.after}…</span></span></a>
           <button type="button" class="btn btn-sm" data-accept="${m.note.id}">Link</button></li>`)}</ul></div>` : ''}
-      ${rel.length ? html`<div class="conn-group"><h3>Related, found on this device</h3>
+      ${rel.length ? html`<div class="conn-group"><h3><span class="kind-line dash" style="--k:var(--c-related)"></span>Related, found on this device</h3>
         <ul class="links-list">${rel.map((x) => html`<li><a href="${href(x.note)}"><span class="dot" style="background:${dot(x.note)}"></span><span style="flex:1;min-width:0"><span class="lt">${displayTitle(x.note)}</span><span class="ctx">${x.meaning ? 'Close in meaning' : `Shares: ${x.shared.join(', ')}`}</span></span></a>
           <button type="button" class="btn btn-sm" data-accept="${x.note.id}">Link</button></li>`)}</ul>
         <p class="hint">Worked out on this device. Nothing is sent anywhere.</p></div>` : ''}
@@ -741,6 +745,7 @@ function mountTyped(el, params, ctx) {
     destroy() {
       flush();
       destroyEditor();
+      if (!compact) leaveNote();
     },
   };
 }

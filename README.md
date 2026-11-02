@@ -43,6 +43,7 @@ Every sync is one commit, so the data repo's history doubles as version history.
 - **Today** is home: your week, what's due (late ones flagged), a quick "add a task", today's note (type straight into it), and everything you captured that day. Tap another day to look back or ahead.
 - **Capture** (the + button): a thought, screenshots or photos, and/or a link, which land in the **Inbox**. From the same sheet you can **scan paper**, or start a **typed note**, a **handwritten note** or a **whiteboard**.
 - **Notebooks**: a shelf of notebooks, each in a region, with a cover from the library (or your own photo, or a plain colour). Inside: sections, notes, and sub-notes under notes. On iPad the open note sits beside the notebook.
+- **More room to write** (iPad and computers): the side-panel button at the top of any note hides the side panel and a notebook's list, and the page grows to fill the space. It's remembered until you switch it back.
 - **Typed notes**
   - Styles: Title, Heading, Subheading, body text, bulleted, numbered and checklist lists, quote, callout box, post-it, divider. Type `/` anywhere for the style menu, or use shortcuts as you type: `#`, `##`, `###`, `-`, `1.`, `[ ]`, `>`, `!`, `---`.
   - **Toolbar**: the same two rows at the top as handwritten notes. The top row: undo and redo, text style, bold, lists, the tag button (adds a label) and **Insert** (+). The row below: font, size, colours and the rest. It's there while reading too, so nothing jumps when you start typing.
@@ -50,7 +51,7 @@ Every sync is one commit, so the data repo's history doubles as version history.
   - **Colours**: 30 text colours (ten hues, each bright, classic or deep), soft and marker highlights, the colours you used last (they also sit in the toolbar), and any colour of your own. In dark mode they're shown brightened so they stay readable.
   - **Insert** (the + button, or `/`): tables with shading, images, stickers, post-its, due dates and links to notes.
   - **Fields** from a section's table view (dates, impact, people and so on) are folded away below the text; tap **Fields** to see or change them.
-  - Links: `[[` links to another note.
+  - Links: `[[` links to another note. Links show bold and blue (the same blue as links on the map), so they're easy to spot.
   - On iPad, headings make an outline beside the note.
 - **Handwritten notes** (Apple Pencil writes, fingers scroll and pinch to zoom)
   - **Toolbar**: the top row of tools never changes; the row below shows the settings for the tool in hand (the pen chip names the pen, like "Fountain, 0.7 mm"; tap it for all pen settings). Not sure what an icon does? Hover over it, or press and hold it on iPad and iPhone.
@@ -75,7 +76,8 @@ Every sync is one commit, so the data repo's history doubles as version history.
 - **Connections** (at the end of a typed note): links in both directions, mentions that aren't linked yet, related notes worked out on this device, and sub-notes.
 - **Version history**: every sync is a commit, so each note (and each handwritten page) can be compared with earlier versions and restored.
 - **Export**: a note or notebook as PDF or Markdown, or everything as a Markdown zip (Settings).
-- **Map**: each region is a territory; notes cluster around it, links are lines, dashed amber lines are suggested links. Tap a dot to open the note (on iPad it opens beside the map). Drag screenshots onto the map on iPad or a computer to capture them.
+- **Map**: like Obsidian's graph, every note is a dot and every connection a line, each kind in its own colour: your links (blue), sub-notes (purple), whiteboards (teal), and related notes the assistant found by meaning (amber, dashed). Labels can be shown too. Notes cluster around their region, and a dot grows bigger the more it's connected. Tap the colours in **Connections** to show or hide a kind. Tap a dot to light up what it connects to, then **Only its connections** (one or two steps) to see just its neighbourhood. Tap a line to see why two notes connect; on an amber line, **Link them** or **Not related**. **Replay** shows your map growing in the order you wrote things. Drag screenshots onto the map on iPad or a computer to capture them.
+- **Map assistant**: runs by itself on this device. It draws related lines as you write and files new notes into regions (adding regions when needed). Under **Noticed** it points out patterns: notes that belong together (one tap links them), a note that ties regions together, your most connected note, and notes not connected to anything yet.
 - **Organiser** (Organise on the map or in the inbox): reads your notes on this device and files each into the region it fits. When notes need a new home it adds a region, such as Property & home, Health & fitness, Money & admin or Side projects. You see the plan first and can untick anything. With **Organise new notes by themselves** on (Settings → On-device intelligence), new captures are filed once you've finished with them, but only when the organiser is sure. Anything moved can be put back with **Undo** in the inbox. Nothing leaves the device.
 - **Ask Claude**
   - **Sweep my Claude chats** copies a request that asks Claude to go through your chats since the last sweep and keep only what's worth keeping (decisions, ideas, open questions, wins), skipping lookups and one-off tasks.

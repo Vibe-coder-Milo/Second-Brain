@@ -19,6 +19,8 @@
   --rem-bg: #FBE3E1;
   --rem-ink: #8E2F2F;
   --paper-shadow: 0 1px 2px rgba(27, 42, 56, 0.08), 0 8px 24px rgba(27, 42, 56, 0.08);
+  /* Kinds of connection, the same on the map and in notes. */
+  --c-link: #2F6FB5; --c-sub: #8A5CC2; --c-board: #168F88; --c-related: #C08A2E; --c-label: #C2557F;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme=light]) {
@@ -29,6 +31,7 @@
     --rem-bg: #452628;
     --rem-ink: #F5B3B3;
     --paper-shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.35);
+    --c-link: #7FB0EA; --c-sub: #B79BEB; --c-board: #5CC8C0; --c-related: #D6A24A; --c-label: #E58FB2;
   }
 }
 :root[data-theme=dark] {
@@ -39,6 +42,7 @@
   --rem-bg: #452628;
   --rem-ink: #F5B3B3;
   --paper-shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.35);
+  --c-link: #7FB0EA; --c-sub: #B79BEB; --c-board: #5CC8C0; --c-related: #D6A24A; --c-label: #E58FB2;
 }
 
 /* ---------- Small shared pieces ---------- */
@@ -138,8 +142,9 @@
 .rich pre code { background: none; padding: 0; }
 .rich a { color: inherit; text-decoration-thickness: 1px; text-underline-offset: 3px; }
 .rich mark { border-radius: 3px; padding: 0 2px; color: #1B2A38; }
-.rich .wikilink { text-decoration: underline dotted; text-underline-offset: 4px; text-decoration-thickness: 1.5px; cursor: pointer; }
-.rich .wikilink.missing { color: var(--muted); }
+.rich .wikilink { color: var(--c-link); font-weight: 600; text-decoration: underline; text-decoration-color: color-mix(in srgb, var(--c-link) 45%, transparent); text-underline-offset: 4px; text-decoration-thickness: 1.5px; cursor: pointer; border-radius: 4px; }
+.rich .wikilink:hover { background: color-mix(in srgb, var(--c-link) 10%, transparent); text-decoration-color: var(--c-link); }
+.rich .wikilink.missing { color: var(--muted); font-weight: 500; text-decoration-style: dashed; text-decoration-color: var(--muted); }
 .rich .wl-br { color: var(--muted); text-decoration: none; }
 .rich[contenteditable='false'] .wl-br { display: none; }
 .rich p.is-editor-empty:first-child::before, .rich .is-empty::before { content: attr(data-placeholder); color: var(--muted); opacity: 0.75; float: left; height: 0; pointer-events: none; font-style: normal; }
@@ -1004,3 +1009,26 @@ td.tv-tags, td.tv-select { min-width: 150px; }
 .org-from { font-size: 12.5px; color: var(--muted); flex-shrink: 0; }
 .org-recent { margin-top: 10px; }
 .org-move .row-main { flex: 1; min-width: 0; }
+
+/* ---------- Focus while writing (iPad and computers) ---------- */
+.focus-btn { display: none !important; }
+@media (min-width: 900px) {
+  .focus-btn { display: inline-flex !important; }
+  .focus-btn[aria-pressed='true'] { background: var(--tint); }
+  body.focus .sidebar, body.focus .nb-side { display: none; }
+  body.focus .main { margin-left: 0; }
+  body.focus .inkview, body.focus.nb-open .inkview, body.focus .bd, body.focus.nb-open .bd { left: 0; }
+  body.focus #toast, body.focus.nb-open #toast { left: 50%; }
+  body.focus .fmtbar:not(.phone) { left: 16px; max-width: calc(100vw - 32px); }
+  /* More room to write: typed notes get a wider column. */
+  body.focus .note-page { max-width: 880px; }
+}
+@media (min-width: 1180px) {
+  body.focus .outline-panel:not([hidden]) { left: 0; }
+  body.focus .with-outline.page { max-width: min(720px, calc(100vw - 288px)); }
+}
+
+/* Kinds of connection: a short coloured line, as on the map. */
+.kind-line { display: inline-block; width: 18px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 2px; background: var(--k); }
+.kind-line.dash { background: repeating-linear-gradient(90deg, var(--k) 0 5px, transparent 5px 8px); }
+.links-list.k-link .lt { color: var(--c-link); font-weight: 600; }

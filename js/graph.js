@@ -1,11 +1,16 @@
-// The map: notes as nodes around fixed region hubs, drawn like a chart with
-// contour "territories". Built on force-graph (canvas, pinch/zoom/pan).
+// The map: notes as dots around region hubs, drawn like a chart with contour
+// "territories", and every connection between notes as a line in its own
+// colour (see mapdata.js). Hover or tap a note to light up what it connects
+// to; focus on a note to see only its neighbourhood; replay to watch the map
+// grow. Built on force-graph (canvas, pinch/zoom/pan).
 
 import { state } from './vault.js';
-import { computeLinks, suggestedEdges, displayTitle, regionColors, searchNotes } from './model.js';
+import { displayTitle, regionColors, searchNotes, labelMap } from './model.js';
 import { cssVar } from './util.js';
+import { connections, KINDS, DEFAULT_SHOWN } from './mapdata.js';
 
-const R = 240; // hub ring radius in graph units
+// Hubs sit on a ring; with more regions the ring grows so they don't crowd.
+const ringRadius = (slots) => Math.max(240, slots * 42);
 
 export function createMap(el, handlers = {}) {
   const ForceGraph = window.ForceGraph;
@@ -14,9 +19,17 @@ export function createMap(el, handlers = {}) {
   let hoverId = null;
   let filter = { regions: null, query: '' };
   let matches = null; // Set of note ids matching the filter, or null for all
-  let neighbours = new Map();
+  let neighbours = new Map(); // id -> Set of ids, over the kinds shown
+  let shown = new Set(handlers.shown || DEFAULT_SHOWN);
+  let focus = null; // { id, depth, ids: Set }
+  let reveal = null; // replay: show notes created up to this time
+  let counts = {};
   let firstFit = true;
   let theme = readTheme();
+
+  const kindOf = (id) => KINDS.find((k) => k.id === id);
+  const ends = (l) => [typeof l.source === 'object' ? l.source : nodeCache.get(l.source), typeof l.target === 'object' ? l.target : nodeCache.get(l.target)];
+  const idOf = (x) => (typeof x === 'object' ? x.id : x);
 
   const g = ForceGraph()(el)
     .backgroundColor('rgba(0,0,0,0)')
@@ -27,8 +40,11 @@ export function createMap(el, handlers = {}) {
     .cooldownTicks(150)
     .d3VelocityDecay(0.35)
     .linkColor(linkColor)
-    .linkWidth((l) => (l.kind === 'hub' ? 0.8 : isSelectedLink(l) ? 2 : 1))
-    .linkLineDash((l) => (l.kind === 'suggest' ? [4, 4] : null))
+    .linkWidth(linkWidth)
+    .linkLineDash((l) => kindOf(l.kind)?.dash || null)
+    .linkVisibility(linkVisible)
+    .nodeVisibility(nodeVisible)
+    .linkHoverPrecision(6)
     .nodeCanvasObjectMode(() => 'replace')
     .nodeCanvasObject(drawNode)
     .nodePointerAreaPaint((node, color, ctx, scale) => {
@@ -40,12 +56,15 @@ export function createMap(el, handlers = {}) {
     .onRenderFramePre(drawBackdrop)
     .onNodeClick((node) => {
       if (node.hub) handlers.onOpenRegion?.(node.unsorted ? null : node.region.id);
+      else if (node.labelNode) handlers.onOpenLabel?.(node.label.id);
       else handlers.onOpenNote?.(node.id);
     })
     .onNodeHover((node) => {
       hoverId = node && !node.hub ? node.id : null;
       el.style.cursor = node ? 'pointer' : '';
     })
+    .onLinkHover((l) => { if (!hoverId) el.style.cursor = l && l.kind !== 'hub' ? 'pointer' : ''; })
+    .onLinkClick((l, ev) => { if (l.kind !== 'hub') handlers.onLinkClick?.({ a: idOf(l.source), b: idOf(l.target), kind: l.kind, why: l.why, x: ev?.clientX ?? 0, y: ev?.clientY ?? 0 }); })
     .onNodeDragEnd((node) => {
       if (node.hub) { node.fx = node.homeX; node.fy = node.homeY; }
     })
@@ -55,60 +74,93 @@ export function createMap(el, handlers = {}) {
     });
 
   g.d3Force('center', null);
-  g.d3Force('charge').strength((n) => (n.hub ? -80 : -26)).distanceMax(260);
+  g.d3Force('charge').strength((n) => (n.hub ? -80 : n.labelNode ? -40 : -26)).distanceMax(260);
   g.d3Force('link')
-    .distance((l) => (l.kind === 'hub' ? 48 : 110))
-    .strength((l) => (l.kind === 'hub' ? 0.22 : l.kind === 'link' ? 0.04 : 0));
+    .distance((l) => (l.kind === 'hub' ? 48 : l.kind === 'label' ? 70 : 110))
+    .strength((l) => (l.kind === 'hub' ? 0.22 : l.kind === 'link' || l.kind === 'sub' || l.kind === 'board' ? 0.05 : l.kind === 'label' ? 0.08 : 0.012));
 
   function readTheme() {
+    const kinds = Object.fromEntries(KINDS.map((k) => [k.id, cssVar(k.css) || k.fallback]));
     return {
       ink: cssVar('--ink') || '#1B2A38',
       muted: cssVar('--muted') || '#51606C',
       paper: cssVar('--map-bg') || '#F1F4F2',
       grid: cssVar('--grid') || '#DCE5E2',
-      amber: cssVar('--amber-line') || '#C08A2E',
       serif: cssVar('--serif') || 'Georgia, serif',
       sans: cssVar('--sans') || 'system-ui, sans-serif',
+      kinds,
     };
   }
 
+  // ---- What's showing, what's lit up ------------------------------------------------
+
+  const active = () => hoverId || selectedId;
+  function lit(id) {
+    const a = active();
+    if (!a) return true;
+    return id === a || !!neighbours.get(a)?.has(id);
+  }
+  function nodeVisible(n) {
+    if (n.hub) {
+      if (!focus && !reveal) return true;
+      return [...nodeCache.values()].some((m) => m.note && nodeVisible(m) && hubOf(m) === n.id);
+    }
+    if (n.labelNode) return shown.has('label') && (!focus || focus.ids.has(n.id));
+    if (reveal && (n.note.createdAt || 0) > reveal) return false;
+    if (focus && !focus.ids.has(n.id)) return false;
+    return true;
+  }
+  function linkVisible(l) {
+    if (l.kind !== 'hub' && !shown.has(l.kind)) return false;
+    const [s, t] = ends(l);
+    return !!(s && t && nodeVisible(s) && nodeVisible(t));
+  }
+  const hubOf = (n) => (n.note.inbox || !n.note.region || !nodeCache.has(`hub:${n.note.region}`) ? 'hub:__inbox' : `hub:${n.note.region}`);
+
   function nodeRadius(n) {
     if (n.hub) return n.unsorted ? 6 : 9;
-    const deg = neighbours.get(n.id)?.size || 0;
-    return 3.2 + Math.min(4, Math.sqrt(deg) * 1.3);
+    if (n.labelNode) return 4.5;
+    const deg = n.degree || 0;
+    return 3.2 + Math.min(4.5, Math.sqrt(deg) * 1.3);
   }
 
   function isDimmed(n) {
-    if (!matches) return false;
     if (n.hub) return false;
-    return !matches.has(n.id);
+    if (matches && !n.labelNode && !matches.has(n.id)) return true;
+    return !lit(n.id);
   }
 
-  function isSelectedLink(l) {
-    if (!selectedId || l.kind === 'hub') return false;
-    const s = typeof l.source === 'object' ? l.source.id : l.source;
-    const t = typeof l.target === 'object' ? l.target.id : l.target;
-    return s === selectedId || t === selectedId;
+  function touchesActive(l) {
+    const a = active();
+    if (!a || l.kind === 'hub') return false;
+    return idOf(l.source) === a || idOf(l.target) === a;
   }
 
   function linkColor(l) {
-    const s = typeof l.source === 'object' ? l.source : nodeCache.get(l.source);
-    const t = typeof l.target === 'object' ? l.target : nodeCache.get(l.target);
-    const dim = (s && isDimmed(s)) || (t && isDimmed(t));
-    if (l.kind === 'suggest') return withAlpha(theme.amber, dim ? 0.2 : 0.9);
+    const [s, t] = ends(l);
     if (l.kind === 'hub') {
       const c = regionColors(l.region).dot;
-      return withAlpha(c, dim ? 0.1 : 0.45);
+      const faded = active() || (s && t && (isDimmed(s) || isDimmed(t)));
+      return withAlpha(c, faded ? 0.08 : 0.4);
     }
-    if (isSelectedLink(l)) return withAlpha(theme.ink, 0.85);
-    return withAlpha(theme.ink, dim ? 0.08 : 0.32);
+    const c = theme.kinds[l.kind] || theme.ink;
+    if (active()) return withAlpha(c, touchesActive(l) ? 0.95 : 0.07);
+    const dim = (s && isDimmed(s)) || (t && isDimmed(t));
+    return withAlpha(c, dim ? 0.12 : l.kind === 'related' ? 0.75 : 0.8);
   }
+  function linkWidth(l) {
+    if (l.kind === 'hub') return 0.8;
+    const w = kindOf(l.kind)?.width || 1;
+    return touchesActive(l) ? w + 0.9 : w;
+  }
+
+  // ---- Drawing -----------------------------------------------------------------------
 
   function drawNode(node, ctx, scale) {
     const r = nodeRadius(node);
     const dim = isDimmed(node);
     ctx.save();
-    ctx.globalAlpha = dim ? 0.18 : 1;
+    ctx.globalAlpha = dim ? 0.16 : 1;
     if (node.hub) {
       const c = node.unsorted ? regionColors(null) : regionColors(node.region);
       if (!node.unsorted) {
@@ -133,6 +185,20 @@ export function createMap(el, handlers = {}) {
         scale,
         align: 'center',
       });
+    } else if (node.labelNode) {
+      // A label as a small tag.
+      const c = node.label.color || theme.kinds.label;
+      const w = r * 2.6;
+      ctx.beginPath();
+      ctx.moveTo(node.x - w / 2, node.y - r);
+      ctx.lineTo(node.x + w / 2, node.y - r);
+      ctx.lineTo(node.x + w / 2, node.y + r);
+      ctx.lineTo(node.x - w / 2, node.y + r);
+      ctx.lineTo(node.x - w / 2 - r * 0.9, node.y);
+      ctx.closePath();
+      ctx.fillStyle = c;
+      ctx.fill();
+      if (scale > 0.6 || lit(node.id)) label(ctx, node.label.name, node.x + w / 2 + 4 / scale, node.y + 4 / scale, { font: `600 ${11 / scale}px ${theme.sans}`, color: c, scale, align: 'left' });
     } else {
       const reg = node.note.region ? state.config.regions.find((x) => x.id === node.note.region) : null;
       const c = regionColors(node.note.inbox ? null : reg);
@@ -144,7 +210,7 @@ export function createMap(el, handlers = {}) {
       ctx.strokeStyle = theme.paper;
       ctx.stroke();
       const selected = node.id === selectedId;
-      if (selected) {
+      if (selected || node.id === hoverId) {
         ctx.beginPath();
         ctx.arc(node.x, node.y, r + 4, 0, 2 * Math.PI);
         ctx.lineWidth = 1.8 / scale;
@@ -160,8 +226,9 @@ export function createMap(el, handlers = {}) {
         ctx.stroke();
         ctx.setLineDash([]);
       }
-      const deg = neighbours.get(node.id)?.size || 0;
-      const showLabel = selected || node.id === hoverId || scale > 1.5 || (deg >= 2 && scale > 0.75) || (deg >= 4 && scale > 0.45) || (matches && matches.has(node.id) && filter.query);
+      const deg = node.degree || 0;
+      const near = active() && lit(node.id);
+      const showLabel = selected || node.id === hoverId || near || focus || scale > 1.5 || (deg >= 2 && scale > 0.75) || (deg >= 4 && scale > 0.45) || (matches && matches.has(node.id) && filter.query);
       if (showLabel && !dim) {
         const t = node.title.length > 34 ? `${node.title.slice(0, 33)}…` : node.title;
         label(ctx, t, node.x + r + 4 / scale, node.y + 4 / scale, {
@@ -205,8 +272,8 @@ export function createMap(el, handlers = {}) {
     // Territories: three contour rings around each region's notes.
     const { nodes } = g.graphData();
     for (const hub of nodes) {
-      if (!hub.hub || hub.unsorted) continue;
-      const members = nodes.filter((n) => !n.hub && !n.note.inbox && n.note.region === hub.region.id);
+      if (!hub.hub || hub.unsorted || !nodeVisible(hub)) continue;
+      const members = nodes.filter((n) => n.note && !n.note.inbox && n.note.region === hub.region.id && nodeVisible(n));
       let rx = 46;
       let ry = 46;
       if (members.length) {
@@ -218,13 +285,13 @@ export function createMap(el, handlers = {}) {
       }
       hub.labelLift = ry - 4;
       const c = regionColors(hub.region).dot;
-      const dim = filter.regions && !filter.regions.has(hub.region.id);
+      const dim = (filter.regions && !filter.regions.has(hub.region.id)) || active();
       const rings = [[1, 0.32], [0.72, 0.48], [0.44, 0.7]];
       rings.forEach(([k, alpha], i) => {
         ctx.beginPath();
         ctx.ellipse(hub.x, hub.y, rx * k, ry * k, 0, 0, 2 * Math.PI);
-        if (i === 2) { ctx.fillStyle = withAlpha(c, dim ? 0.02 : 0.08); ctx.fill(); }
-        ctx.strokeStyle = withAlpha(c, dim ? alpha * 0.25 : alpha);
+        if (i === 2) { ctx.fillStyle = withAlpha(c, dim ? 0.03 : 0.08); ctx.fill(); }
+        ctx.strokeStyle = withAlpha(c, dim ? alpha * 0.35 : alpha);
         ctx.lineWidth = 1 / scale;
         ctx.stroke();
       });
@@ -234,6 +301,7 @@ export function createMap(el, handlers = {}) {
 
   function hubPositions(regions) {
     const slots = regions.length + 1;
+    const R = ringRadius(slots);
     const out = new Map();
     regions.forEach((r, i) => {
       const ang = (Math.PI / 2) + ((i + 1) * 2 * Math.PI) / slots;
@@ -242,6 +310,8 @@ export function createMap(el, handlers = {}) {
     out.set('__inbox', { x: 0, y: R * 0.92 });
     return out;
   }
+
+  // ---- Building --------------------------------------------------------------------
 
   function build() {
     const regions = state.config.regions;
@@ -272,30 +342,71 @@ export function createMap(el, handlers = {}) {
       const n = get(note.id, () => ({ id: note.id, x: hp.homeX + (Math.random() - 0.5) * 60, y: hp.homeY + (Math.random() - 0.5) * 60 }));
       n.note = note;
       n.title = displayTitle(note);
+      n.degree = 0;
       nodes.push(n);
       const reg = regions.find((r) => r.id === note.region);
       links.push({ source: note.id, target: hubId, kind: 'hub', region: note.inbox ? null : reg });
     }
-    const L = computeLinks(state.notes);
-    neighbours = L.neighbours;
-    for (const [a, b] of L.edges) links.push({ source: a, target: b, kind: 'link' });
-    for (const [a, b] of suggestedEdges(state.notes)) links.push({ source: a, target: b, kind: 'suggest' });
+    // Labels only join the layout when they're shown, so they don't pull notes around.
+    const C = connections(state.notes, { labels: shown.has('label') });
+    counts = C.counts;
+    const lm = labelMap(state.config);
+    neighbours = new Map();
+    const link = (a, b) => {
+      if (!neighbours.has(a)) neighbours.set(a, new Set());
+      if (!neighbours.has(b)) neighbours.set(b, new Set());
+      neighbours.get(a).add(b);
+      neighbours.get(b).add(a);
+    };
+    for (const e of C.edges) {
+      if (e.kind === 'label') {
+        const lid = e.b;
+        const def = lm.get(lid.slice(6)) || { id: lid.slice(6), name: lid.slice(6), color: theme.kinds.label };
+        const ln = get(lid, () => ({ id: lid, labelNode: true, x: (Math.random() - 0.5) * 80, y: (Math.random() - 0.5) * 80 }));
+        ln.label = def;
+        if (!nodes.includes(ln)) nodes.push(ln);
+      }
+      links.push({ source: e.a, target: e.b, kind: e.kind, why: e.why });
+      if (shown.has(e.kind)) {
+        link(e.a, e.b);
+        if (e.kind !== 'related' && e.kind !== 'label') {
+          const na = nodeCache.get(e.a);
+          const nb = nodeCache.get(e.b);
+          if (na) na.degree++;
+          if (nb) nb.degree++;
+        }
+      }
+    }
     for (const id of [...nodeCache.keys()]) if (!keep.has(id)) nodeCache.delete(id);
+    if (focus) focus.ids = reach(focus.id, focus.depth);
     return { nodes, links };
+  }
+
+  // Notes within `depth` steps of a note, over the kinds shown.
+  function reach(id, depth) {
+    const seen = new Set([id]);
+    let edge = [id];
+    for (let d = 0; d < depth; d++) {
+      const next = [];
+      for (const x of edge) for (const y of neighbours.get(x) || []) if (!seen.has(y)) { seen.add(y); next.push(y); }
+      edge = next;
+    }
+    return seen;
   }
 
   function computeMatches() {
     const { regions, query } = filter;
-    if (!regions && !query) { matches = null; return; }
+    if (!regions && !query && !filter.ids) { matches = null; return; }
     let pool = [...state.notes.values()];
+    if (filter.ids) pool = pool.filter((n) => filter.ids.has(n.id));
     if (regions) pool = pool.filter((n) => !n.inbox && regions.has(n.region));
     if (query) pool = searchNotes(pool, query, 10000);
     matches = new Set(pool.map((n) => n.id));
   }
 
-  // Fit the whole map into the area not covered by the search bar and chips.
-  function fitView(ms) {
-    const bb = g.getGraphBbox();
+  // Fit what's showing into the area not covered by the search bar and chips.
+  function fitView(ms, only = null) {
+    const bb = g.getGraphBbox((n) => nodeVisible(n) && (!only || (!n.hub && only.has(n.id))));
     const w = el.clientWidth;
     const h = el.clientHeight;
     if (!bb || !w || !h) return;
@@ -304,7 +415,7 @@ export function createMap(el, handlers = {}) {
     const side = 24;
     const bw = bb.x[1] - bb.x[0] + 60;
     const bh = bb.y[1] - bb.y[0] + 90; // room for region labels above the rings
-    const k = Math.max(0.2, Math.min((w - 2 * side) / bw, (h - top - bottom) / bh, 2.4));
+    const k = Math.max(0.2, Math.min((w - 2 * side) / bw, (h - top - bottom) / bh, only ? 3 : 2.4));
     const cx = (bb.x[0] + bb.x[1]) / 2;
     const cy = (bb.y[0] + bb.y[1]) / 2 - 20;
     const dy = (top + (h - top - bottom) / 2 - h / 2) / k;
@@ -328,6 +439,9 @@ export function createMap(el, handlers = {}) {
   // again once the layout settles.
   setTimeout(() => { if (firstFit) fitView(0); }, 60);
 
+  let playing = null;
+  const refresh = () => { g.nodeVisibility(g.nodeVisibility()); g.linkVisibility(g.linkVisibility()); };
+
   return {
     update() {
       computeMatches();
@@ -344,9 +458,47 @@ export function createMap(el, handlers = {}) {
       filter = { ...filter, ...f };
       computeMatches();
     },
+    // Which kinds of connection to draw.
+    setShown(kinds) {
+      shown = new Set(kinds);
+      g.graphData(build());
+    },
+    shown: () => [...shown],
+    counts: () => ({ ...counts }),
+    // Only this note and what it connects to (depth 1 or 2).
+    focusOn(id, depth = 1) {
+      focus = id ? { id, depth, ids: reach(id, depth) } : null;
+      refresh();
+      g.d3ReheatSimulation();
+      setTimeout(() => fitView(500), 350);
+    },
+    focused: () => (focus ? { id: focus.id, depth: focus.depth, size: focus.ids.size } : null),
+    neighboursOf: (id) => [...(neighbours.get(id) || [])],
+    // Replay: notes appear in the order they were made.
+    play({ ms = 7000, onTick, onDone } = {}) {
+      cancelAnimationFrame(playing);
+      const times = [...state.notes.values()].map((n) => n.createdAt || 0).filter(Boolean).sort((p, q) => p - q);
+      if (!times.length) return;
+      const t0 = times[0];
+      const t1 = Date.now();
+      const start = performance.now();
+      const step = (now) => {
+        const k = Math.min(1, (now - start) / ms);
+        reveal = t0 + (t1 - t0) * k;
+        refresh();
+        onTick?.(reveal);
+        if (k < 1) playing = requestAnimationFrame(step);
+        else { reveal = null; refresh(); onDone?.(); }
+      };
+      playing = requestAnimationFrame(step);
+    },
+    stopPlay() { cancelAnimationFrame(playing); reveal = null; refresh(); },
     matchCount: () => (matches ? matches.size : null),
     fit() { fitView(400); },
+    // Zoom to just these notes.
+    fitTo(ids) { if (ids?.size) fitView(500, ids); },
     destroy() {
+      cancelAnimationFrame(playing);
       ro.disconnect();
       window.removeEventListener('sb-theme', onScheme);
       try { g.pauseAnimation(); g._destructor?.(); } catch { /* ignore */ }

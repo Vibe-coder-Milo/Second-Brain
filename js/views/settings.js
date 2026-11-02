@@ -280,7 +280,9 @@ export function mount(main, params, ctx) {
       paint(S.semState);
       const off = S.onSemantic(paint);
       cleanups.push(off);
-      $('#s-sem', main).onchange = async (e) => {
+      const sem = $('#s-sem', main);
+      if (!sem) return; // left Settings before this loaded
+      sem.onchange = async (e) => {
         await V.updateDevice({ semantic: e.target.checked });
         if (e.target.checked) S.buildSoon(0); else await S.clearIndex();
         paint(S.semState);

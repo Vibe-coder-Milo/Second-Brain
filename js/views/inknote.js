@@ -8,6 +8,7 @@ import { state } from '../vault.js';
 import { newNote, newPage, displayTitle, PAPERS, PAPER_COLORS, PAGE_W, A4_H } from '../model.js';
 import { refreshInkSummary } from '../notework.js';
 import { icons } from '../icons.js';
+import { focusButtonHtml, toggleFocus, enterNote, leaveNote } from '../focus.js';
 import { openSheet, menuSheet, confirmSheet, popover, stickerDrawer, notePicker, passphraseSheet, labelPicker, tooltips } from '../ui.js';
 import { InkSurface, penExtras } from '../editor/ink.js';
 import { ZoomStrip } from '../editor/zoomstrip.js';
@@ -73,6 +74,7 @@ export function mount(el, params, ctx) {
     if (params.page) pageIdx = Math.max(0, n.pages.findIndex((p) => p.id === params.page));
     draw();
     document.body.classList.add('inking');
+    enterNote();
     // Catch up on reading pages written before (or on another device).
     if (handOn()) setTimeout(() => { if (note()) readNote(id).catch(() => {}); }, 2000);
   }
@@ -97,6 +99,7 @@ export function mount(el, params, ctx) {
           <button type="button" class="icon-btn bare show-sm-flex" data-act="undo" aria-label="Undo">${icons.undo()}</button>
           <button type="button" class="icon-btn bare show-sm-flex" data-act="redo" aria-label="Redo">${icons.redo()}</button>
           <button type="button" class="icon-btn bare" data-act="replay" aria-label="Replay recordings" aria-pressed="false" ${n.recordings.length ? '' : raw('hidden')}>${icons.headphones()}</button>
+          ${raw(focusButtonHtml())}
           <button type="button" class="icon-btn bare" data-act="pages" aria-label="All pages">${icons.pages()}</button>
           <button type="button" class="icon-btn bare hide-sm" data-act="link" aria-label="Link to another note">${icons.link()}</button>
           <button type="button" class="icon-btn bare hide-sm" data-act="export" aria-label="Export as PDF">${icons.share()}</button>
@@ -111,6 +114,7 @@ export function mount(el, params, ctx) {
     el.querySelector('[data-act=back]').onclick = () => leave();
     el.querySelector('[data-act=rename]').onclick = () => rename();
     el.querySelector('[data-act=pages]').onclick = () => pagesSheet();
+    el.querySelector('[data-act=focus]').onclick = () => toggleFocus();
     el.querySelector('[data-act=replay]').onclick = () => (replay ? exitReplay() : enterReplay());
     el.querySelector('[data-act=link]').onclick = () => linkTo();
     el.querySelector('[data-act=export]').onclick = () => exportPdf();
@@ -1189,6 +1193,7 @@ export function mount(el, params, ctx) {
       surface?.destroy();
       surface = null;
       document.body.classList.remove('inking', 'editing');
+      leaveNote();
     },
   };
 }

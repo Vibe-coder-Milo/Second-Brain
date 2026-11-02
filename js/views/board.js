@@ -7,6 +7,7 @@ import * as V from '../vault.js';
 import { state } from '../vault.js';
 import { newNote, newPage, displayTitle } from '../model.js';
 import { icons } from '../icons.js';
+import { focusButtonHtml, toggleFocus, enterNote, leaveNote } from '../focus.js';
 import { openSheet, menuSheet, confirmSheet, notePicker, passphraseSheet, popover, closePopover, tooltips } from '../ui.js';
 import { compressImage } from '../images.js';
 import { notebookPicker } from './notebooks.js';
@@ -118,6 +119,7 @@ export function mount(el, params, ctx) {
     data.tomb ||= [];
     draw();
     document.body.classList.add('inking', 'boarding');
+    enterNote();
   }
 
   // ---------- Layout ----------
@@ -138,6 +140,7 @@ export function mount(el, params, ctx) {
           ${nb ? html`<span class="bd-sub">${nb.title}${sec && nb.sections.length > 1 ? ` › ${sec.name}` : ''}</span>` : ''}
         </div>
         <div class="top-actions">
+          ${raw(focusButtonHtml())}
           <button type="button" class="icon-btn bare" data-act="undo" aria-label="Undo">${icons.undo()}</button>
           <button type="button" class="icon-btn bare" data-act="redo" aria-label="Redo">${icons.redo()}</button>
           <button type="button" class="icon-btn bare hide-sm" data-act="export" aria-label="Export">${icons.share()}</button>
@@ -185,6 +188,7 @@ export function mount(el, params, ctx) {
     on('redo', () => doRedo());
     on('export', () => exportMenu());
     on('more', () => more());
+    on('focus', () => toggleFocus());
     on('zoom-in', () => zoomBy(1.25));
     on('zoom-out', () => zoomBy(0.8));
     on('zoom-fit', () => fit({ animate: true }));
@@ -1641,6 +1645,7 @@ export function mount(el, params, ctx) {
       if (editing) endEdit();
       flush().then(() => discardIfEmpty());
       document.body.classList.remove('inking', 'boarding');
+      leaveNote();
     },
   };
 }

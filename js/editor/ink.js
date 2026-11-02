@@ -292,7 +292,9 @@ export class InkSurface {
   get baseWidth() {
     const w = this.scroll.clientWidth;
     const pad = w > 700 ? 48 : 16;
-    return Math.max(280, Math.min(w - pad, 900));
+    // With the side panel hidden (focus), the page can grow bigger.
+    const cap = document.body.classList.contains('focus') ? 1240 : 900;
+    return Math.max(280, Math.min(w - pad, cap));
   }
   get scale() { return (this.baseWidth * this.zoom) / PAGE_W; }
 
