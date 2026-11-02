@@ -188,8 +188,10 @@ async function typedCanvases(n) {
     y += 30;
     for (const { f, img } of imgs) {
       if (!img) continue;
-      const h = Math.min(900, width * (f.h || img.naturalHeight) / (f.w || img.naturalWidth));
-      const w = h * (f.w || img.naturalWidth) / (f.h || img.naturalHeight);
+      const iw = img.naturalWidth || img.width;
+      const ih = img.naturalHeight || img.height;
+      const h = Math.min(900, width * (f.h || ih) / (f.w || iw));
+      const w = h * (f.w || iw) / (f.h || ih);
       ctx.drawImage(img, M, y, w, h);
       y += h + 24;
     }

@@ -15,7 +15,44 @@ const SHOWN_KEY = 'sb-map-shown';
 const loadShown = () => { try { const v = JSON.parse(localStorage.getItem(SHOWN_KEY)); return Array.isArray(v) ? v : DEFAULT_SHOWN; } catch { return DEFAULT_SHOWN; } };
 const saveShown = (v) => { try { localStorage.setItem(SHOWN_KEY, JSON.stringify(v)); } catch { /* private mode */ } };
 
+// The map library (force-graph) is only fetched when you open the map, so it
+// doesn't slow the app's start. It's fetched in the background soon after
+// unlocking too, so the map is usually ready by the time you tap it.
+let graphLib = null;
+export function preloadMap() {
+  if (window.ForceGraph) return Promise.resolve();
+  if (!graphLib) {
+    graphLib = new Promise((ok, fail) => {
+      const s = document.createElement('script');
+      s.src = 'vendor/force-graph.min.js';
+      s.onload = () => ok();
+      s.onerror = () => { graphLib = null; s.remove(); fail(new Error('The map could not load.')); };
+      document.head.appendChild(s);
+    });
+  }
+  return graphLib;
+}
+
 export function mount(main, params, ctx) {
+  if (window.ForceGraph) return mountMap(main, params, ctx);
+  main.innerHTML = `${html`<div class="mapview"><p class="status-line map-loading">${icons.spinner({ size: 18 })}Opening your map…</p></div>`}`;
+  let inst = null;
+  let gone = false;
+  let last = params;
+  const start = () => preloadMap().then(() => { if (!gone) inst = mountMap(main, last, ctx); }).catch((e) => {
+    if (gone) return;
+    main.innerHTML = `${html`<div class="mapview"><div class="map-loading"><p class="error">${e.message} Check your connection and try again.</p><button type="button" class="btn" data-retry>Try again</button></div></div>`}`;
+    main.querySelector('[data-retry]').onclick = start;
+  });
+  start();
+  return {
+    update(p) { last = p; inst?.update(p); },
+    onEvent(evt) { inst?.onEvent(evt); },
+    destroy() { gone = true; inst?.destroy(); },
+  };
+}
+
+function mountMap(main, params, ctx) {
   let regionFilter = null;
   let since = 0; // only notes worked on since then (0: any time)
   const TIMES = [[0, 'Any time'], [7, 'Past week'], [30, 'Past month'], [90, 'Past 3 months'], [365, 'Past year']];

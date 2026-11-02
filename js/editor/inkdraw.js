@@ -180,7 +180,10 @@ export function drawPaper(ctx, page, scale, bgImage = null, area = null) {
   ctx.fillStyle = pc.bg;
   ctx.fillRect(0, 0, PAGE_W, h);
   if (bgImage) {
-    ctx.drawImage(bgImage, 0, 0, PAGE_W, h);
+    // At its own shape: if the page has grown (endless scroll), the PDF or
+    // photo stays as it was and there's plain paper below it.
+    const ih = bgImage.width ? (PAGE_W * bgImage.height) / bgImage.width : h;
+    ctx.drawImage(bgImage, 0, 0, PAGE_W, Math.min(h, ih));
     ctx.restore();
     return;
   }
@@ -218,26 +221,77 @@ export function drawPaper(ctx, page, scale, bgImage = null, area = null) {
 
 // ---- Images used on pages -------------------------------------------------------
 
-const fileImgs = new Map();
+// Decoded pictures (PDF pages, photos) take a lot of memory: a PDF page is
+// about 15 MB once decoded. Only the most recently used are kept (about
+// eight pages' worth), so flipping through a long PDF never piles up.
+// Pictures are decoded off the main thread where the browser can.
+const fileImgs = new Map(); // fileId -> { img, ready, waiters, bytes }
+const KEEP_BYTES = 128 * 1024 * 1024;
+const KEEP_MIN = 4;
+let keptBytes = 0;
+function evictImages() {
+  for (const [id, rec] of fileImgs) {
+    if (keptBytes <= KEEP_BYTES || fileImgs.size <= KEEP_MIN) break;
+    if (!rec.ready) continue;
+    fileImgs.delete(id);
+    keptBytes -= rec.bytes || 0;
+    // Not closed: anything still drawing with it keeps it until it's done.
+  }
+}
+async function decode(blob) {
+  if (typeof createImageBitmap === 'function') {
+    try { return await createImageBitmap(blob); } catch { /* fall back below */ }
+  }
+  const url = URL.createObjectURL(blob);
+  try {
+    const img = new Image();
+    img.decoding = 'async';
+    img.src = url;
+    await img.decode();
+    return img;
+  } finally { URL.revokeObjectURL(url); }
+}
 export function fileImage(fileId, onload) {
   if (!fileId) return null;
   let rec = fileImgs.get(fileId);
   if (!rec) {
-    const img = new Image();
-    img.decoding = 'async';
-    rec = { img, ready: false, waiters: [] };
+    rec = { img: null, ready: false, waiters: [], bytes: 0 };
     fileImgs.set(fileId, rec);
-    V.fileURL(fileId).then((u) => {
-      if (!u) return;
-      img.onload = () => { rec.ready = true; rec.waiters.splice(0).forEach((f) => f()); };
-      img.src = u;
-    });
+    V.fileBlob(fileId).then(async (blob) => {
+      if (!blob) { fileImgs.delete(fileId); return; }
+      const img = await decode(blob);
+      rec.img = img;
+      rec.ready = true;
+      rec.bytes = (img.width || 1) * (img.height || 1) * 4;
+      keptBytes += rec.bytes;
+      rec.waiters.splice(0).forEach((f) => f());
+      evictImages();
+    }).catch(() => { fileImgs.delete(fileId); });
+  } else {
+    // Most recently used last.
+    fileImgs.delete(fileId);
+    fileImgs.set(fileId, rec);
   }
   if (rec.ready) return rec.img;
   if (onload) rec.waiters.push(onload);
   return null;
 }
-export function forgetFileImages() { fileImgs.clear(); }
+export function forgetFileImages() { fileImgs.clear(); keptBytes = 0; }
+export const cachedImageCount = () => fileImgs.size;
+
+// A small version of a picture, for page thumbnails (cheap to decode).
+const thumbs = new Map();
+export async function thumbImage(fileId, width) {
+  const key = `${fileId}:${width}`;
+  if (thumbs.has(key)) { const t = thumbs.get(key); thumbs.delete(key); thumbs.set(key, t); return t; }
+  const blob = await V.fileBlob(fileId);
+  if (!blob) return null;
+  let img = null;
+  try { img = await createImageBitmap(blob, { resizeWidth: Math.round(width), resizeQuality: 'medium' }); } catch { img = await decode(blob); }
+  thumbs.set(key, img);
+  while (thumbs.size > 80) thumbs.delete(thumbs.keys().next().value);
+  return img;
+}
 
 export async function fileImageReady(fileId) {
   if (!fileId) return null;
@@ -650,9 +704,9 @@ export function drawContent(ctx, data, { redraw, skip = null, hidden = null, dim
 }
 
 // Render a page to a new canvas at a given pixel width (thumbnails, export, crops).
-export async function renderPageCanvas(page, data, widthPx, { crop = null, visible = null, paperHidden = false, dark: darkPage = false } = {}) {
+export async function renderPageCanvas(page, data, widthPx, { crop = null, visible = null, paperHidden = false, dark: darkPage = false, thumb = false } = {}) {
   if (paperHidden) page = { ...page, paper: 'blank', bg: null };
-  const bg = page.bg ? await fileImageReady(page.bg) : null;
+  const bg = page.bg ? (thumb ? await thumbImage(page.bg, widthPx * 2) : await fileImageReady(page.bg)) : null;
   for (const o of data.objects || []) {
     if (o.type === 'image') await fileImageReady(o.fileId);
     if (o.type === 'mine') await fileImageReady((state.config?.myStickers || []).find((m) => m.id === o.mine)?.fileId);

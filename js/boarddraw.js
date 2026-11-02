@@ -391,8 +391,10 @@ function drawObject(ctx, o, imgs) {
       roundRect(ctx, o.x + 8, o.y + 8, o.w - 16, o.h - 16 - capH, 6);
       ctx.clip();
       const bw = o.w - 16; const bh = o.h - 16 - capH;
-      const k = Math.max(bw / img.naturalWidth, bh / img.naturalHeight);
-      const iw = img.naturalWidth * k; const ih = img.naturalHeight * k;
+      const nw = img.naturalWidth || img.width;
+      const nh = img.naturalHeight || img.height;
+      const k = Math.max(bw / nw, bh / nh);
+      const iw = nw * k; const ih = nh * k;
       ctx.drawImage(img, o.x + 8 + (bw - iw) / 2, o.y + 8 + (bh - ih) / 2, iw, ih);
       ctx.restore();
     }

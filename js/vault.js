@@ -25,7 +25,10 @@ export function subscribe(fn) {
   listeners.add(fn);
   return () => listeners.delete(fn);
 }
+// Goes up on every change, so screens can tell when cached results are stale.
+export let rev = 0;
 export function emit(evt) {
+  rev++;
   for (const fn of listeners) {
     try { fn(evt); } catch (e) { console.error(e); }
   }

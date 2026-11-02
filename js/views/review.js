@@ -5,7 +5,6 @@ import { html, raw, fmtDate, toast } from '../util.js';
 import { state, sealedState } from '../vault.js';
 import { regionColors, typeName, titleIndex } from '../model.js';
 import { session, applyReply, describeUpdate } from '../claude.js';
-import { renderMarkdown } from '../markdown.js';
 import { icons } from '../icons.js';
 
 export function mount(main, params, ctx) {
@@ -25,6 +24,9 @@ export function mount(main, params, ctx) {
   const keepCount = () => reply.newNotes.filter((n) => choices.newNotes[n.ref].keep).length + Object.values(choices.skipped).filter(Boolean).length;
   const updCount = () => Object.values(choices.updates).filter(Boolean).length;
 
+  // The markdown reader is only fetched when there's an answer to show.
+  let renderMarkdown = null;
+  if (reply.answer) import('../markdown.js').then((M) => { renderMarkdown = M.renderMarkdown; if (main.isConnected) draw(); });
   const draw = () => {
     const sw = reply.sweep;
     const n = reply.newNotes.length;
@@ -35,7 +37,7 @@ export function mount(main, params, ctx) {
         ${reply.kind === 'sweep' ? html`<p class="page-sub">${sw?.chatsReviewed ? `From ${sw.chatsReviewed} chats` : 'From your chats'}${sw?.from ? `, ${fmtDate(Date.parse(sw.from))} to ${fmtDate(Date.parse(sw.to || Date.now()))}` : ''}. ${reply.skipped.length} skipped as lookups or one-off tasks. Untick anything you don’t want.</p>` : html`<p class="page-sub">${n || reply.updates.length ? 'Untick anything you don’t want. Nothing is saved until you confirm.' : 'Save it as a note if you want to keep it.'}</p>`}
       </div>
 
-      ${reply.answer ? html`<section class="answer"><div class="md">${raw(renderMarkdown(reply.answer, (t) => idx.get(t.toLowerCase())))}</div>
+      ${reply.answer ? html`<section class="answer"><div class="md">${renderMarkdown ? raw(renderMarkdown(reply.answer, (t) => idx.get(t.toLowerCase()))) : html`<p class="status-line">${icons.spinner({ size: 18 })}Loading…</p>`}</div>
         <label class="check" style="margin-top:8px"><input type="checkbox" data-save-answer ${choices.saveAnswer ? raw('checked') : ''}> Save this answer as a note</label></section>` : ''}
 
       ${n ? html`<section style="display:flex;flex-direction:column;gap:8px">

@@ -14,7 +14,7 @@ import { InkSurface, penExtras } from '../editor/ink.js';
 import { ZoomStrip } from '../editor/zoomstrip.js';
 import { startRecording, stopRecording, isRecording, recordingTime } from '../recorder.js';
 import { mountPlayer } from './recordings.js';
-import { PENS, HL, INK_COLORS, HL_COLORS, DEFAULT_FAVS, mm, renderPageCanvas, layerView, noteLayers, layerOf, drawStroke, drawPaper, SMOOTHING, strokeBox, setInkTone, pageDark, darkInk } from '../editor/inkdraw.js';
+import { PENS, HL, INK_COLORS, HL_COLORS, DEFAULT_FAVS, mm, renderPageCanvas, layerView, noteLayers, layerOf, drawStroke, drawPaper, SMOOTHING, strokeBox, setInkTone, pageDark, darkInk, fileImage } from '../editor/inkdraw.js';
 import { isDarkUI } from '../theme.js';
 import { linkedWith, mentions, related, subNotes } from '../connections.js';
 import { miniMapHtml } from '../minimap.js';
@@ -38,6 +38,20 @@ export function mount(el, params, ctx) {
   if (!('ontouchstart' in window) && !navigator.maxTouchPoints) tool.fingerDraw = false;
 
   const note = () => state.notes.get(id);
+  const thumbCache = new Map();
+  // The last page open in each note, on this device.
+  const LAST_KEY = 'sb-last-pages';
+  const lastPages = () => { try { return JSON.parse(localStorage.getItem(LAST_KEY)) || {}; } catch { return {}; } };
+  const rememberPage = (pageId) => {
+    try {
+      const m = lastPages();
+      delete m[id];
+      m[id] = pageId;
+      const keys = Object.keys(m);
+      for (const k of keys.slice(0, Math.max(0, keys.length - 200))) delete m[k];
+      localStorage.setItem(LAST_KEY, JSON.stringify(m));
+    } catch { /* private mode */ }
+  };
   const favs = () => state.config.favColors || DEFAULT_FAVS;
 
   async function create() {
@@ -73,6 +87,12 @@ export function mount(el, params, ctx) {
       return;
     }
     if (params.page) pageIdx = Math.max(0, n.pages.findIndex((p) => p.id === params.page));
+    else {
+      // Open where you left off (long PDFs especially).
+      const last = lastPages()[id];
+      const at = last ? n.pages.findIndex((p) => p.id === last) : -1;
+      if (at > 0) pageIdx = at;
+    }
     draw();
     document.body.classList.add('inking');
     enterNote();
@@ -139,7 +159,70 @@ export function mount(el, params, ctx) {
     });
     applyLayers();
     showPage(pageIdx);
+    bindPageTurns(surface.scroll);
   }
+
+  // ---------- Turning pages ----------
+  // Scroll on past the end of a page for the next one (and back past the top
+  // for the one before), like a PDF reader. Page Up/Down and arrows work too.
+  let turning = false;
+  async function turn(dir) {
+    const n = note();
+    if (turning || !n) return;
+    const to = pageIdx + dir;
+    if (to < 0 || to >= n.pages.length) return;
+    turning = true;
+    try {
+      await showPage(to);
+      const sc = surface?.scroll;
+      if (sc && dir < 0) sc.scrollTop = sc.scrollHeight;
+    } finally { turning = false; }
+  }
+  function bindPageTurns(sc) {
+    const atEnd = () => sc.scrollTop + sc.clientHeight >= sc.scrollHeight - 4;
+    const atTop = () => sc.scrollTop <= 2;
+    let pull = 0;
+    let quiet = null;
+    let held = false; // after a turn, the rest of that flick doesn't scroll the new page
+    sc.addEventListener('wheel', (e) => {
+      if (e.ctrlKey || e.metaKey || note()?.pages.length < 2) return;
+      clearTimeout(quiet);
+      quiet = setTimeout(() => { pull = 0; held = false; }, 300);
+      if (held) { e.preventDefault(); return; }
+      if ((e.deltaY > 0 && atEnd()) || (e.deltaY < 0 && atTop())) {
+        pull += e.deltaY;
+        const dir = pull > 220 ? 1 : pull < -220 ? -1 : 0;
+        if (dir) { pull = 0; held = true; turn(dir); }
+      } else pull = 0;
+    }, { passive: false });
+    // Touch: drag on past the end (when fingers scroll rather than write).
+    let t0 = null;
+    sc.addEventListener('touchstart', (e) => {
+      const scrolls = (surface?.pageEl.style.touchAction || '').includes('pan');
+      t0 = e.touches.length === 1 && scrolls ? { y: e.touches[0].clientY, end: atEnd(), top: atTop() } : null;
+    }, { passive: true });
+    sc.addEventListener('touchmove', (e) => {
+      if (!t0 || e.touches.length !== 1) return;
+      const dy = e.touches[0].clientY - t0.y;
+      t0.dy = dy;
+      if (!atEnd()) t0.end = false;
+      if (!atTop()) t0.top = false;
+    }, { passive: true });
+    sc.addEventListener('touchend', () => {
+      if (!t0) return;
+      if (t0.end && atEnd() && t0.dy < -90) turn(1);
+      else if (t0.top && atTop() && t0.dy > 90) turn(-1);
+      t0 = null;
+    });
+  }
+  const onPageKeys = (e) => {
+    if (e.defaultPrevented || e.target.closest?.('input, textarea, [contenteditable=true], .tb-edit, .postit-edit')) return;
+    if (surface?.sel || surface?.editing || e.altKey || e.ctrlKey || e.metaKey) return;
+    if (document.querySelector('.overlay, .popover')) return; // a sheet or menu is open
+    if (e.key === 'PageDown' || e.key === 'ArrowRight') { e.preventDefault(); turn(1); }
+    if (e.key === 'PageUp' || e.key === 'ArrowLeft') { e.preventDefault(); turn(-1); }
+  };
+  document.addEventListener('keydown', onPageKeys);
 
   // ---------- Endless scroll ----------
   // In endless layout the page gets longer as you near the bottom.
@@ -755,6 +838,14 @@ export function mount(el, params, ctx) {
     surface.setPage(page, data);
     zoom?.reset();
     drawPageBar();
+    rememberPage(page.id);
+    // Get the pages either side ready, so turning the page is instant.
+    for (const k of [pageIdx + 1, pageIdx - 1]) {
+      const p = n.pages[k];
+      if (!p) continue;
+      V.loadPage(p.id).catch(() => {});
+      if (p.bg) fileImage(p.bg);
+    }
     const sub = $('#iv-sub', el);
     if (sub) {
       const { nb, sec } = crumbs(n);
@@ -771,7 +862,7 @@ export function mount(el, params, ctx) {
     nav.className = 'ink-pagenav';
     const endless = n.layout === 'scroll';
     nav.innerHTML = String(html`${n.pages.length > 1 || !endless ? html`<button type="button" class="btn btn-sm" data-pg="prev" ${pageIdx === 0 ? raw('disabled') : ''}>${icons.back({ size: 16 })}Previous</button>` : ''}
-      <span class="muted">${endless && n.pages.length === 1 ? 'Endless page' : `Page ${pageIdx + 1} of ${n.pages.length}`}</span>
+      ${endless && n.pages.length === 1 ? html`<span class="muted">Endless page</span>` : html`<button type="button" class="btn btn-sm btn-ghost pg-label" data-pg="all" aria-label="Page ${pageIdx + 1} of ${n.pages.length}. See all pages">Page ${pageIdx + 1} of ${n.pages.length}</button>`}
       ${pageIdx < n.pages.length - 1 ? html`<button type="button" class="btn btn-sm" data-pg="next">Next${icons.chevron({ size: 16 })}</button>` : endless ? html`<button type="button" class="btn btn-sm" data-pg="more">${icons.plus({ size: 16 })}More paper</button>` : html`<button type="button" class="btn btn-sm" data-pg="add">${icons.plus({ size: 16 })}Add page</button>`}`);
     scroll.appendChild(nav);
     const pv = nav.querySelector('[data-pg=prev]');
@@ -782,6 +873,9 @@ export function mount(el, params, ctx) {
     if (nx) nx.onclick = () => showPage(pageIdx + 1);
     const ad = nav.querySelector('[data-pg=add]');
     if (ad) ad.onclick = () => addPage();
+    const all = nav.querySelector('[data-pg=all]');
+    if (all) all.onclick = () => pagesSheet();
+    if (pageIdx < n.pages.length - 1 && n.pages.length > 1) nav.insertAdjacentHTML('beforeend', '<p class="pg-hint">Keep scrolling for the next page</p>');
   }
 
   async function addPage(fields = {}, at = pageIdx + 1) {
@@ -793,6 +887,21 @@ export function mount(el, params, ctx) {
     await V.saveNote({ ...n, pages });
     await showPage(at);
     return page;
+  }
+
+  // A page's thumbnail, kept until the page changes.
+  async function thumbFor(p) {
+    const data = await V.loadPage(p.id);
+    const key = `${p.id}:${data.at || 0}:${p.paper}:${p.color}:${pageDark(p) ? 1 : 0}`;
+    const hit = thumbCache.get(key);
+    const c = hit || await renderPageCanvas(p, data, 220, { ...layerView(note()), crop: { x: 0, y: 0, w: PAGE_W, h: Math.min(p.h, A4_H) }, dark: pageDark(p), thumb: true });
+    if (!hit) { thumbCache.set(key, c); while (thumbCache.size > 120) thumbCache.delete(thumbCache.keys().next().value); }
+    const out = document.createElement('canvas');
+    out.width = c.width;
+    out.height = c.height;
+    out.className = 'thumb-canvas';
+    out.getContext('2d').drawImage(c, 0, 0);
+    return out;
   }
 
   function pagesSheet() {
@@ -850,15 +959,29 @@ export function mount(el, params, ctx) {
     s.el.querySelector('[data-pdf]').onchange = async (e) => { const f = e.target.files?.[0]; if (!f) return; s.close(); await importPdf(f); };
     s.el.querySelector('[data-scan]').onclick = async () => { s.close(); await scanPages(); };
     s.el.querySelectorAll('[data-pm]').forEach((b) => { b.onclick = () => pageMenu(Number(b.dataset.pm), s); });
-    // Thumbnails
-    n.pages.forEach(async (p, i) => {
-      try {
-        const data = await V.loadPage(p.id);
-        const c = await renderPageCanvas(p, data, 220, { ...layerView(note()), crop: { x: 0, y: 0, w: PAGE_W, h: Math.min(p.h, A4_H) }, dark: pageDark(p) });
+    // Thumbnails: drawn as they scroll into view, a couple at a time, small.
+    const queue = [];
+    let busy = 0;
+    const pump = () => {
+      while (busy < 2 && queue.length) {
+        const i = queue.shift();
+        const p = note()?.pages[i];
         const slot = s.el.querySelector(`[data-thumb="${i}"]`);
-        if (slot) slot.replaceWith(Object.assign(c, { className: 'thumb-canvas' }));
-      } catch { /* not downloaded yet */ }
-    });
+        if (!p || !slot) continue;
+        busy++;
+        thumbFor(p).then((c) => { if (c && slot.isConnected) slot.replaceWith(c); }).catch(() => {}).finally(() => { busy--; pump(); });
+      }
+    };
+    const io = new IntersectionObserver((entries) => {
+      for (const e of entries) {
+        if (!e.isIntersecting) continue;
+        io.unobserve(e.target);
+        queue.push(Number(e.target.dataset.thumb));
+      }
+      pump();
+    }, { root: s.el, rootMargin: '300px' });
+    s.el.querySelectorAll('[data-thumb]').forEach((c) => io.observe(c));
+    s.el.querySelector(`[data-i="${pageIdx}"]`)?.scrollIntoView({ block: 'center' });
   }
 
   async function pageMenu(i, sheet) {
@@ -1197,6 +1320,7 @@ export function mount(el, params, ctx) {
       zoom = null;
       window.removeEventListener('resize', onResize);
       window.removeEventListener('sb-theme', onThemeChange);
+      document.removeEventListener('keydown', onPageKeys);
       exitReplay();
       surface?.endEdit();
       flush().then(() => discardIfEmpty());

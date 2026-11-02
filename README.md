@@ -63,6 +63,8 @@ Every sync is one commit, so the data repo's history doubles as version history.
   - **Layout**: A4 pages, or **endless scroll**: one long page that grows as you write (PDF export prints it as A4 pieces).
   - **Paper**: dot grid (the default), lined, narrow lined, squared, Cornell or blank, in white, ivory or dark. Change it under All pages: it changes every page of the note and becomes the paper for new notes.
   - Pages: add, reorder, bookmark. **Import a PDF** to write on it, a photo of paper, or **scan** pages straight in.
+  - **Turning pages**: keep scrolling past the end of a page for the next one (and back past the top for the one before), use Previous and Next under the page, or Page Up / Page Down and the arrow keys on a keyboard. Tap **Page 3 of 40** to see every page and jump to one. A note opens at the page you were last on.
+  - **Long PDFs** stay quick: only the pages near the one you're on are kept ready, page pictures come in as you scroll the page list, and a PDF page keeps its shape on an endless page.
   - **Mark up a PDF**: from a notebook (Mark up a PDF), from Capture, or by dragging a PDF onto a notebook or the map. It opens as a handwritten note with the PDF's pages to draw, circle (hold at the end of a shape so it snaps), highlight and type on. The PDF's text is searchable.
   - **Laser pointer** (on iPhone: + → More tools): draw to point things out while you talk or share your screen. A glowing red line with a tail; it fades a moment after you lift, and nothing is saved.
   - **Layers**: Ink, Highlights and your own (say "Review notes"). Hide or lock a layer, pick which one you're writing on, move a selection to another layer, and export only the visible layers.
@@ -90,6 +92,7 @@ Every sync is one commit, so the data repo's history doubles as version history.
   - Handwritten notes share their text boxes, post-its and the handwriting read on your device, whiteboards share an outline of what's on them, and recordings share their transcripts. Sealed notes and notebooks are never included.
 - **Updates**: when a new version of the app is ready, a bar offers to switch to it (you'll unlock again). Settings → This device shows the version and has **Check for updates**.
 - **Appearance** (Settings): match the device, or always light or dark. In dark mode, handwritten pages and whiteboards go dark too, with dark ink shown light and colours brightened, so there's no bright white page in a dark app. PDFs and images you export always use light paper. You can keep pages light in dark mode if you prefer.
+- **Speed and battery**: the app loads only what the first screen needs (the map's drawing library and the reader for Claude's answers come in when you open them), the map sits still when nothing's moving instead of redrawing all the time, and how notes connect is worked out once per change and shared by the map, each note's mini-map and the assistant.
 - **Settings**: sync, appearance, auto-lock, passphrase, sealed notes, regions, labels, encrypted backup, Markdown export.
 
 ## Editing the app

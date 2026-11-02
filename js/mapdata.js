@@ -6,9 +6,10 @@
 //   label    a note and a label stuck on it
 // Each kind has its own colour, the same on the map and in notes.
 
+import * as V from './vault.js';
 import { state } from './vault.js';
 import { displayTitle, wikiTitles, titleIndex, labelMap, noteText } from './model.js';
-import { similarNotes } from './semantic.js';
+import { nearLists, indexVersion } from './semantic.js';
 
 export const KINDS = [
   { id: 'link', name: 'Your links', css: '--c-link', fallback: '#2F6FB5', width: 1.9 },
@@ -26,7 +27,17 @@ const RELATED_PER_NOTE = 2;
 
 const key = (a, b) => (a < b ? `${a}|${b}` : `${b}|${a}`);
 
+// Worked out once per change to your notes (or to what the device knows of
+// their meaning) and shared by the map, the note mini-map and the assistant.
+const memo = new Map();
 export function connections(notesMap = state.notes, { labels = false } = {}) {
+  if (notesMap !== state.notes) return compute(notesMap, labels);
+  const k = `${V.rev}|${indexVersion()}|${labels}`;
+  if (memo.get(labels)?.k !== k) memo.set(labels, { k, v: compute(notesMap, labels) });
+  return memo.get(labels).v;
+}
+
+function compute(notesMap, labels) {
   const notes = [...notesMap.values()];
   const idx = titleIndex(notes);
   const edges = new Map(); // key -> { a, b, kind, why }
@@ -53,12 +64,13 @@ export function connections(notesMap = state.notes, { labels = false } = {}) {
   for (const n of notes) {
     for (const s of n.suggested || []) if (!taken.has(key(n.id, s.id)) && !dismissed(n.id, s.id)) add(n.id, s.id, 'related', s.reason || 'Suggested by Claude');
   }
+  const near = nearLists({ limit: RELATED_PER_NOTE + 2, min: RELATED_MIN });
   for (const n of notes) {
-    const near = similarNotes(n, { limit: RELATED_PER_NOTE + 2, min: RELATED_MIN }) || [];
     let k = 0;
-    for (const { note: o, score } of near) {
+    for (const { id, score } of near.get(n.id) || []) {
       if (k >= RELATED_PER_NOTE) break;
-      if (taken.has(key(n.id, o.id)) || dismissed(n.id, o.id)) continue;
+      const o = notesMap.get(id);
+      if (!o || taken.has(key(n.id, o.id)) || dismissed(n.id, o.id)) continue;
       add(n.id, o.id, 'related', `Close in meaning (${Math.round(score * 100)}%)`);
       k++;
     }
@@ -95,7 +107,17 @@ export const titleOf = (id) => { const n = state.notes.get(id); return n ? displ
 const STOP = new Set('the and for with that this from have has had was were are you your our their they them then than into onto about after before over under more most less very just also only even still need needs want wants will would could should can may might must not but all any some each other others same such own one two three four five six seven eight nine ten first last next new old good great big small get got make made take took give gave see saw know knew think thought say said tell told ask asked use used work works working note notes page pages week weeks day days month months year years time times today tomorrow yesterday thing things lot lots way ways back here there where when what which who whom whose why how out off per via etc yes yeah okay ok much many few well really maybe check sure like dont doesnt didnt isnt cant wont im ive its lets'.split(' '));
 const tokens = (t) => (String(t || '').toLowerCase().match(/[a-z][a-z0-9&'-]{2,}/g) || []).map((w) => w.replace(/'s$/, '')).filter((w) => !STOP.has(w));
 
+const themeMemo = new WeakMap();
 export function themes(edges, { minSize = 3 } = {}) {
+  const k = `${V.rev}|${minSize}`;
+  const had = themeMemo.get(edges);
+  if (had?.k === k) return had.v.map((t) => ({ ...t }));
+  const v = findThemes(edges, minSize);
+  themeMemo.set(edges, { k, v });
+  return v.map((t) => ({ ...t }));
+}
+
+function findThemes(edges, minSize) {
   const notes = [...state.notes.values()];
   const N = notes.length || 1;
   const df = new Map();

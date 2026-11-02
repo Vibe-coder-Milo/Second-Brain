@@ -454,3 +454,5 @@ select { appearance: none; -webkit-appearance: none; padding-right: 36px; backgr
 
 .time-chip { gap: 6px; }
 .time-chip[aria-pressed='true'] { background: var(--ink); color: var(--on-ink); border-color: var(--ink); }
+
+.map-loading { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: var(--muted); }

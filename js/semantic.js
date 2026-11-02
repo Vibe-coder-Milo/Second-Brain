@@ -12,6 +12,7 @@ import { embed } from './ai.js';
 
 const DIM = 384;
 const index = new Map(); // noteId -> { hash, chunks: Int8Array[], mean: Float32Array }
+let ver = 0; // goes up whenever the index changes
 const listeners = new Set();
 let loaded = false;
 let building = null;
@@ -99,6 +100,7 @@ async function loadSaved() {
     try {
       const { hash, chunks } = decode(await C.decryptBytes(state.keys.m, r.id, r.data));
       index.set(id, { hash, chunks, mean: meanOf(chunks.map(asFloat)) });
+      ver++;
     } catch { /* re-made on the next pass */ }
   }
 }
@@ -119,7 +121,7 @@ export async function buildIndex() {
       do {
         again = false;
         await loadSaved();
-        for (const id of [...index.keys()]) if (!state.notes.has(id)) { index.delete(id); local.del(`emb:${id}`).catch(() => {}); }
+        for (const id of [...index.keys()]) if (!state.notes.has(id)) { index.delete(id); ver++; local.del(`emb:${id}`).catch(() => {}); }
         for (const n of state.notes.values()) if (n.sealed) local.del(`emb:${n.id}`).catch(() => {});
         const todo = [];
         for (const n of state.notes.values()) {
@@ -137,6 +139,7 @@ export async function buildIndex() {
           for (let i = 0; i < ps.length; i += 8) vecs.push(...await embed(ps.slice(i, i + 8)));
           const chunks = vecs.map(toInt8);
           index.set(n.id, { hash: h, chunks, mean: meanOf(vecs) });
+          ver++;
           if (!n.sealed && state.keys.m) {
             const rid = `emb:${n.id}`;
             await local.put({ id: rid, k: 'm', data: await C.encryptBytes(state.keys.m, rid, encode(h, chunks)) });
@@ -163,6 +166,7 @@ export async function buildIndex() {
 
 export function forgetIndex() {
   index.clear();
+  ver++;
   loaded = false;
   semState.done = 0;
   semState.total = 0;
@@ -207,6 +211,30 @@ export async function searchByMeaning(query, { limit = 12, min = 0.18, pool = nu
   // Keep what's reasonably close to the best match.
   const cut = out.length ? out[0].score * 0.55 : 0;
   return out.filter((x) => x.score >= cut).slice(0, limit);
+}
+
+export const indexVersion = () => ver;
+
+// For every note, the notes closest in meaning, worked out in one pass (each
+// pair once) and kept until the index changes. The map, the note mini-map and
+// the assistant all read from this, so it isn't redone on every save.
+let near = { ver: -1, limit: 0, min: 0, map: new Map() };
+export function nearLists({ limit = 4, min = 0.3 } = {}) {
+  if (near.ver === ver && near.limit === limit && near.min === min) return near.map;
+  const ids = [...index.keys()];
+  const vs = ids.map((id) => index.get(id).mean);
+  const lists = ids.map(() => []);
+  for (let i = 0; i < ids.length; i++) {
+    const a = vs[i];
+    for (let j = i + 1; j < ids.length; j++) {
+      const s = dotF(a, vs[j]);
+      if (s >= min) { lists[i].push([j, s]); lists[j].push([i, s]); }
+    }
+  }
+  const map = new Map();
+  ids.forEach((id, i) => map.set(id, lists[i].sort((p, q) => q[1] - p[1]).slice(0, limit).map(([j, s]) => ({ id: ids[j], score: s }))));
+  near = { ver, limit, min, map };
+  return map;
 }
 
 // Notes closest in meaning to this one (no model call needed).

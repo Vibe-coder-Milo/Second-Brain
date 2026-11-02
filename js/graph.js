@@ -36,7 +36,9 @@ export function createMap(el, handlers = {}) {
     .backgroundColor('rgba(0,0,0,0)')
     .nodeId('id')
     .nodeRelSize(1)
-    .autoPauseRedraw(false)
+    // Only redraw when something changes (moving, zooming, hovering, a new
+    // filter), not 60 times a second while the map sits still: saves battery.
+    .autoPauseRedraw(true)
     .warmupTicks(80)
     .cooldownTicks(150)
     .d3VelocityDecay(0.35)
@@ -61,7 +63,9 @@ export function createMap(el, handlers = {}) {
       else handlers.onOpenNote?.(node.id);
     })
     .onNodeHover((node) => {
+      const was = hoverId;
       hoverId = node && !node.hub ? node.id : null;
+      if (was !== hoverId) poke();
       el.style.cursor = node ? 'pointer' : '';
     })
     .onLinkHover((l) => { if (!hoverId) el.style.cursor = l && l.kind !== 'hub' ? 'pointer' : ''; })
@@ -455,24 +459,36 @@ export function createMap(el, handlers = {}) {
   ro.observe(el);
   sizeToContainer();
 
-  const onScheme = () => { theme = readTheme(); };
+  const onScheme = () => { theme = readTheme(); poke(); };
   window.addEventListener('sb-theme', onScheme);
 
-  g.graphData(build());
+  let lastShape = '';
+  // Order doesn't matter (a saved note moves to the end of the list).
+  const shapeOf = (d) => `${d.nodes.map((n) => n.id).sort().join(',')}#${d.links.map((l) => `${idOf(l.source)}>${idOf(l.target)}:${l.kind}:${l.region?.color || ''}`).sort().join(',')}`;
+  { const d = build(); lastShape = shapeOf(d); g.graphData(d); }
   // Frame the map straight away (positions come from the warm-up ticks), then
   // again once the layout settles.
   setTimeout(() => { if (firstFit) fitView(0); }, 60);
 
   let playing = null;
   const refresh = () => { g.nodeVisibility(g.nodeVisibility()); g.linkVisibility(g.linkVisibility()); };
+  // Ask for one redraw (the map otherwise sits still when nothing moves).
+  function poke() { g.nodeVisibility(g.nodeVisibility()); }
 
   return {
+    // A saved note usually changes nothing on the map's shape; then just
+    // redraw (titles, colours) rather than restart the layout.
     update() {
       computeMatches();
-      g.graphData(build());
+      const d = build();
+      const sig = shapeOf(d);
+      if (sig === lastShape) { refresh(); return; }
+      lastShape = sig;
+      g.graphData(d);
     },
     select(id, { center = false } = {}) {
       selectedId = id;
+      poke();
       if (center && id) {
         const n = nodeCache.get(id);
         if (n && Number.isFinite(n.x)) g.centerAt(n.x, n.y, 500);
@@ -481,11 +497,14 @@ export function createMap(el, handlers = {}) {
     setFilter(f) {
       filter = { ...filter, ...f };
       computeMatches();
+      refresh();
     },
     // Which kinds of connection to draw.
     setShown(kinds) {
       shown = new Set(kinds);
-      g.graphData(build());
+      const d = build();
+      lastShape = shapeOf(d);
+      g.graphData(d);
     },
     shown: () => [...shown],
     counts: () => ({ ...counts }),
