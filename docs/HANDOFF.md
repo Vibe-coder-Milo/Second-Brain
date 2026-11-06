@@ -10,8 +10,7 @@ Open Claude Code on this repo (`Vibe-coder-Milo/Second-Brain`) and paste:
 
 > Read `docs/HANDOFF.md` and `CLAUDE.md` first. Then help me plan version 2.0
 > of Second brain. Start by asking me which of the ideas in
-> `docs/research/2026-11-06-feature-ideas.md` I want, and whether the iPad
-> top-bar blur is fixed.
+> `docs/research/2026-11-06-feature-ideas.md` I want.
 
 `CLAUDE.md` loads by itself in every session. This file is not automatic, so
 ask for it by name.
@@ -37,12 +36,8 @@ ask for it by name.
 
 ## Open items to check first
 
-1. **iPad top-bar blur: not yet confirmed fixed.**
-   - What was done: `sb-v22`, `.edge-guard`.
-   - Ask the owner whether the note title and back button look sharp now.
-   - If they're still soft, use the fallback in `CLAUDE.md` (move the top bars
-     below the blurred band in Home Screen mode on iPad).
-   - Chromium can't show this blur, so only the owner can confirm it.
+1. **iPad top-bar blur: fixed** in `sb-v22` (`.edge-guard`). The owner confirmed
+   it on their iPad. Keep the bar (see "iOS Safari" in `CLAUDE.md`).
 2. **Confirm on a real iPad:** Touch ID or Face ID unlock, and writing with
    the Pencil across a page break in the continuous view. See "Ideas noted,
    not requested" in `CLAUDE.md`.

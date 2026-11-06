@@ -362,9 +362,7 @@ owner picked 1 to 4, all built:
 button looked blurred on the iPad only (a laptop was fine). `sb-v21` turned
 off Safari's own button look (harmless, didn't fix it). The cause is iPadOS
 26's top-edge blur for Home Screen apps; `sb-v22` added `.edge-guard` (see
-"iOS Safari" above). **Not yet confirmed on the owner's iPad.** If it's still
-soft, the fallback is to move the top bars below the blurred band (about
-40 pt) when running as a Home Screen app on iPad.
+"iOS Safari" above). The owner confirmed on their iPad that it's sharp now.
 
 ## Ideas noted, not requested
 
