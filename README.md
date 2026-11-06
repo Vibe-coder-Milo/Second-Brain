@@ -51,18 +51,20 @@ Every sync is one commit, so the data repo's history doubles as version history.
 
 - **Today** is home: your week, what's due (late ones flagged), a quick "add a task", today's note (type straight into it), and everything you captured that day. Tap another day to look back or ahead.
 - **Capture** (the + button): a thought, screenshots or photos, and/or a link, which land in the **Inbox**. From the same sheet you can **scan paper**, or start a **typed note**, a **handwritten note** or a **whiteboard**.
-- **Notebooks**: a shelf of notebooks, each in a region, with a cover from the library of 38 (Classic, Nature, Singapore & Asia, Patterns, Bold and Night collections: shophouses, an HDB estate, lanterns, koi, peaks at dawn, monstera, tartan, leather, art deco, aurora and more), your own photo, or a plain colour. Long names fit: they go onto two lines (three if they must) rather than being cut short. Inside: sections, notes, and sub-notes under notes. On iPad the open note sits beside the notebook.
+- **Notebooks**: a shelf of notebooks, each in a region, with a cover from the library of 66 in 11 collections: Classic, Lined & paper (ruled, graph, dot grid, legal pad, ledger, music paper), Nature (peaks at dawn, monstera, dunes, bamboo, autumn leaves, rain and more), Calm (misty hills, moon phases, a soft arch), Singapore & Asia (shophouses, an HDB estate, lanterns, koi and more), Patterns, Bold, Fun (confetti, sprinkles, smiles, pixel hearts, rainbow, balloons), Futuristic (neon grid, holographic, circuit board, hyperspace), AI & data (neural network, tokens, sparkle, heatmap, signal) and Night, your own photo, or a plain colour. Long names fit: they go onto two lines (three if they must) rather than being cut short. Inside: sections, notes, and sub-notes under notes. On iPad the open note sits beside the notebook.
 - **More room to write** (iPad and computers): the side-panel button at the top of any note hides the side panel and a notebook's list, and the page grows to fill the space. It's remembered until you switch it back.
 - **Typed notes**
   - Styles: Title, Heading, Subheading, body text, bulleted, numbered and checklist lists, quote, callout box, post-it, divider. Type `/` anywhere for the style menu, or use shortcuts as you type: `#`, `##`, `###`, `-`, `1.`, `[ ]`, `>`, `!`, `---`.
   - **Toolbar**: the same two rows at the top as handwritten notes. The top row: undo and redo, text style, bold, lists, the tag button (adds a label) and **Insert** (+). The row below: font, size, colours and the rest. It's there while reading too, so nothing jumps when you start typing.
   - Formatting: bold, italic, underline, strikethrough, seven fonts, sizes and alignment.
+  - **Default text** (Settings → Appearance): the font, size and colour new typed text starts with, in typed notes, Today's note and text boxes on handwritten pages. It follows you to every device. A note with its own font keeps it; a chosen colour shows brightened in dark mode.
   - **Colours**: 30 text colours (ten hues, each bright, classic or deep), soft and marker highlights, the colours you used last (they also sit in the toolbar), and any colour of your own. In dark mode they're shown brightened so they stay readable.
   - **Insert** (the + button, or `/`): tables with shading, images, stickers, post-its, due dates and links to notes.
   - **Fields** from a section's table view (dates, impact, people and so on) are folded away below the text; tap **Fields** to see or change them.
   - Links: `[[` links to another note. Links show bold and blue (the same blue as links on the map), so they're easy to spot.
   - On iPad, headings make an outline beside the note.
 - **Handwritten notes** (Apple Pencil writes, fingers scroll and pinch to zoom; zoomed in, scroll or drag to any part of the page, edge to edge)
+  - **Zoom**: pinch with two fingers and the page grows around your fingers, following them as they move (up to 6 times). On a computer, hold Ctrl (or ⌘) and scroll, or pinch the trackpad: it zooms around the pointer. While zooming, a small label shows how far ("250%"); tap it to fit the page to the screen again.
   - **Toolbar**: the top row of tools never changes; the row below shows the settings for the tool in hand (the pen chip names the pen, like "Fountain, 0.7 mm"; tap it for all pen settings). Not sure what an icon does? Hover over it, or press and hold it on iPad and iPhone.
   - **Move** (the hand): drag stickers, post-its, labels, tables, photos or writing around without lassoing first. Tap something for its options; drag empty paper to scroll.
   - **Labels** (the tag button): stick a label like Important or Follow up anywhere on the page. Labels are what you search and filter by; they show on the Labels screen.
@@ -140,7 +142,7 @@ js/editor/inkdraw.js  drawing pages, pens, stickers and layers
 js/editor/pagestack.js  the continuous view (pages one under another)
 js/editor/zoomstrip.js  the writing window
 js/stickers.js        the sticker library
-js/covers.js, coverart.js  notebook covers (coverart.js holds the newer artwork)
+js/covers.js, coverart.js, coverart2.js  notebook covers (coverart*.js hold the generated artwork; tools/covergen2.py makes coverart2.js)
 js/export.js, pdf.js  PDF and Markdown export, PDF import
 js/pdfview.js         drawing PDF pages sharp from the kept PDF
 js/bulkimport.js      bringing in many PDFs at once (Notability exports)

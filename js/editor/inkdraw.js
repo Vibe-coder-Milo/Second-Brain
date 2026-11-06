@@ -463,7 +463,7 @@ export function drawObject(ctx, o, { redraw } = {}) {
   }
   if (o.type === 'text') {
     ctx.save();
-    const h = drawRichText(ctx, o.doc, o.x, o.y, o.w, { size: o.size || 20, font: o.font, redraw });
+    const h = drawRichText(ctx, o.doc, o.x, o.y, o.w, { size: o.size || 20, font: o.font, color: o.color || undefined, redraw });
     ctx.restore();
     if (Math.abs((o.h || 0) - h) > 1) Object.defineProperty(o, '_h', { value: h, configurable: true, enumerable: false });
   }

@@ -6,7 +6,8 @@ import { meta } from './db.js';
 import { startAutoSync, scheduleSync } from './sync.js';
 import { runOcrQueue } from './ocr.js';
 import { isWide, toast } from './util.js';
-import { applyTheme } from './theme.js';
+import { applyTheme, applyTextDefaults } from './theme.js';
+import { textFontCss } from './model.js';
 import { registerSW } from './appupdate.js';
 import { closeAllSheets, passphraseSheet, closePopover } from './ui.js';
 import { renderShell, refreshChrome } from './views/shell.js';
@@ -150,8 +151,9 @@ async function boot() {
   await V.init();
   V.onLocalChange(() => scheduleSync());
   V.subscribe((evt) => {
-    if (evt.type === 'unlock') { startUnlocked(); return; }
+    if (evt.type === 'unlock') { applyTextDefaults(state.config?.text, textFontCss); startUnlocked(); return; }
     if (state.status !== 'unlocked') return;
+    if (evt.type === 'config' || evt.type === 'remote') applyTextDefaults(state.config?.text, textFontCss);
     current.inst?.onEvent?.(evt);
     panel.inst?.onEvent?.(evt);
     if (['note', 'delete', 'remote', 'sealed', 'config', 'sync'].includes(evt.type)) {

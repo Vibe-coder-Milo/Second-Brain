@@ -4,7 +4,7 @@ import { html, raw, $, fmtAgo, toast, downloadText, isoDay } from '../util.js';
 import * as V from '../vault.js';
 import { state } from '../vault.js';
 import { meta } from '../db.js';
-import { PALETTE } from '../model.js';
+import { PALETTE, TEXT_FONT_IDS, TEXT_SIZES, TEXT_DEFAULT_COLORS, textFontCss } from '../model.js';
 import { passphraseStrength } from '../crypto.js';
 import { probe, syncNow, explainError } from '../sync.js';
 import { confirmSheet, openSheet } from '../ui.js';
@@ -14,6 +14,41 @@ import { syncFields, readSyncFields } from './gate.js';
 import { icons } from '../icons.js';
 import { themePref, applyTheme } from '../theme.js';
 import { appVersion, checkForUpdate } from '../appupdate.js';
+
+// Default text: font, size and colour for new typed text (synced to every device).
+function textPrefsHtml() {
+  const t = state.config.text || {};
+  const size = t.size || 18;
+  return String(html`
+    <div class="set-row"><label for="s-text-font">Font</label>
+      <select id="s-text-font" class="text-font-pick">
+        <option value="" ${!t.font ? raw('selected') : ''}>Usual (Spectral in notes)</option>
+        ${TEXT_FONT_IDS.map((f) => html`<option value="${f}" ${t.font === f ? raw('selected') : ''}>${f}</option>`)}
+      </select></div>
+    <div class="set-row"><span id="s-text-size-l">Size</span>
+      <div class="seg text-sizes" role="radiogroup" aria-labelledby="s-text-size-l">${TEXT_SIZES.map((n) => html`<button type="button" role="radio" data-text-size="${n}" aria-checked="${n === size ? 'true' : 'false'}" aria-label="${n} point">${n}</button>`)}</div></div>
+    <div class="set-row"><span id="s-text-col-l">Colour</span>
+      <div class="text-colours" role="radiogroup" aria-labelledby="s-text-col-l">
+        <button type="button" role="radio" class="swatch usual" data-text-colour="" aria-checked="${!t.color ? 'true' : 'false'}" aria-label="Usual ink (follows light and dark)"></button>
+        ${TEXT_DEFAULT_COLORS.map(([n, c]) => html`<button type="button" role="radio" class="swatch" data-text-colour="${c}" style="background:${c}" aria-checked="${t.color === c ? 'true' : 'false'}" aria-label="${n}"></button>`)}
+      </div></div>
+    <p class="rich text-sample" id="s-text-sample" style="font-family:${t.font ? textFontCss(t.font) : 'var(--serif)'}">This is how new typed text will look.</p>`);
+}
+function bindTextPrefs(main) {
+  const host = $('#s-text', main);
+  if (!host) return;
+  const save = async (patch) => {
+    await V.saveConfig({ text: { ...state.config.text, ...patch } });
+    host.innerHTML = textPrefsHtml();
+  };
+  host.addEventListener('change', (e) => { if (e.target.id === 's-text-font') save({ font: e.target.value || null }); });
+  host.addEventListener('click', (e) => {
+    const sz = e.target.closest('[data-text-size]');
+    if (sz) { save({ size: Number(sz.dataset.textSize) }); return; }
+    const col = e.target.closest('[data-text-colour]');
+    if (col) save({ color: col.dataset.textColour || null });
+  });
+}
 
 // Turning on Touch ID / Face ID: check the passphrase, make a passkey, then
 // lock a copy of the key with it. Each step that asks for Touch ID or Face ID
@@ -145,6 +180,9 @@ export function mount(main, params, ctx) {
           <div class="seg" role="radiogroup" aria-labelledby="s-theme-l">${[['auto', 'Match device'], ['light', 'Light'], ['dark', 'Dark']].map(([v, n]) => html`<button type="button" role="radio" data-theme-pick="${v}" aria-checked="${themePref() === v ? 'true' : 'false'}">${n}</button>`)}</div></div>
         <label class="check"><input type="checkbox" id="s-darkpaper" ${state.device?.darkPaper !== false ? raw('checked') : ''}> In dark mode, show handwritten pages and whiteboards dark too</label>
         <p class="hint">Easier on the eyes at night. Dark ink shows light, and colours are brightened a little. PDFs and images you export always use light paper.</p>
+        <h3 class="set-sub" id="s-text-h">Default text</h3>
+        <p class="hint">How new typed text starts: in typed notes, Today’s note, and text boxes on handwritten pages. You can still change any part of a note.</p>
+        <div id="s-text">${raw(textPrefsHtml())}</div>
       </section>
 
       <section aria-labelledby="s-sec">
@@ -403,6 +441,7 @@ export function mount(main, params, ctx) {
         main.querySelectorAll('[data-theme-pick]').forEach((y) => y.setAttribute('aria-checked', y === x ? 'true' : 'false'));
       };
     });
+    bindTextPrefs(main);
     $('#s-darkpaper', main).onchange = async (e) => { await V.updateDevice({ darkPaper: e.target.checked }); window.dispatchEvent(new Event('sb-theme')); };
     on('[data-act=hand-all]', async (b) => {
       const st = $('#s-hand-status', main);

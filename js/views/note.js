@@ -456,7 +456,8 @@ function mountTyped(el, params, ctx) {
       pickLabel: (cb) => labelPicker(host, { title: 'Callout label' }).then(cb),
       pickDate: (cur, cb) => datePicker(host, cur).then((d) => cb(d === undefined ? undefined : d)),
     });
-    host.style.setProperty('--note-font', R.fontCss(n.font));
+    // A note with its own font keeps it; others use the default from Settings.
+    if (n.font) host.style.setProperty('--note-font', R.fontCss(n.font)); else host.style.removeProperty('--note-font');
     // Tap the text while reading to start editing there.
     editor.view.dom.addEventListener('click', (e) => {
       if (editing || compact) return;
@@ -493,7 +494,7 @@ function mountTyped(el, params, ctx) {
         onRecord: () => record(),
         onHideKeyboard: () => {},
         sealed: () => !!note()?.sealed,
-        noteFont: () => note()?.font,
+        noteFont: () => note()?.font || state.config.text?.font,
         setNoteFont: (f) => { patch({ font: f }); $('#n-rich', el)?.style.setProperty('--note-font', rich.fontCss(f)); },
       });
       suggest = T.attachSuggest(editor, { noteId: () => id, sealed: () => !!note()?.sealed });

@@ -187,7 +187,8 @@ export class PageStack {
     const scale = this.s.scale;
     const sc = this.s.scroll;
     let anchor = null;
-    if (this.lastScale && Math.abs(scale - this.lastScale) > 1e-4 && this.slots.length) {
+    // (A pinch or wheel zoom places the page under the fingers itself.)
+    if (!this.s.zoomAnchored && this.lastScale && Math.abs(scale - this.lastScale) > 1e-4 && this.slots.length) {
       const i = this.focusIndex();
       const sl = this.slots[i];
       const line = sc.scrollTop + sc.clientHeight * 0.4;

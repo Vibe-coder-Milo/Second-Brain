@@ -828,6 +828,7 @@ export function mount(el, params, ctx) {
     if (!tools || !props) return;
     document.body.classList.add('editing');
     fmt = T.mountNoteBars(tools, props, ed, {
+      baseSize: 18, // text boxes size their text against the box's own size
       wide: isWide() || window.innerWidth >= 700,
       hideKeyboard: !isWide(),
       dark: () => !!surface?.dark,

@@ -524,7 +524,9 @@ export function notebookSheet(existing = null) {
     const drawCovers = () => {
       const st = d.cover.style;
       const own = [{ id: 'photo' }, { id: 'plain', nb: { ...d, title: '', cover: { ...d.cover, style: 'plain' } } }];
-      const art = COVERS.filter((c) => group === 'all' || c.group === group).map((c) => ({ id: c.id, nb: { ...d, title: '', cover: { ...d.cover, style: c.id } } }));
+      // In All, covers sit with the rest of their collection.
+      const order = COVER_GROUPS.map(([g]) => g);
+      const art = COVERS.filter((c) => group === 'all' || c.group === group).sort((a, b) => order.indexOf(a.group) - order.indexOf(b.group)).map((c) => ({ id: c.id, nb: { ...d, title: '', cover: { ...d.cover, style: c.id } } }));
       const items = group === 'own' ? own : group === 'all' ? [...art, ...own] : art;
       $('#nbs-covers', s.el).innerHTML = `${html`${items.map((it) => html`<li><button type="button" role="radio" aria-checked="${st === it.id ? 'true' : 'false'}" data-cover="${it.id}" class="cover-pick">
         ${it.id === 'photo'

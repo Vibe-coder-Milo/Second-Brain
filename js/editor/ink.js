@@ -2,7 +2,7 @@
 // writes; fingers scroll and pinch. Pens, highlighter, eraser, lasso, shapes,
 // text boxes, post-its and stickers, with undo.
 
-import { PAGE_W } from '../model.js';
+import { PAGE_W, textFontCss } from '../model.js';
 import { uid, html, raw, toast } from '../util.js';
 import { state } from '../vault.js';
 import * as V from '../vault.js';
@@ -18,6 +18,9 @@ const r2 = (v) => Math.round(v * 100) / 100;
 // A pen's smoothing and pressure settings, kept on each stroke it draws.
 export const penExtras = (tool, hl = false) => (hl ? {} : { ...(Number.isInteger(tool.smoothing) && tool.smoothing !== 2 ? { sm: tool.smoothing } : {}), ...(tool.pressure === false ? { np: 1 } : {}) });
 const MAX_PX = 8_000_000;
+// Zoom, against the page fitted to the screen's width.
+export const ZOOM_MIN = 1;
+export const ZOOM_MAX = 6;
 let clip = null;
 
 // ---- Shape recognition ------------------------------------------------------------
@@ -466,51 +469,165 @@ export class InkSurface {
     el.addEventListener('touchstart', blockStylus, { passive: false });
     el.addEventListener('touchmove', blockStylus, { passive: false });
 
-    el.addEventListener('pointerdown', (e) => this.down(e));
+    // Which kind of pointer each one is (a finger, the Pencil, a mouse).
+    this.ptypes = new Map();
+    el.addEventListener('pointerdown', (e) => { this.ptypes.set(e.pointerId, e.pointerType); if (this.ptypes.size > 20) this.ptypes.delete(this.ptypes.keys().next().value); this.down(e); });
     el.addEventListener('pointermove', (e) => this.move(e));
     el.addEventListener('pointerup', (e) => this.up(e));
     el.addEventListener('pointercancel', (e) => this.cancel(e));
 
-    // Pinch to zoom (Safari), ctrl/cmd + wheel elsewhere.
-    let startZoom = 1;
-    // In the continuous view every page grows with the pinch, from the middle of the screen.
-    const zoomEl = () => this.zoomTarget || this.pageEl;
-    this.scroll.addEventListener('gesturestart', (e) => {
-      e.preventDefault();
-      startZoom = this.zoom;
-      const t = zoomEl();
-      t.style.transformOrigin = this.zoomTarget ? `50% ${this.scroll.scrollTop + this.scroll.clientHeight / 2 - t.offsetTop}px` : 'top center';
-    });
-    this.scroll.addEventListener('gesturechange', (e) => {
-      e.preventDefault();
-      const z = Math.max(1, Math.min(3, startZoom * e.scale));
-      zoomEl().style.transform = `scale(${z / this.zoom})`;
-      this.pendingZoom = z;
-    });
-    this.scroll.addEventListener('gestureend', (e) => {
-      e.preventDefault();
-      zoomEl().style.transform = '';
-      if (this.pendingZoom) this.setZoom(this.pendingZoom);
-      this.pendingZoom = null;
-    });
-    this.scroll.addEventListener('wheel', (e) => {
-      if (!(e.ctrlKey || e.metaKey)) return;
-      e.preventDefault();
-      this.setZoom(this.zoom * (e.deltaY < 0 ? 1.1 : 1 / 1.1));
-    }, { passive: false });
+    // Pinch with two fingers: the page grows around your fingers and follows
+    // them as they move (like Photos). Ctrl/cmd + scroll wheel (and a
+    // trackpad pinch) zooms around the pointer.
+    this.bindPinch();
   }
 
-  setZoom(z) {
-    const nz = Math.max(1, Math.min(3, z));
-    if (Math.abs(nz - this.zoom) < 0.01) return;
+  // ---------- Zoom ----------
+  // The element that grows with a pinch (all pages in the continuous view).
+  get zoomEl() { return this.zoomTarget || this.pageEl; }
+  // What's under a point on screen: the page (or the continuous view's page
+  // slot) and where on it, as fractions, so it can be put back under the
+  // fingers after the zoom.
+  anchorAt(cx, cy) {
+    let el = this.pageEl;
+    if (this.zoomTarget) {
+      const slots = [...this.zoomTarget.querySelectorAll(':scope > .ink-slot')];
+      let best = null;
+      let bd = Infinity;
+      for (const sl of slots) {
+        const r = sl.getBoundingClientRect();
+        const d = cy < r.top ? r.top - cy : cy > r.bottom ? cy - r.bottom : 0;
+        if (d < bd) { bd = d; best = sl; }
+        if (d === 0) break;
+      }
+      if (best) el = best;
+    }
+    const r = el.getBoundingClientRect();
+    return { el, fx: (cx - r.left) / Math.max(1, r.width), fy: (cy - r.top) / Math.max(1, r.height) };
+  }
+  // Set the zoom so the spot that was under `from` (screen point, or the
+  // anchor from anchorAt) ends up under `to`. Without a point: the middle.
+  setZoom(z, at = null, to = null) {
+    const nz = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, z));
     const sc = this.scroll;
-    const cx = (sc.scrollLeft + sc.clientWidth / 2) / (sc.scrollWidth || 1);
-    const cy = (sc.scrollTop + sc.clientHeight / 2) / (sc.scrollHeight || 1);
+    const sr = sc.getBoundingClientRect();
+    const from = at || { x: sr.left + sc.clientWidth / 2, y: sr.top + sc.clientHeight / 2 };
+    const anchor = from.el ? from : this.anchorAt(from.x, from.y);
+    const dest = to || (from.el ? null : from) || { x: sr.left + sc.clientWidth / 2, y: sr.top + sc.clientHeight / 2 };
+    const changed = Math.abs(nz - this.zoom) >= 0.005;
     this.zoom = nz;
-    this.layout();
-    sc.scrollLeft = cx * sc.scrollWidth - sc.clientWidth / 2;
-    sc.scrollTop = cy * sc.scrollHeight - sc.clientHeight / 2;
-    this.opts.onZoom?.(nz);
+    // The continuous view keeps its own place on resize; here the fingers decide.
+    this.zoomAnchored = true;
+    if (changed) this.layout();
+    this.zoomAnchored = false;
+    const r = anchor.el.getBoundingClientRect();
+    sc.scrollLeft += r.left + anchor.fx * r.width - dest.x;
+    sc.scrollTop += r.top + anchor.fy * r.height - dest.y;
+    if (changed) this.opts.onZoom?.(nz);
+    this.showZoom();
+  }
+  // A small "150%" while zooming; tap it to fit the page to the screen again.
+  showZoom(z = this.zoom) {
+    let pill = this.host.querySelector('.zoom-pill');
+    if (!pill) {
+      pill = document.createElement('button');
+      pill.type = 'button';
+      pill.className = 'zoom-pill';
+      pill.addEventListener('click', () => this.setZoom(1));
+      this.host.appendChild(pill);
+    }
+    const pct = Math.round(z * 100);
+    pill.textContent = `${pct}%`;
+    pill.setAttribute('aria-label', pct === 100 ? 'Zoom 100%' : `Zoom ${pct}%. Tap to fit the page`);
+    pill.classList.add('on');
+    clearTimeout(this.pillTimer);
+    if (pct !== 100) this.pillTimer = setTimeout(() => pill.classList.remove('on'), 2500);
+    else this.pillTimer = setTimeout(() => pill.classList.remove('on'), 900);
+  }
+
+  bindPinch() {
+    const sc = this.scroll;
+    const fingers = (e) => [...e.touches].filter((t) => t.touchType !== 'stylus');
+    const mid = (a, b) => ({ x: (a.clientX + b.clientX) / 2, y: (a.clientY + b.clientY) / 2 });
+    const gap = (a, b) => Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+    let p = null; // the pinch in progress
+    const start = (e) => {
+      const f = fingers(e);
+      if (f.length !== 2 || [...e.touches].some((t) => t.touchType === 'stylus')) return;
+      // A finger stroke or drag the first finger started gives way to the pinch.
+      if (this.drawing) this.dropFingerAction();
+      this.tap = null;
+      const m = mid(f[0], f[1]);
+      const t = this.zoomEl;
+      const tr = t.getBoundingClientRect();
+      p = { d0: Math.max(10, gap(f[0], f[1])), m0: m, m, z0: this.zoom, z: this.zoom, anchor: this.anchorAt(m.x, m.y), sl0: sc.scrollLeft, st0: sc.scrollTop };
+      t.style.transformOrigin = `${m.x - tr.left}px ${m.y - tr.top}px`;
+      t.style.willChange = 'transform';
+      e.preventDefault();
+    };
+    const move = (e) => {
+      if (!p) return;
+      const f = fingers(e);
+      if (f.length < 2) return;
+      e.preventDefault();
+      p.m = mid(f[0], f[1]);
+      p.z = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, p.z0 * gap(f[0], f[1]) / p.d0));
+      if (p.raf) return;
+      p.raf = requestAnimationFrame(() => {
+        if (!p) return;
+        p.raf = 0;
+        // Whatever the browser scrolled meanwhile is undone by the translate.
+        const tx = p.m.x - p.m0.x + (sc.scrollLeft - p.sl0);
+        const ty = p.m.y - p.m0.y + (sc.scrollTop - p.st0);
+        this.zoomEl.style.transform = `translate(${tx}px, ${ty}px) scale(${p.z / p.z0})`;
+        this.showZoom(p.z);
+      });
+    };
+    const end = (e) => {
+      if (!p || fingers(e).length >= 2) return;
+      const q = p;
+      p = null;
+      cancelAnimationFrame(q.raf);
+      const t = this.zoomEl;
+      t.style.transform = '';
+      t.style.transformOrigin = '';
+      t.style.willChange = '';
+      this.setZoom(q.z, q.anchor, q.m);
+    };
+    sc.addEventListener('touchstart', start, { passive: false });
+    sc.addEventListener('touchmove', move, { passive: false });
+    sc.addEventListener('touchend', end);
+    sc.addEventListener('touchcancel', end);
+    // Safari's own page zoom stays off; the pinch above does the zooming.
+    for (const ev of ['gesturestart', 'gesturechange', 'gestureend']) sc.addEventListener(ev, (e) => e.preventDefault());
+    // Ctrl/cmd + wheel, and trackpad pinches (which arrive as ctrl + wheel).
+    let wz = null;
+    sc.addEventListener('wheel', (e) => {
+      if (!(e.ctrlKey || e.metaKey)) return;
+      e.preventDefault();
+      const dy = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY;
+      const k = Math.exp(-Math.max(-100, Math.min(100, dy)) * 0.002);
+      if (!wz) wz = { z: this.zoom, at: { x: e.clientX, y: e.clientY } };
+      wz.z *= k;
+      wz.at = { x: e.clientX, y: e.clientY };
+      if (wz.raf) return;
+      wz.raf = requestAnimationFrame(() => { const w = wz; wz = null; this.setZoom(w.z, w.at); });
+    }, { passive: false });
+  }
+  // Drop what a single finger was doing (writing with a finger, dragging the
+  // page) when a second finger lands to pinch.
+  dropFingerAction() {
+    const d = this.drawing;
+    if (!d) return;
+    // The Pencil (or a mouse) keeps going; only a finger's action gives way.
+    if (d.pointerId === -1 || this.ptypes.get(d.pointerId) !== 'touch') return;
+    clearTimeout(this.holdTimer);
+    this.drawing = null;
+    if (d.kind === 'erase') { if (d.any) this.undo(); else this.undoStack.pop(); }
+    if (d.kind === 'move') this.endMove(d);
+    if (d.kind === 'laser') d.trail.end = performance.now();
+    this.clearWet();
+    this.updateTouchAction();
   }
 
   isDrawPointer(e) {
@@ -1340,7 +1457,11 @@ export class InkSurface {
   }
 
   addText(x, y) {
-    const o = this.stamp({ id: uid('o'), at: Date.now(), type: 'text', x: Math.min(x, PAGE_W - 240), y: y - 14, w: Math.min(520, PAGE_W - Math.min(x, PAGE_W - 240) - 30), h: 40, size: 20, doc: { type: 'doc', content: [{ type: 'paragraph' }] }, t: Date.now(), fresh: true });
+    // New text boxes start in the default text from Settings (size 18 there is 20 here).
+    const dt = state.config?.text || {};
+    const extra = { ...(dt.font ? { font: dt.font } : {}), ...(dt.color ? { color: dt.color } : {}) };
+    const size = Math.round(((dt.size || 18) * 20) / 18);
+    const o = this.stamp({ id: uid('o'), at: Date.now(), type: 'text', x: Math.min(x, PAGE_W - 240), y: y - 14, w: Math.min(520, PAGE_W - Math.min(x, PAGE_W - 240) - 30), h: 40, size, ...extra, doc: { type: 'doc', content: [{ type: 'paragraph' }] }, t: Date.now(), fresh: true });
     this.snapshot();
     this.data.objects.push(o);
     this.edit(o);
@@ -1408,6 +1529,8 @@ export class InkSurface {
     if (o.type === 'text') {
       Object.assign(box.style, { left: `${o.x * s}px`, top: `${o.y * s}px`, width: `${o.w * s}px` });
       box.style.setProperty('--fs', `${(o.size || 20) * s}px`);
+      if (o.font) box.style.setProperty('--tbf', textFontCss(o.font)); else box.style.removeProperty('--tbf');
+      if (o.color) box.style.setProperty('--tbc', this.dark ? darkInk(o.color) : o.color); else box.style.removeProperty('--tbc');
     } else {
       Object.assign(box.style, { left: `${o.x * s}px`, top: `${o.y * s}px`, width: `${Math.max(o.w * s, 200)}px`, minHeight: `${o.h * s}px` });
       box.style.setProperty('--fs', `${30 * s}px`);

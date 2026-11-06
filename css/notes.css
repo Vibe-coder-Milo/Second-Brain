@@ -114,13 +114,18 @@
 .postit-swatch { display: block; width: 52px; height: 52px; clip-path: polygon(0 0, 100% 0, 100% 76%, 76% 100%, 0 100%); box-shadow: 0 2px 4px rgba(0, 0, 0, 0.12); }
 
 /* ---------- Typed notes: the editor ---------- */
-.rich-host { --note-font: var(--serif); }
-.rich { outline: none; font-family: var(--note-font); font-size: 18px; line-height: 1.55; color: var(--ink); overflow-wrap: anywhere; min-height: 2em; caret-color: var(--ink); }
+.rich-host { --note-font: var(--default-note-font, var(--serif)); }
+/* Size and colour come from Settings (Default text); headings scale with the size.
+   A chosen colour shows brightened on dark backgrounds (text boxes on handwritten
+   pages follow the paper instead). */
+@media (prefers-color-scheme: dark) { :root:not([data-theme=light]) .rich:not(.tb-rich) { color: var(--note-ink-dark, var(--ink)); } }
+:root[data-theme=dark] .rich:not(.tb-rich) { color: var(--note-ink-dark, var(--ink)); }
+.rich { outline: none; font-family: var(--note-font); font-size: var(--note-size, 18px); line-height: 1.55; color: var(--note-ink, var(--ink)); overflow-wrap: anywhere; min-height: 2em; caret-color: var(--ink); }
 .rich > * + * { margin-top: 0.55em; }
 .rich p { margin: 0; }
-.rich h1 { font-family: var(--note-font); font-weight: 400; font-size: 32px; line-height: 1.2; margin: 0.8em 0 0.2em; }
-.rich h2 { font-family: var(--note-font); font-weight: 400; font-size: 25px; line-height: 1.25; margin: 0.9em 0 0.15em; }
-.rich h3 { font-family: var(--sans); font-weight: 700; font-size: 16px; line-height: 1.35; margin: 1em 0 0.1em; letter-spacing: 0.01em; }
+.rich h1 { font-family: var(--note-font); font-weight: 400; font-size: 1.78em; line-height: 1.2; margin: 0.8em 0 0.2em; }
+.rich h2 { font-family: var(--note-font); font-weight: 400; font-size: 1.39em; line-height: 1.25; margin: 0.9em 0 0.15em; }
+.rich h3 { font-family: var(--sans); font-weight: 700; font-size: 0.89em; line-height: 1.35; margin: 1em 0 0.1em; letter-spacing: 0.01em; }
 .rich > h1:first-child, .rich > h2:first-child, .rich > h3:first-child { margin-top: 0; }
 .rich ul, .rich ol { margin: 0; padding-left: 1.5em; }
 .rich li { margin: 0.12em 0; }
@@ -310,6 +315,10 @@ body.inking { overscroll-behavior: none; }
    (centring would push its left side off-screen, out of reach). */
 .ink-scroll { position: absolute; inset: 0; overflow: auto; -webkit-overflow-scrolling: touch; display: flex; flex-direction: column; align-items: flex-start; padding: 4px 8px 140px; }
 .ink-scroll > * { margin-inline: auto; }
+/* "150%" while zooming; a tap fits the page to the screen again. */
+.zoom-pill { position: absolute; top: 12px; left: 50%; z-index: 6; min-height: 36px; padding: 0 14px; border: 0; border-radius: 18px; background: var(--ink); color: var(--on-ink); font: 600 14px/1 var(--sans); font-variant-numeric: tabular-nums; cursor: pointer; transform: translateX(-50%); opacity: 0; pointer-events: none; transition: opacity 0.2s ease; }
+.zoom-pill.on { opacity: 0.92; pointer-events: auto; }
+.zoom-pill::after { content: ""; position: absolute; inset: -4px; }
 @media (min-width: 700px) { .ink-scroll { padding: 8px 24px 160px; } }
 .ink-page { position: relative; flex-shrink: 0; box-shadow: var(--paper-shadow); border-radius: 3px; background: #FFFFFF; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
 .ink-page canvas { position: absolute; left: 0; top: 0; border-radius: 3px; }
@@ -325,7 +334,7 @@ body.inking { overscroll-behavior: none; }
 .sel-bar button:hover { background: rgba(255, 255, 255, 0.14); }
 .sel-col { width: 16px; height: 16px; border-radius: 50%; background: conic-gradient(#EB5757, #F2C94C, #6FCF97, #56CCF2, #2F80ED, #8C67B0, #EB5757); }
 .tb-edit { position: absolute; z-index: 4; border: 1.5px dashed var(--focus); border-radius: 6px; background: rgba(255, 255, 255, 0.92); }
-.tb-edit .rich, .tb-rich { font-family: 'Overpass', system-ui, sans-serif; font-size: var(--fs, 20px); line-height: 1.42; color: #1B2A38; padding: 2px 4px; min-height: 1.5em; }
+.tb-edit .rich, .tb-rich { font-family: var(--tbf, 'Overpass', system-ui, sans-serif); font-size: var(--fs, 20px); line-height: 1.42; color: var(--tbc, #1B2A38); padding: 2px 4px; min-height: 1.5em; }
 .tb-edit .rich h1 { font-size: 1.7em; } .tb-edit .rich h2 { font-size: 1.35em; } .tb-edit .rich h3 { font-size: 1.12em; color: #51606C; }
 .tb-actions { position: absolute; left: 0; top: 100%; margin-top: 6px; display: flex; gap: 4px; }
 .tb-actions button { min-height: 34px; padding: 0 12px; border-radius: 9px; border: 1px solid var(--field); background: var(--surface); color: var(--ink); font-size: 13px; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; }
@@ -949,7 +958,15 @@ td.tv-tags, td.tv-select { min-width: 150px; }
 
 /* ---------- Appearance ---------- */
 .set-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-.set-row > span { font-weight: 600; font-size: 15px; }
+.set-row > span, .set-row > label { font-weight: 600; font-size: 15px; }
+.set-sub { margin: 22px 0 4px; font-size: 16px; font-weight: 700; }
+#s-text { display: grid; gap: 14px; margin-top: 10px; }
+.text-font-pick { width: auto; min-width: 220px; }
+.text-sizes { flex-wrap: wrap; }
+.text-sizes button { padding: 0 10px; min-width: 40px; font-variant-numeric: tabular-nums; }
+.text-colours { display: flex; flex-wrap: wrap; gap: 10px; padding: 4px; }
+.swatch.usual { background: linear-gradient(135deg, var(--ink) 50%, var(--bg) 50%); }
+.text-sample { margin: 0; padding: 12px 14px; border-radius: 12px; background: var(--surface); border: 1px solid var(--line); min-height: 0; }
 
 /* ---------- Dark mode: text colours and dark pages ---------- */
 /* Text colours and highlights carry a dark-mode version (--tcd, --hld). */
@@ -962,7 +979,7 @@ td.tv-tags, td.tv-select { min-width: 150px; }
 .paper-dark .tb-edit [style*="--tcd"]:not(mark *) { color: var(--tcd) !important; }
 .paper-dark .tb-edit mark[style*="--hld"] { background-color: var(--hld) !important; color: #D2D9E0 !important; }
 .paper-dark .tb-edit { background: rgba(30, 43, 56, 0.94); }
-.paper-dark .tb-edit .rich, .paper-dark .tb-rich { color: #D2D9E0; }
+.paper-dark .tb-edit .rich, .paper-dark .tb-rich { color: var(--tbc, #D2D9E0); }
 .paper-dark .tb-edit .rich h3 { color: #C1CAD1; }
 .paper-dark .ink-page { box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.05), 0 8px 24px rgba(0, 0, 0, 0.35); }
 

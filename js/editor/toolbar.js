@@ -169,7 +169,8 @@ function fontMenu(editor, anchor, opts) {
   });
 }
 
-const sizeOf = (editor) => parseInt(editor.getAttributes('textStyle').fontSize || '', 10) || 18;
+// Text without its own size shows at the default size from Settings.
+const sizeOf = (editor, base) => parseInt(editor.getAttributes('textStyle').fontSize || '', 10) || base || state.config?.text?.size || 18;
 
 export function mountFormatBar(bar, editor, opts = {}) {
   const compact = !!opts.compact;
@@ -333,8 +334,8 @@ export function mountNoteBars(tools, props, editor, opts = {}) {
         break;
       }
       case 'font': fontMenu(editor, b, opts); break;
-      case 'smaller': ch().setFontSize(`${Math.max(12, sizeOf(editor) - 2)}px`).run(); break;
-      case 'larger': ch().setFontSize(`${Math.min(48, sizeOf(editor) + 2)}px`).run(); break;
+      case 'smaller': ch().setFontSize(`${Math.max(12, sizeOf(editor, opts.baseSize) - 2)}px`).run(); break;
+      case 'larger': ch().setFontSize(`${Math.min(48, sizeOf(editor, opts.baseSize) + 2)}px`).run(); break;
       case 'bold': ch().toggleBold().run(); break;
       case 'italic': ch().toggleItalic().run(); break;
       case 'underline': ch().toggleUnderline().run(); break;
@@ -368,7 +369,7 @@ export function mountNoteBars(tools, props, editor, opts = {}) {
     const st = tools.querySelector('#fb-style');
     if (st) st.textContent = name;
     const sz = props.querySelector('#fb-size');
-    if (sz) sz.textContent = String(sizeOf(editor));
+    if (sz) sz.textContent = String(sizeOf(editor, opts.baseSize));
     const fn = props.querySelector('#fb-font');
     if (fn) fn.textContent = FONTS.find((f) => f.id === (editor.getAttributes('textStyle').fontFamily || opts.noteFont?.() || 'Spectral'))?.name || 'Spectral';
     const press = { bold: 'bold', italic: 'italic', underline: 'underline', strike: 'strike', bullets: 'bulletList', numbers: 'orderedList', checklist: 'taskList' };

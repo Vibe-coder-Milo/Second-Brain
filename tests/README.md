@@ -50,6 +50,8 @@ python3 t5r.py phone         # one test directly (needs the server: python3 serv
 | t5w | Notes close in meaning: kept lists match a full recompute (real model) |
 | t5x | Zoomed in on a handwritten page: scroll and drag to its far left and right edges |
 | t5y | Sharp PDFs: the PDF is kept, zoomed text is crisp, exports keep the original pages |
+| t5z | Pinch and wheel zoom follow the fingers / pointer, up to 6x; the zoom label fits the page again |
+| t6a | Default text in Settings (font, size, colour) in typed notes, Today and text boxes |
 
 Helpers: `dbg.py` (`run(steps, vp, mob)` creates a vault and runs steps),
 `mockgh.py` (in-memory GitHub Git Data API), `calib.py`, `hershey_ink.py`
