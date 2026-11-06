@@ -20,6 +20,7 @@ import { isDarkUI } from '../theme.js';
 import { linkedWith, mentions, related, subNotes } from '../connections.js';
 import { miniMapHtml } from '../minimap.js';
 import { notebookPicker, textSheet } from './notebooks.js';
+import { BOX_FONT, TEXT_SIZE } from '../fonts.js';
 
 const activeLayers = new Map(); // note id -> the layer you're writing on (this session)
 
@@ -828,12 +829,12 @@ export function mount(el, params, ctx) {
     if (!tools || !props) return;
     document.body.classList.add('editing');
     fmt = T.mountNoteBars(tools, props, ed, {
-      baseSize: 18, // text boxes size their text against the box's own size
+      baseSize: TEXT_SIZE, // text boxes size their text against the box's own size
       wide: isWide() || window.innerWidth >= 700,
       hideKeyboard: !isWide(),
       dark: () => !!surface?.dark,
       tone: darkInk,
-      noteFont: () => surface?.editing?.font || 'Overpass',
+      noteFont: () => surface?.editing?.font || BOX_FONT,
       sealed: () => !!note()?.sealed,
       onHideKeyboard: () => surface?.endEdit(),
     });

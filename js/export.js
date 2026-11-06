@@ -6,6 +6,7 @@ import { state, notesIn } from './vault.js';
 import * as V from './vault.js';
 import { displayTitle, PAGE_W, A4_H } from './model.js';
 import { downloadBlob, toast } from './util.js';
+import { NOTE_FONT, TEXT_SIZE, boxSize } from './fonts.js';
 
 export const safeName = (s) => String(s || 'note').replace(/[\\/:*?"<>|#^[\]\n\r]+/g, '-').replace(/\s+/g, ' ').trim().slice(0, 80) || 'note';
 const isoDate = (ts) => new Date(ts).toISOString().slice(0, 10);
@@ -179,7 +180,9 @@ async function typedCanvases(n) {
   const walkImgs = async (node) => { if (node?.type === 'imageFile') await fileImageReady(node.attrs?.fileId); for (const c of node?.content || []) await walkImgs(c); };
   await walkImgs(doc);
   await document.fonts?.ready;
-  const fontId = n.font || 'Spectral';
+  // The note's own font, else the default text from Settings (as on screen).
+  const dt = state.config?.text || {};
+  const fontId = n.font || dt.font || NOTE_FONT;
   const layout = (ctx) => {
     let y = M;
     ctx.fillStyle = '#1B2A38';
@@ -205,7 +208,7 @@ async function typedCanvases(n) {
       y += h + 24;
     }
     setInkTone(false);
-    y += drawRichText(ctx, doc, M, y, width, { size: 20, font: fontId });
+    y += drawRichText(ctx, doc, M, y, width, { size: boxSize(dt.size || TEXT_SIZE), font: fontId, color: dt.color || undefined });
     return y + M;
   };
   const probe = document.createElement('canvas').getContext('2d');

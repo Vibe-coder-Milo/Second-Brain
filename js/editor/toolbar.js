@@ -8,7 +8,8 @@ import { icons } from '../icons.js';
 import { popover, closePopover, labelPicker, datePicker, stickerDrawer, tooltips } from '../ui.js';
 import { searchNotes, displayTitle } from '../model.js';
 import { compressImage } from '../images.js';
-import { FONTS, TEXT_PALETTE, HL_PALETTE, colourName, suggestKey } from './rich.js';
+import { TEXT_PALETTE, HL_PALETTE, colourName, suggestKey } from './rich.js';
+import { FONTS, NOTE_FONT, TEXT_SIZE } from '../fonts.js';
 import { POSTIT_COLORS } from '../stickers.js';
 import { isDarkUI, darkInk, darkHighlight } from '../theme.js';
 
@@ -155,7 +156,7 @@ function colourMenu(editor, anchor, opts = {}) {
 }
 
 function fontMenu(editor, anchor, opts) {
-  const cur = editor.getAttributes('textStyle').fontFamily || opts.noteFont?.() || 'Spectral';
+  const cur = editor.getAttributes('textStyle').fontFamily || opts.noteFont?.() || NOTE_FONT;
   const p = popover(anchor, `${html`<div class="pop-head">Font</div>
     <ul class="font-menu">${FONTS.map((f) => html`<li><button type="button" data-font="${f.id}" class="${cur === f.id ? 'on' : ''}"><span style="font-family:${f.css};font-size:19px">${f.name}</span><span class="muted">${f.note}</span></button></li>`)}</ul>
     ${opts.setNoteFont ? html`<p class="hint" style="padding:0 6px 6px">With nothing selected, this sets the font for the whole note.</p>` : ''}`}`, { label: 'Font', width: 300 });
@@ -170,7 +171,7 @@ function fontMenu(editor, anchor, opts) {
 }
 
 // Text without its own size shows at the default size from Settings.
-const sizeOf = (editor, base) => parseInt(editor.getAttributes('textStyle').fontSize || '', 10) || base || state.config?.text?.size || 18;
+const sizeOf = (editor, base) => parseInt(editor.getAttributes('textStyle').fontSize || '', 10) || base || state.config?.text?.size || TEXT_SIZE;
 
 export function mountFormatBar(bar, editor, opts = {}) {
   const compact = !!opts.compact;
@@ -371,7 +372,7 @@ export function mountNoteBars(tools, props, editor, opts = {}) {
     const sz = props.querySelector('#fb-size');
     if (sz) sz.textContent = String(sizeOf(editor, opts.baseSize));
     const fn = props.querySelector('#fb-font');
-    if (fn) fn.textContent = FONTS.find((f) => f.id === (editor.getAttributes('textStyle').fontFamily || opts.noteFont?.() || 'Spectral'))?.name || 'Spectral';
+    if (fn) fn.textContent = FONTS.find((f) => f.id === (editor.getAttributes('textStyle').fontFamily || opts.noteFont?.() || NOTE_FONT))?.name || NOTE_FONT;
     const press = { bold: 'bold', italic: 'italic', underline: 'underline', strike: 'strike', bullets: 'bulletList', numbers: 'orderedList', checklist: 'taskList' };
     for (const [act, mark] of Object.entries(press)) for (const bar of [tools, props]) bar.querySelector(`[data-act=${act}]`)?.setAttribute('aria-pressed', editor.isActive(mark) ? 'true' : 'false');
     const col = editor.getAttributes('textStyle').color || '';

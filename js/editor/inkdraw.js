@@ -10,6 +10,7 @@ import { stickerDef, stickerSVG, svgImage, labelDef, tapePattern, postitColor } 
 import { labelMap } from '../model.js';
 import { isDarkUI, darkInk, darkHighlight } from '../theme.js';
 import { pdfAreaReady } from '../pdfview.js';
+import { fontCss, BOX_FONT, BOX_SIZE, TEXT_SIZE } from '../fonts.js';
 
 export { darkInk };
 
@@ -463,7 +464,7 @@ export function drawObject(ctx, o, { redraw } = {}) {
   }
   if (o.type === 'text') {
     ctx.save();
-    const h = drawRichText(ctx, o.doc, o.x, o.y, o.w, { size: o.size || 20, font: o.font, color: o.color || undefined, redraw });
+    const h = drawRichText(ctx, o.doc, o.x, o.y, o.w, { size: o.size || BOX_SIZE, font: o.font, color: o.color || undefined, redraw });
     ctx.restore();
     if (Math.abs((o.h || 0) - h) > 1) Object.defineProperty(o, '_h', { value: h, configurable: true, enumerable: false });
   }
@@ -484,15 +485,11 @@ function wrapPlain(ctx, text, width) {
 
 // ---- Rich text on canvas (text boxes, typed notes in PDF export) ---------------------
 
-const FONT_CSS = {
-  Spectral: "'Spectral', Georgia, serif", Overpass: "'Overpass', system-ui, sans-serif", Fraunces: "'Fraunces', Georgia, serif", Nunito: "'Nunito', system-ui, sans-serif",
-  'Atkinson Hyperlegible': "'Atkinson Hyperlegible', system-ui, sans-serif", 'JetBrains Mono': "'JetBrains Mono', ui-monospace, monospace", Caveat: "'Caveat', cursive",
-};
 
-export function drawRichText(ctx, doc, x, y, width, { size = 20, font = 'Overpass', color: color0 = '#1B2A38', redraw } = {}) {
+export function drawRichText(ctx, doc, x, y, width, { size = BOX_SIZE, font = BOX_FONT, color: color0 = '#1B2A38', redraw } = {}) {
   const color = tint(color0);
   const soft = dark ? '#3A4B5B' : '#CDD9D6';
-  const base = FONT_CSS[font] || FONT_CSS.Overpass;
+  const base = fontCss(font, BOX_FONT);
   let cy = y;
   const lm = labelMap(state.config);
 
@@ -509,8 +506,8 @@ export function drawRichText(ctx, doc, x, y, width, { size = 20, font = 'Overpas
           strike: !!m.strike,
           color: m.highlight && !dark ? (m.textStyle?.color || '#1B2A38') : tint(m.textStyle?.color || style.color || color),
           hl: m.highlight ? (m.highlight.color || '#FFF1B8') : null,
-          size: m.textStyle?.fontSize ? (parseFloat(m.textStyle.fontSize) / 18) * style.size : style.size,
-          family: m.textStyle?.fontFamily ? (FONT_CSS[m.textStyle.fontFamily] || base) : style.family,
+          size: m.textStyle?.fontSize ? (parseFloat(m.textStyle.fontSize) / TEXT_SIZE) * style.size : style.size,
+          family: m.textStyle?.fontFamily ? fontCss(m.textStyle.fontFamily, font) : style.family,
         });
       } else if (c.type === 'hardBreak') runs.push({ br: true });
       else if (c.type === 'labelChip') runs.push({ label: lm.get(c.attrs?.label) || { name: c.attrs?.label, color: '#6B7A85' }, size: style.size });
@@ -669,7 +666,7 @@ export function drawRichText(ctx, doc, x, y, width, { size = 20, font = 'Overpas
         cy += size * 0.5;
         break;
       }
-      case 'codeBlock': cy += paragraph([{ text: (b.content || []).map((t) => t.text).join(''), size: size * 0.85, family: FONT_CSS['JetBrains Mono'], color }], px, pw) + size * 0.3; break;
+      case 'codeBlock': cy += paragraph([{ text: (b.content || []).map((t) => t.text).join(''), size: size * 0.85, family: fontCss('JetBrains Mono'), color }], px, pw) + size * 0.3; break;
       case 'imageFile': {
         const img = fileImage(b.attrs?.fileId, redraw);
         const w = Math.min(pw, (b.attrs?.w || 800) / 2);

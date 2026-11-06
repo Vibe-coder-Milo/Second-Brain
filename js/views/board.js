@@ -14,6 +14,7 @@ import { notebookPicker } from './notebooks.js';
 import { PENS, HL, HL_COLORS, INK_COLORS, darkInk } from '../editor/inkdraw.js';
 import { isDarkUI } from '../theme.js';
 import * as B from '../boarddraw.js';
+import { TEXT_SIZE } from '../fonts.js';
 
 const TOOLS = [
   { id: 'select', icon: 'select', name: 'Select and move', key: 'v' },
@@ -45,7 +46,9 @@ export function mount(el, params, ctx) {
   let createdHere = false;
   let tx = 0; let ty = 0; let z = 1;
   let tool = 'select';
-  const opts = { pen: 'ballpoint', ink: '#1B2A38', hl: '#F7D046', size: 1, shape: 'rect', fill: false, sticky: 'yellow', text: 'm', ...(state.device?.board || {}) };
+  // Text starts at the size nearest the default text in Settings, until you pick one here.
+  const dts = state.config?.text?.size || TEXT_SIZE;
+  const opts = { pen: 'ballpoint', ink: '#1B2A38', hl: '#F7D046', size: 1, shape: 'rect', fill: false, sticky: 'yellow', text: dts <= 16 ? 's' : dts >= 24 ? 'l' : 'm', ...(state.device?.board || {}) };
   let sel = new Set(); // object ids, and 's:<id>' for pen strokes
   let editing = null; // { id, fresh }
   const undo = [];
@@ -726,7 +729,7 @@ export function mount(el, params, ctx) {
 
   function addText(wx, wy) {
     checkpoint();
-    const o = add({ type: 'text', x: Math.round(wx - 4), y: Math.round(wy - B.TEXT_SIZES.find((s) => s.id === opts.text).px * 0.7), w: B.DEFAULTS.text.w, h: 0, text: '', size: opts.text, color: B.PAPER.ink });
+    const o = add({ type: 'text', x: Math.round(wx - 4), y: Math.round(wy - B.TEXT_SIZES.find((s) => s.id === opts.text).px * 0.7), w: B.DEFAULTS.text.w, h: 0, text: '', size: opts.text, color: state.config?.text?.color || B.PAPER.ink });
     setTool('select');
     render();
     beginEdit(o.id, { fresh: true });

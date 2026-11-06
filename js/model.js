@@ -3,6 +3,7 @@
 import { uid, firstLine } from './util.js';
 import { docTasks, mdTasks } from './doc.js';
 import { isDarkUI } from './theme.js';
+import { FONT_IDS, TEXT_SIZES, TEXT_SIZE } from './fonts.js';
 
 // Region colours: a dot/line colour and a darker (or lighter, at night) text colour
 // that passes contrast on the map background.
@@ -319,25 +320,18 @@ export function searchNotes(notes, q, limit = 200) {
 // typed notes and in text boxes on handwritten pages). Chosen in Settings and
 // synced, so every device writes the same way. Font null = the usual one
 // (Spectral in typed notes, Overpass in text boxes); colour null = the app's ink.
-export const TEXT_FONT_IDS = ['Spectral', 'Overpass', 'Fraunces', 'Nunito', 'Atkinson Hyperlegible', 'JetBrains Mono', 'Caveat'];
-export const TEXT_SIZES = [14, 16, 18, 20, 22, 24, 28];
-const TEXT_FONT_CSS = {
-  Spectral: "'Spectral', Georgia, serif", Overpass: "'Overpass', system-ui, sans-serif", Fraunces: "'Fraunces', Georgia, serif", Nunito: "'Nunito', system-ui, sans-serif",
-  'Atkinson Hyperlegible': "'Atkinson Hyperlegible', system-ui, sans-serif", 'JetBrains Mono': "'JetBrains Mono', ui-monospace, monospace", Caveat: "'Caveat', cursive",
-};
 // Colours offered for default text: dark enough to read on white paper (and
 // shown brightened in dark mode).
 export const TEXT_DEFAULT_COLORS = [
   ['Ink black', '#16191D'], ['Chart blue', '#2B5684'], ['Royal blue', '#2E5BD8'], ['Deep teal', '#1F6467'], ['Forest green', '#2F6B4F'],
   ['Brown', '#6B4A3A'], ['Deep red', '#9B2C2C'], ['Plum', '#5E3F8A'], ['Berry', '#8A2F64'], ['Slate grey', '#3F4650'],
 ];
-export const textFontCss = (id) => TEXT_FONT_CSS[id] || TEXT_FONT_CSS.Spectral;
-export const DEFAULT_TEXT = { font: null, size: 18, color: null };
+export const DEFAULT_TEXT = { font: null, size: TEXT_SIZE, color: null };
 export function normText(t) {
   const size = Number(t?.size);
   const color = typeof t?.color === 'string' && /^#[0-9a-f]{6}$/i.test(t.color) ? t.color.toUpperCase() : null;
   return {
-    font: TEXT_FONT_IDS.includes(t?.font) ? t.font : null,
+    font: FONT_IDS.includes(t?.font) ? t.font : null,
     size: TEXT_SIZES.includes(size) ? size : DEFAULT_TEXT.size,
     color,
   };

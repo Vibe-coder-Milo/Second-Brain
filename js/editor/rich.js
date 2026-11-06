@@ -15,17 +15,10 @@ import { docToMarkdown } from '../doc.js';
 import { stickerDef, stickerSVG, labelDef, postitColor } from '../stickers.js';
 import { esc } from '../util.js';
 import { darkInk, darkHighlight } from '../theme.js';
+import { FONTS, fontCss } from '../fonts.js';
 
-export const FONTS = [
-  { id: 'Spectral', name: 'Spectral', note: 'Book serif', css: "'Spectral', Georgia, serif" },
-  { id: 'Overpass', name: 'Overpass', note: 'Clean sans', css: "'Overpass', system-ui, sans-serif" },
-  { id: 'Fraunces', name: 'Fraunces', note: 'Display serif', css: "'Fraunces', Georgia, serif" },
-  { id: 'Nunito', name: 'Nunito', note: 'Rounded', css: "'Nunito', system-ui, sans-serif" },
-  { id: 'Atkinson Hyperlegible', name: 'Atkinson Hyperlegible', note: 'Easy to read', css: "'Atkinson Hyperlegible', system-ui, sans-serif" },
-  { id: 'JetBrains Mono', name: 'JetBrains Mono', note: 'Monospace', css: "'JetBrains Mono', ui-monospace, monospace" },
-  { id: 'Caveat', name: 'Caveat', note: 'Handwritten', css: "'Caveat', cursive" },
-];
-export const fontCss = (id) => FONTS.find((f) => f.id === id)?.css || FONTS[0].css;
+// The fonts live in fonts.js; re-exported for the toolbar and note screen.
+export { FONTS, fontCss };
 
 // Text colours: ten hues, each in three strengths, like the named colours in
 // Notion and the shade grid in Google Docs. Tuned to read well on white; in

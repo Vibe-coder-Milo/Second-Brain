@@ -4,7 +4,8 @@ import { html, raw, $, fmtAgo, toast, downloadText, isoDay } from '../util.js';
 import * as V from '../vault.js';
 import { state } from '../vault.js';
 import { meta } from '../db.js';
-import { PALETTE, TEXT_FONT_IDS, TEXT_SIZES, TEXT_DEFAULT_COLORS, textFontCss } from '../model.js';
+import { PALETTE, TEXT_DEFAULT_COLORS } from '../model.js';
+import { FONT_IDS, TEXT_SIZES, TEXT_SIZE, fontCss } from '../fonts.js';
 import { passphraseStrength } from '../crypto.js';
 import { probe, syncNow, explainError } from '../sync.js';
 import { confirmSheet, openSheet } from '../ui.js';
@@ -18,12 +19,12 @@ import { appVersion, checkForUpdate } from '../appupdate.js';
 // Default text: font, size and colour for new typed text (synced to every device).
 function textPrefsHtml() {
   const t = state.config.text || {};
-  const size = t.size || 18;
+  const size = t.size || TEXT_SIZE;
   return String(html`
     <div class="set-row"><label for="s-text-font">Font</label>
       <select id="s-text-font" class="text-font-pick">
         <option value="" ${!t.font ? raw('selected') : ''}>Usual (Spectral in notes)</option>
-        ${TEXT_FONT_IDS.map((f) => html`<option value="${f}" ${t.font === f ? raw('selected') : ''}>${f}</option>`)}
+        ${FONT_IDS.map((f) => html`<option value="${f}" ${t.font === f ? raw('selected') : ''}>${f}</option>`)}
       </select></div>
     <div class="set-row"><span id="s-text-size-l">Size</span>
       <div class="seg text-sizes" role="radiogroup" aria-labelledby="s-text-size-l">${TEXT_SIZES.map((n) => html`<button type="button" role="radio" data-text-size="${n}" aria-checked="${n === size ? 'true' : 'false'}" aria-label="${n} point">${n}</button>`)}</div></div>
@@ -32,7 +33,7 @@ function textPrefsHtml() {
         <button type="button" role="radio" class="swatch usual" data-text-colour="" aria-checked="${!t.color ? 'true' : 'false'}" aria-label="Usual ink (follows light and dark)"></button>
         ${TEXT_DEFAULT_COLORS.map(([n, c]) => html`<button type="button" role="radio" class="swatch" data-text-colour="${c}" style="background:${c}" aria-checked="${t.color === c ? 'true' : 'false'}" aria-label="${n}"></button>`)}
       </div></div>
-    <p class="rich text-sample" id="s-text-sample" style="font-family:${t.font ? textFontCss(t.font) : 'var(--serif)'}">This is how new typed text will look.</p>`);
+    <p class="rich text-sample" id="s-text-sample" style="font-family:${t.font ? fontCss(t.font) : 'var(--serif)'}">This is how your typed text will look.</p>`);
 }
 function bindTextPrefs(main) {
   const host = $('#s-text', main);
@@ -181,7 +182,7 @@ export function mount(main, params, ctx) {
         <label class="check"><input type="checkbox" id="s-darkpaper" ${state.device?.darkPaper !== false ? raw('checked') : ''}> In dark mode, show handwritten pages and whiteboards dark too</label>
         <p class="hint">Easier on the eyes at night. Dark ink shows light, and colours are brightened a little. PDFs and images you export always use light paper.</p>
         <h3 class="set-sub" id="s-text-h">Default text</h3>
-        <p class="hint">How new typed text starts: in typed notes, Today’s note, and text boxes on handwritten pages. You can still change any part of a note.</p>
+        <p class="hint">Typed notes and Today’s note use it, including notes you already have (except text you’ve given its own font, size or colour). New text boxes on handwritten pages and whiteboards start with it; ones already placed stay as they are, so they don’t shift over your writing.</p>
         <div id="s-text">${raw(textPrefsHtml())}</div>
       </section>
 

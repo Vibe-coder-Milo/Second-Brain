@@ -74,7 +74,7 @@ through a private GitHub repo. Everything is encrypted on the device.
   - models: transformers and onnxruntime (`ort/`) with the model files;
   - OCR: tesseract.
 - **Service worker** (`sw.js`):
-  - Bump `VERSION` (`sb-vN`; currently `sb-v17`) on every release.
+  - Bump `VERSION` (`sb-vN`; currently `sb-v18`) on every release.
   - Add every new JS/CSS file to `SHELL`, or it won't work offline.
   - The app shows an update bar (`js/appupdate.js`).
 - **Views:** `js/views/*.js` export `mount(main, params, ctx)`, returning
@@ -112,7 +112,7 @@ through a private GitHub repo. Everything is encrypted on the device.
 | Encryption | `js/crypto.js`; Touch ID / Face ID in `js/deviceunlock.js` |
 | Sync (GitHub Git Data API) | `js/sync.js` |
 | Note model, regions, search | `js/model.js`, `js/doc.js`, `js/notework.js` (tasks, daily notes, ink summaries) |
-| Typed notes | `js/views/note.js`, `js/editor/rich.js` (Tiptap), `js/editor/toolbar.js` |
+| Typed notes | `js/views/note.js`, `js/editor/rich.js` (Tiptap), `js/editor/toolbar.js`, `js/fonts.js` (the fonts and text sizes everything shares) |
 | Handwritten notes | `js/views/inknote.js` (screen), `js/editor/ink.js` (InkSurface), `js/editor/inkdraw.js` (drawing pages, pens, paper, PDF backgrounds), `js/editor/pagestack.js` (continuous view), `js/editor/zoomstrip.js` (writing window), `js/handwriting.js` |
 | PDFs | `js/pdf.js` (import), `js/pdfview.js` (drawing pages sharp from the kept PDF), `js/bulkimport.js` + `js/views/importsheet.js` (many at once / Notability), `js/export.js` (PDF/Markdown export) |
 | Whiteboards | `js/views/board.js`, `js/boarddraw.js` |
@@ -149,10 +149,18 @@ through a private GitHub repo. Everything is encrypted on the device.
 - **Synced settings** (`state.config`, `normConfig`): regions, labels, stickers,
   and `text { font, size, color }`, the default text (`normText`; font null =
   the usual one, Spectral in notes and Overpass in text boxes; colour null = the
-  app's ink). `applyTextDefaults()` (`theme.js`) turns it into CSS variables
-  (`--note-size`, `--default-note-font`, `--note-ink`, `--note-ink-dark`) on
-  unlock and on `config`/`remote` events. New ink text boxes copy it into
-  `o.size` (x 20/18), `o.font`, `o.color`.
+  app's ink). Two rules, by design:
+  - Typed text follows it live: `applyTextDefaults()` (`theme.js`) sets CSS
+    variables (`--note-size`, `--default-note-font`, `--note-ink`,
+    `--note-ink-dark`) on unlock and on `config`/`remote` events, so existing
+    notes change too, except text with its own marks or a note with its own
+    `font`. Typed-note PDF export (`export.js`) uses the same values.
+  - Placed objects copy it when created and then keep their own: ink text
+    boxes get `o.size` (`boxSize()`), `o.font`, `o.color`; whiteboard text gets
+    `color` and starts at the nearest S/M/L size. Changing the default later
+    must not move text over handwriting.
+  - Fonts, sizes and the 18 px / 20-unit relation live in `js/fonts.js` only
+    (no imports, so `theme.js` and `model.js` can use it).
 
 ## Things that are easy to break
 
@@ -280,6 +288,11 @@ Baselines at 10,000 notes (headless, no GPU):
 3. **Zoom that follows the fingers**, deeper (6x): see "Zoom" above; `t5z`.
    Previously the pinch scaled around the screen's middle, the continuous view
    then re-centred it, and it stopped at 3x.
+
+Follow-up after a code review (`sb-v18`): the default text now reaches PDF
+exports and new whiteboard text, the Settings hint says what follows it live
+and what doesn't, fonts and sizes moved to `js/fonts.js`, and
+`tools/README.md` documents `covergen2.py`.
 
 A redesign mockup (slim menu rail, one-row writing toolbar, cover shelf) was
 shown on 6 Nov; the owner said to ignore it. Don't build it or bring it up

@@ -1,7 +1,8 @@
-"""Default text in Settings: font, size and colour for new typed text. Typed
-notes and Today's note use them (headings grow with the size), a colour shows
-brightened in dark mode, new text boxes on handwritten pages start with them,
-and the choice is kept in the synced settings."""
+"""Default text in Settings: font, size and colour. Typed notes (ones already
+written too) and Today's note use them (headings grow with the size), a colour
+shows brightened in dark mode, a note's own font wins, PDF exports of typed
+notes use them, new text boxes on handwritten pages and new whiteboard text
+start with them, and the choice is kept in the synced settings."""
 from dbg import *
 import sys
 OUT = 'shots5'
@@ -61,6 +62,26 @@ def steps(page):
     o = J(f"import('./js/vault.js').then(async V => {{ const n = V.state.notes.get('{iid}'); const d = await V.loadPage(n.pages[0].id); return d.objects.filter(o => o.type === 'text').map(o => [o.size, o.color, o.font]); }})")
     print('saved text box:', o)
     assert o == [[24, '#2B5684', 'Atkinson Hyperlegible']]
+    # A PDF export of a typed note uses the default colour for its text.
+    J(f"import('./js/vault.js').then(async V => {{ const n = V.state.notes.get('{nid}'); await V.saveNote({{ ...n, font: null }}); }})")
+    with page.expect_download(timeout=60000) as dl:
+        J(f"Promise.all([import('./js/vault.js'), import('./js/export.js')]).then(([V, E]) => E.exportNotePdf(V.state.notes.get('{nid}')))")
+    data = open(dl.value.path(), 'rb').read()
+    blue = J("""async (b64) => { const P = await import('./js/pdf.js'); const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0)); const { doc } = await P.openPdf(bytes);
+      const pg = await doc.getPage(1); const vp = pg.getViewport({ scale: 1.5 }); const c = document.createElement('canvas'); c.width = vp.width; c.height = vp.height;
+      await pg.render({ canvas: c, canvasContext: c.getContext('2d'), viewport: vp }).promise; const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+      let n = 0; for (let i = 0; i < d.length; i += 4) if (d[i + 2] > 110 && d[i + 2] - d[i] > 60 && d[i] < 90) n++; return n; }""", __import__('base64').b64encode(data).decode())
+    print('chart-blue pixels in the exported PDF:', blue); assert blue > 200, 'exported text uses the default colour'
+    # New whiteboard text starts in the default colour.
+    nbid = J("""async () => { const V = await import('./js/vault.js'); const M = await import('./js/model.js');
+      return (await V.saveNotebook(M.newNotebook({ title: 'Boards', region: 'career' }))).id; }""")
+    page.goto(BASE + f'#/notebook/{nbid}'); page.wait_for_timeout(500)
+    page.locator('.nb-new [data-newnote=board]').click(); page.wait_for_selector('.bd-stage'); page.wait_for_timeout(500)
+    st = page.locator('#bd-stage').bounding_box()
+    page.locator('[data-tool=text]').click(); page.mouse.click(st['x'] + st['width'] * 0.4, st['y'] + st['height'] * 0.4)
+    page.wait_for_selector('.bo-text .bt[contenteditable]'); page.keyboard.type('Board words'); page.keyboard.press('Escape'); page.wait_for_timeout(300)
+    bc = J("getComputedStyle(document.querySelector('.bo-text')).color"); print('whiteboard text colour:', bc)
+    assert bc == 'rgb(43, 86, 132)'
     # Back to usual: the "usual ink" swatch and the usual font.
     page.goto(BASE + '#/settings'); page.wait_for_selector('#s-text')
     page.locator('[data-text-colour=""]').click(); page.wait_for_timeout(300)

@@ -1,6 +1,8 @@
 // Light, dark, or follow the device. The choice is also kept in localStorage
 // (it isn't private) so the lock screen uses it before the vault is open.
 
+import { fontCss } from './fonts.js';
+
 const KEY = 'sb-theme';
 const mql = window.matchMedia('(prefers-color-scheme: dark)');
 const BAR = { light: '#F1F4F2', dark: '#13202D' };
@@ -34,7 +36,7 @@ export function onTheme(fn) {
 
 // The default text from Settings, as CSS variables the editors read: size,
 // font, and colour (with its brightened twin for dark backgrounds).
-export function applyTextDefaults(t, fontCss) {
+export function applyTextDefaults(t) {
   const st = document.documentElement.style;
   if (!t) { for (const k of ['--note-size', '--default-note-font', '--note-ink', '--note-ink-dark']) st.removeProperty(k); return; }
   st.setProperty('--note-size', `${t.size}px`);

@@ -2,7 +2,8 @@
 // writes; fingers scroll and pinch. Pens, highlighter, eraser, lasso, shapes,
 // text boxes, post-its and stickers, with undo.
 
-import { PAGE_W, textFontCss } from '../model.js';
+import { PAGE_W } from '../model.js';
+import { fontCss, boxSize, BOX_FONT, BOX_SIZE, TEXT_SIZE } from '../fonts.js';
 import { uid, html, raw, toast } from '../util.js';
 import { state } from '../vault.js';
 import * as V from '../vault.js';
@@ -1323,7 +1324,7 @@ export class InkSurface {
       if (!sel.objects.has(o.id)) return o;
       if (d.mode === 'rotate') return { ...o, rot: d.rot, t: now };
       const n = { ...o, x: tx(o.x), y: ty(o.y), w: o.w * d.k, h: o.h * d.k, t: now };
-      if (o.type === 'text') n.size = (o.size || 20) * d.k;
+      if (o.type === 'text') n.size = (o.size || BOX_SIZE) * d.k;
       return n;
     });
     sel.strokes = ids;
@@ -1457,10 +1458,11 @@ export class InkSurface {
   }
 
   addText(x, y) {
-    // New text boxes start in the default text from Settings (size 18 there is 20 here).
+    // New text boxes start in the default text from Settings; boxes already on
+    // the page keep theirs, so they don't shift over the writing around them.
     const dt = state.config?.text || {};
     const extra = { ...(dt.font ? { font: dt.font } : {}), ...(dt.color ? { color: dt.color } : {}) };
-    const size = Math.round(((dt.size || 18) * 20) / 18);
+    const size = boxSize(dt.size || TEXT_SIZE);
     const o = this.stamp({ id: uid('o'), at: Date.now(), type: 'text', x: Math.min(x, PAGE_W - 240), y: y - 14, w: Math.min(520, PAGE_W - Math.min(x, PAGE_W - 240) - 30), h: 40, size, ...extra, doc: { type: 'doc', content: [{ type: 'paragraph' }] }, t: Date.now(), fresh: true });
     this.snapshot();
     this.data.objects.push(o);
@@ -1528,8 +1530,8 @@ export class InkSurface {
     const s = this.scale;
     if (o.type === 'text') {
       Object.assign(box.style, { left: `${o.x * s}px`, top: `${o.y * s}px`, width: `${o.w * s}px` });
-      box.style.setProperty('--fs', `${(o.size || 20) * s}px`);
-      if (o.font) box.style.setProperty('--tbf', textFontCss(o.font)); else box.style.removeProperty('--tbf');
+      box.style.setProperty('--fs', `${(o.size || BOX_SIZE) * s}px`);
+      if (o.font) box.style.setProperty('--tbf', fontCss(o.font, BOX_FONT)); else box.style.removeProperty('--tbf');
       if (o.color) box.style.setProperty('--tbc', this.dark ? darkInk(o.color) : o.color); else box.style.removeProperty('--tbc');
     } else {
       Object.assign(box.style, { left: `${o.x * s}px`, top: `${o.y * s}px`, width: `${Math.max(o.w * s, 200)}px`, minHeight: `${o.h * s}px` });
