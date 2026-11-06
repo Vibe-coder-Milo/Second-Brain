@@ -1079,6 +1079,7 @@ export class InkSurface {
     if (one?.type === 'table' && this.opts.editTable) items.push(['table', 'Rows and columns', icons.table()]);
     if (one?.type === 'postit') items.push(['edit', 'Edit', icons.postit()]);
     if (this.sel.strokes.size && this.opts.readHandwriting) items.push(['read', 'Convert to text', icons.type()]);
+    if (this.sel.strokes.size || one?.type === 'image') items.push(['hl', 'Add to highlights', icons.highlighter()]);
     if (this.sel.strokes.size) items.push(['colour', 'Colour', raw('<span class="sel-col"></span>')]);
     items.push(['copy', 'Copy', icons.copy()], ['cut', 'Cut', raw('✂︎')], ['dup', 'Duplicate', icons.plus()]);
     if (this.sel.strokes.size || one?.type === 'image') items.push(['sticker', 'Save as sticker', icons.sticker()]);
@@ -1104,6 +1105,42 @@ export class InkSurface {
     if (act === 'layer') { const l = await this.opts.pickLayer?.(btn); if (l) this.moveToLayer(l); return; }
     if (act === 'read') { this.opts.readHandwriting?.(this.data.strokes.filter((s) => this.sel.strokes.has(s.id)), { ...this.sel.box }); return; }
     if (act === 'sticker') { await this.saveSelectionAsSticker(); }
+    if (act === 'hl') this.highlightSelection();
+  }
+
+  // "Add to highlights": highlight what's selected (a circle, an underline,
+  // a picture), so it's gathered with the rest. One highlighter stroke per line
+  // of writing, or bands across the selection for anything else.
+  async highlightSelection() {
+    if (!this.sel) return;
+    const t = this.opts.getTool();
+    const c = t.hlColor || '#F7D046';
+    const chosen = this.data.strokes.filter((s) => this.sel.strokes.has(s.id) && s.t !== 'hl');
+    let rows = [];
+    if (chosen.length) {
+      const { groupLines } = await import('../handwriting.js');
+      rows = groupLines(chosen).map((l) => l.box);
+    }
+    const lined = rows.length > 0;
+    if (!lined) rows = [{ ...this.sel.box }];
+    const now = Date.now();
+    const made = [];
+    for (const b of rows) {
+      const size = Math.max(12, Math.min(30, b.h * (lined ? 0.8 : 1)));
+      const bands = lined ? 1 : Math.max(1, Math.ceil(b.h / (size * 0.9)));
+      for (let k = 0; k < bands; k++) {
+        const y = b.y + (bands === 1 ? b.h / 2 : (k + 0.5) * (b.h / bands));
+        const pts = [];
+        for (let x = b.x - 4; x <= b.x + b.w + 4; x += 6) pts.push(x, y, 0.5);
+        made.push(this.stamp({ id: uid('k'), at: now, t: 'hl', pen: null, c, s: size, sp: 1, pts }, true));
+      }
+    }
+    this.snapshot();
+    this.data.strokes.push(...made);
+    this.clearSelection();
+    this.renderMain();
+    this.changed();
+    toast('Added to your highlights');
   }
 
   copySelection() {

@@ -1338,6 +1338,7 @@ export function mount(el, params, ctx) {
       { value: 'link', label: 'Link to another note' },
       { value: 'finger', label: tool.fingerDraw ? 'Fingers scroll (Pencil writes)' : 'Draw with finger' },
       { value: 'notebook', label: n.notebook ? 'Move to another notebook' : 'Move into a notebook' },
+      { value: 'highlights', label: 'Highlights in this note' },
       { value: 'history', label: 'Version history' },
       { value: 'pdf', label: 'Export as PDF' },
       { value: n.sealed ? 'unseal' : 'seal', label: n.sealed ? 'Unseal' : 'Seal this note' },
@@ -1357,6 +1358,7 @@ export function mount(el, params, ctx) {
         draw();
       }
     }
+    if (act === 'highlights') ctx.navigate(`#/highlights?note=${n.id}`);
     if (act === 'history') { const { openHistory } = await import('./history.js'); openHistory(n, ctx, { page: n.pages[pageIdx] }); }
     if (act === 'pdf') exportPdf();
     if (act === 'seal' || act === 'unseal') {

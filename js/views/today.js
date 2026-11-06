@@ -118,7 +118,7 @@ export function mount(el, params, ctx) {
         <div id="t-back"></div>
       </section>` : ''}
       <nav class="quick-links" aria-label="More places">
-        <a href="#/tasks">${icons.tasks({ size: 20 })}Tasks</a><a href="#/labels">${icons.tag({ size: 20 })}Labels</a><a href="#/notes">${icons.notes({ size: 20 })}All notes</a><a href="#/inbox">${icons.inbox({ size: 20 })}Inbox</a><a href="#/settings">${icons.settings({ size: 20 })}Settings</a>
+        <a href="#/tasks">${icons.tasks({ size: 20 })}Tasks</a><a href="#/labels">${icons.tag({ size: 20 })}Labels</a><a href="#/highlights">${icons.highlighter({ size: 20 })}Highlights</a><a href="#/notes">${icons.notes({ size: 20 })}All notes</a><a href="#/inbox">${icons.inbox({ size: 20 })}Inbox</a><a href="#/settings">${icons.settings({ size: 20 })}Settings</a>
       </nav>
     </div>
     <div class="fmtbar" id="t-bar" role="toolbar" aria-label="Formatting" hidden></div>`}`;

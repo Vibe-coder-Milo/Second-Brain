@@ -43,6 +43,11 @@ function closeDoc(r) {
 
 // The PDF page's own height in page units (the width is PAGE_W).
 const heights = new Map(); // `${file}:${n}` -> page units
+// The open PDF document for a kept PDF (for reading its text), or null.
+export async function openDocFor(fileId) {
+  try { return await openDoc(fileId); } catch { return null; }
+}
+
 export const pdfPageHeight = (pdf) => heights.get(`${pdf.file}:${pdf.n}`) || null;
 
 // Draw part of a PDF page. `q` is device pixels per page unit; `area` is the

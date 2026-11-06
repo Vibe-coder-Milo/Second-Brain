@@ -131,6 +131,8 @@ export function normNote(n) {
     exportAllLayers: kind === 'ink' && !!n.exportAllLayers,
     hw: kind === 'ink' && n.hw && typeof n.hw === 'object' ? n.hw : {},
     layout: kind === 'ink' && n.layout === 'scroll' ? 'scroll' : 'pages',
+    // Pages with highlighter marks (null: not worked out yet; see highlights.js).
+    hlPages: kind === 'ink' && Array.isArray(n.hlPages) ? n.hlPages : null,
     editedOn: n.editedOn || null,
     // In Recently deleted since this time (and deleted with these others).
     binnedAt: Number(n.binnedAt) > 0 ? Number(n.binnedAt) : null,

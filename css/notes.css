@@ -1142,3 +1142,26 @@ td.tv-tags, td.tv-select { min-width: 150px; }
 .back-open .t { font-weight: 600; overflow-wrap: anywhere; }
 .back-open .s { font-family: var(--serif); color: var(--ink); opacity: 0.85; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .back-open .m { font-size: 13px; color: var(--muted); }
+
+/* Highlights */
+.hl-chips { margin: 4px 0 8px; }
+.hl-dot-yellow { background: #F7D046; } .hl-dot-green { background: #9BE07A; } .hl-dot-pink { background: #FF9EC4; }
+.hl-dot-blue { background: #8CC8FF; } .hl-dot-orange { background: #FFB46E; } .hl-dot-purple { background: #C8AAFF; }
+.hl-src { margin-top: 22px; }
+.hl-src-h { margin: 0 0 8px; font-family: var(--serif); font-weight: 500; font-size: 20px; display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; }
+.hl-src-h a { color: var(--ink); text-decoration: none; }
+.hl-src-h small { font-family: var(--sans); font-size: 12.5px; color: var(--muted); font-weight: 400; }
+.hl-cards { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.hl-card { display: grid; grid-template-columns: 6px minmax(0, 1fr) auto; gap: 14px; align-items: start; padding: 12px 14px 12px 0; border-radius: 12px; border: 1px solid var(--line-soft); background: var(--surface); overflow: hidden; }
+.hl-bar { align-self: stretch; background: var(--hc); }
+.hl-main { display: grid; gap: 8px; min-width: 0; }
+.hl-pic { min-height: 30px; }
+.hl-pic img { max-width: min(100%, 460px); border-radius: 6px; border: 1px solid var(--line-soft); background: #FFFFFF; }
+.hl-wait { font-size: 13px; color: var(--muted); }
+.hl-txt { margin: 0; font-family: var(--serif); font-size: 18px; line-height: 1.4; overflow-wrap: anywhere; }
+.hl-typed { margin: 0; font-family: var(--serif); font-size: 18px; line-height: 1.45; overflow-wrap: anywhere; }
+.hl-typed mark { background: color-mix(in srgb, var(--hc) 55%, transparent); color: inherit; border-radius: 2px; padding: 0 2px; }
+.hl-why { margin: 0; justify-self: start; font-size: 13.5px; line-height: 1.4; color: var(--muted); background: var(--tint); border-radius: 8px; padding: 4px 8px; }
+.hl-acts { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+.hl-go { font-size: 14px; color: var(--muted); white-space: nowrap; }
+@media (max-width: 600px) { .hl-card { grid-template-columns: 6px minmax(0, 1fr); } .hl-acts { grid-column: 2; flex-direction: row; justify-content: space-between; align-items: center; } }

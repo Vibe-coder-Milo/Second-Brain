@@ -679,6 +679,7 @@ function mountTyped(el, params, ctx) {
       { value: 'link', label: 'Link to another note' },
       { value: 'sub', label: 'Add a sub-note' },
       { value: 'notebook', label: n.notebook ? 'Move to another notebook' : 'Move into a notebook' },
+      { value: 'highlights', label: 'Highlights in this note' },
       { value: 'history', label: 'Version history' },
       { value: 'md', label: 'Export as Markdown' },
       { value: 'print', label: 'Print or save as PDF' },
@@ -692,6 +693,7 @@ function mountTyped(el, params, ctx) {
     if (act === 'link') linkTo();
     if (act === 'sub') { await persist(true); if (id !== 'new') ctx.navigate(`#/note/new?parent=${id}`); }
     if (act === 'notebook') moveToNotebook();
+    if (act === 'highlights') { await persist(true); ctx.navigate(`#/highlights?note=${id}`); }
     if (act === 'history') { const { openHistory } = await import('./history.js'); openHistory(state.notes.get(id) || n, ctx); }
     if (act === 'md') {
       const { noteToMarkdown, safeName } = await import('../export.js');

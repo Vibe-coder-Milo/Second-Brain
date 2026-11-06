@@ -63,6 +63,7 @@ export function refreshChrome(route) {
         <a class="side-link" href="#/notebooks" aria-current="${at('notebooks')}">${icons.notebooks()}Notebooks</a>
         <a class="side-link" href="#/tasks" aria-current="${at('tasks')}">${icons.tasks()}<span class="grow">Tasks</span>${late ? html`<span class="late-count">${late} late</span>` : ''}</a>
         <a class="side-link" href="#/labels" aria-current="${at('labels')}">${icons.tag()}Labels</a>
+        <a class="side-link" href="#/highlights" aria-current="${at('highlights')}">${icons.highlighter()}Highlights</a>
         <a class="side-link" href="#/notes" aria-current="${at('notes')}">${icons.notes()}All notes</a>
         <a class="side-link" href="#/ask" aria-current="${at('ask')}">${icons.ask()}Ask Claude</a>
         <a class="side-link" href="#/settings" aria-current="${at('settings')}">${icons.settings()}Settings</a>

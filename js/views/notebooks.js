@@ -362,6 +362,7 @@ export function mountNotebook(el, params, ctx) {
     const items = [
       { value: 'edit', label: 'Cover, name and region' },
       { value: 'section', label: 'Add section' },
+      { value: 'highlights', label: 'Highlights in this notebook' },
       { value: 'pdf', label: 'Export notebook as PDF' },
       { value: 'md', label: 'Export notebook as Markdown' },
       { value: b.sealed ? 'unseal' : 'seal', label: b.sealed ? 'Unseal notebook' : 'Seal notebook' },
@@ -369,6 +370,7 @@ export function mountNotebook(el, params, ctx) {
     ];
     const act = await menuSheet(b.title, items);
     if (act === 'edit') await notebookSheet(b);
+    if (act === 'highlights') ctx.navigate(`#/highlights?notebook=${b.id}`);
     if (act === 'section') addSection();
     if (act === 'pdf' || act === 'md') {
       toast(act === 'pdf' ? 'Making the PDF…' : 'Making the export…');

@@ -54,6 +54,7 @@ python3 t5r.py phone         # one test directly (needs the server: python3 serv
 | t6a | Default text in Settings (font, size, colour) in typed notes, Today, text boxes, whiteboards and PDF export |
 | t6b | Recently deleted: notes, boards and notebooks kept 30 days, put back (with links and files), delete now, empty, purge |
 | t6c | Today's "From your notes": on this day in past years, and one older note worth another look |
+| t6d | Highlights: words under neat and sloppy highlights (PDF, handwriting, typed), colours, remove a slip, lasso "Add to highlights" |
 
 Helpers: `dbg.py` (`run(steps, vp, mob)` creates a vault and runs steps),
 `mockgh.py` (in-memory GitHub Git Data API), `calib.py`, `hershey_ink.py`
