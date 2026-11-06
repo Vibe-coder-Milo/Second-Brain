@@ -44,7 +44,8 @@ def main(mob):
         leak = J("""import('./js/db.js').then(async D => { const e = await D.meta.get('deviceUnlock'); return JSON.stringify(e).includes('Only for me'); })""")
         assert not leak
         # Lock: the unlock screen asks for Touch ID straight away (virtual sensor says yes).
-        J("import('./js/vault.js').then(V => setTimeout(() => V.lock(), 50))")
+        # Wait for the reload that locking does, or the old screen's .shell counts.
+        with page.expect_navigation(): J("import('./js/vault.js').then(V => setTimeout(() => V.lock(), 50))")
         page.wait_for_selector('.shell', timeout=20000)
         n = J("import('./js/vault.js').then(V => [...V.state.notes.values()].find(x => x.title === 'Secret plan')?.body)")
         print('unlocked by fingerprint on opening:', n == 'Only for me'); assert n == 'Only for me'
@@ -66,7 +67,16 @@ def main(mob):
         due = J("({ bio: !!document.querySelector('#bio'), hint: document.querySelector('#pass-box .hint')?.textContent || '' })")
         print('after a month:', due); assert not due['bio'] and 'month' in due['hint']
         page.fill('#pass', PASS); page.keyboard.press('Enter'); page.wait_for_selector('.shell', timeout=20000)
-        J("import('./js/vault.js').then(V => setTimeout(() => V.lock(), 50))")
+        # Wait for the reload that locking does, or the old screen's .shell counts.
+        with page.expect_navigation(): J("import('./js/vault.js').then(V => setTimeout(() => V.lock(), 50))")
+        # Touch ID is offered again, without the monthly note. (A Touch ID unlock itself
+        # is checked above; Chromium's virtual sensor won't answer again after being
+        # set to "not recognised" and back, so carry on with the passphrase.)
+        page.wait_for_selector('.shell, #bio', timeout=20000); page.wait_for_timeout(800)
+        if not page.locator('.shell').count():
+            back = J("({ bio: !!document.querySelector('#bio'), hint: document.querySelector('#pass-box .hint')?.textContent || '' })")
+            assert back['bio'] and 'month' not in back['hint'], back
+            page.locator('#use-pass').click(); page.fill('#pass', PASS); page.keyboard.press('Enter')
         page.wait_for_selector('.shell', timeout=20000)
         print('Touch ID back after the passphrase: yes')
         # A copy of the key from another passkey (wrong secret) is refused.
