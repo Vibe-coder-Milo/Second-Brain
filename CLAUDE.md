@@ -229,7 +229,7 @@ Baselines at 10,000 notes (headless, no GPU):
 | Map opens | ~4 s, then idle |
 | Save with the map open | ~0.06 s |
 | Startup JS before unlock | ~510 KB |
-| Long PDF flipping | memory stays flat (decoded pages kept: about 8) |
+| Long PDF flipping | memory stays flat (decoded pages kept: about 7) |
 
 ## Requests from the owner (3 Nov 2026)
 

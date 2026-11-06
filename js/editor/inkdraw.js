@@ -231,12 +231,14 @@ export function drawPaper(ctx, page, scale, bgImage = null, area = null, sharp =
 
 // ---- Images used on pages -------------------------------------------------------
 
-// Decoded pictures (PDF pages, photos) take a lot of memory: a PDF page is
-// about 15 MB once decoded. Only the most recently used are kept (about
-// eight pages' worth), so flipping through a long PDF never piles up.
-// Pictures are decoded off the main thread where the browser can.
+// Decoded pictures (PDF pages, photos) take a lot of memory: a PDF page's
+// picture is about 9 MB once decoded (16 MB for PDFs brought in before they
+// were kept whole). Only the most recently used are kept (about seven pages'
+// worth; the sharp drawing from the PDF has its own allowance in pdfview.js),
+// so flipping through a long PDF never piles up. Pictures are decoded off the
+// main thread where the browser can.
 const fileImgs = new Map(); // fileId -> { img, ready, waiters, bytes }
-const KEEP_BYTES = 128 * 1024 * 1024;
+const KEEP_BYTES = 64 * 1024 * 1024;
 const KEEP_MIN = 4;
 let keptBytes = 0;
 function evictImages() {
