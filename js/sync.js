@@ -579,9 +579,12 @@ function fileType(fileId) {
 
 // ---- Scheduling ----------------------------------------------------------
 
-const soon = debounce(() => syncNow({ quiet: true }).catch(() => {}), 4000);
+const soon = debounce(() => { pendingLocal = false; syncNow({ quiet: true }).catch(() => {}); }, 4000);
+let pendingLocal = false; // a change is waiting for the 4-second pause
 export function scheduleSync() {
-  if (isConfigured()) soon();
+  if (!isConfigured()) return;
+  pendingLocal = true;
+  soon();
 }
 
 let timer = null;
@@ -593,6 +596,10 @@ export function startAutoSync() {
   window.addEventListener('online', () => syncNow({ quiet: true }).catch(() => {}));
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') syncNow({ quiet: true }).catch(() => {});
+    // Leaving the app (home screen, another app, closing the tab) right after a
+    // change: send it now. iPadOS pauses a hidden app, so a sync left waiting
+    // would only go out the next time the app is opened.
+    else if (pendingLocal) { soon.cancel(); pendingLocal = false; syncNow({ quiet: true }).catch(() => {}); }
   });
   meta.get('lastSyncAt').then((t) => { if (t) setSync({ lastSyncAt: t }); });
   if (isConfigured()) {

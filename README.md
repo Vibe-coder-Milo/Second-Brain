@@ -45,7 +45,7 @@ Then choose **Start a new second brain** and set a passphrase. Four or more rand
 
 On each other device, open the same link and choose **Set up from another device** with the same repo, token and passphrase.
 
-Every sync is one commit, so the data repo's history doubles as version history. Edits made on two devices before they sync are both kept: the newer one wins and the other becomes a "conflict copy" in your inbox.
+The app syncs a few seconds after each change, straight away when you leave it (home screen or another app), when you come back to it, and every 3 minutes while it's open. **Settings → Sync now** does it on the spot. Every sync is one commit, so the data repo's history doubles as version history. Edits made on two devices before they sync are both kept: the newer one wins and the other becomes a "conflict copy" in your inbox.
 
 ## Everyday use
 

@@ -76,7 +76,7 @@ through a private GitHub repo. Everything is encrypted on the device.
   - models: transformers and onnxruntime (`ort/`) with the model files;
   - OCR: tesseract.
 - **Service worker** (`sw.js`):
-  - Bump `VERSION` (`sb-vN`; currently `sb-v23`) on every release.
+  - Bump `VERSION` (`sb-vN`; currently `sb-v24`) on every release.
   - Add every new JS/CSS file to `SHELL`, or it won't work offline.
   - The app shows an update bar (`js/appupdate.js`).
 - **Views:** `js/views/*.js` export `mount(main, params, ctx)`, returning
@@ -266,6 +266,9 @@ through a private GitHub repo. Everything is encrypted on the device.
     `localStorage`), small bundles first.
   - A note's files go up before the note.
   - Rate-limit answers become state `uploading` with a retry, never an error.
+  - When: 4 s after a local change (`scheduleSync`), at once when the app is
+    hidden with a change still waiting (`pendingLocal`; iPadOS pauses hidden
+    apps), on becoming visible, and every 3 min while visible.
   - Conflicts: typed notes keep the newer version plus a "conflict copy" in
     the inbox. Ink pages merge strokes; notebooks merge.
 - **Organiser:** classifies by exemplar phrases (0.6 × best + 0.4 × second).
@@ -383,6 +386,19 @@ off Safari's own button look (harmless, didn't fix it). The cause is iPadOS
    by `updatedAt`, most recent at the top, instead of the order they were
    made. Writing on a handwritten page counts (the page summary saves the
    note). PDF export of a notebook still uses the order notes were made. `t6g`.
+
+### 7 Nov 2026 (`sb-v24`)
+
+**"Emptied Recently deleted on the iPad, still there on the computer."**
+Emptying already synced (`deleteNote` calls `changed()`; deletions go up as
+`sha: null` tree entries and other devices drop them as `localGone`), and
+the other device's list clears at its next sync. The gap: the sync waits
+4 s after a change, and an iPad app put away within that time is paused
+until it's opened again, so the deletion stayed on the iPad. Now a waiting
+change is sent at once when the app is hidden. A computer only picks it up
+when it syncs (tab shown again, every 3 min, or Sync now). `t6h` (two
+devices; its waits use `page.wait_for_timeout`, since `mockgh` answers from
+the test's own thread and `time.sleep` would stall it).
 
 ## Ideas noted, not requested
 
