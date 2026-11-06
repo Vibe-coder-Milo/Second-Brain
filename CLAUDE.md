@@ -14,6 +14,8 @@ through a private GitHub repo. Everything is encrypted on the device.
   separate private repo (`second-brain-data`). Never in this repo.
 - `README.md` is the user guide (setup, every feature). Keep it current when
   features change.
+- Starting a new round of work (for example version 2.0)? Read
+  `docs/HANDOFF.md`: where things stand, open items, and candidate features.
 
 ## Working with the owner
 
@@ -341,6 +343,28 @@ and what doesn't, fonts and sizes moved to `js/fonts.js`, and
 A redesign mockup (slim menu rail, one-row writing toolbar, cover shelf) was
 shown on 6 Nov; the owner said to ignore it. Don't build it or bring it up
 unless they ask.
+
+### 6 Nov 2026, later the same day (`sb-v19` to `sb-v22`)
+
+Research (`docs/research/2026-11-06-feature-ideas.md`) ranked 14 ideas; the
+owner picked 1 to 4, all built:
+
+1. **Recently deleted** (`sb-v19`): see "Recently deleted" above; `t6b`.
+2. **From your notes on Today** (`sb-v19`): on this day in past years plus
+   one older note worth another look (`js/resurface.js`); `t6c`.
+3. **Two notes side by side** (`sb-v20`, mockup approved first): see "Side by
+   side" above; `t6e`. Fixed in `sb-v21`: the button did nothing for a note
+   open inside a notebook (`#/notebook/B?note=A`, the iPad's usual way).
+4. **Highlights** (`sb-v20`): see "Highlights" above; `t6d`. Highlights sync
+   (they are strokes in the encrypted page data).
+
+**Soft text at the top on iPad** (`sb-v21`, `sb-v22`): the note title and back
+button looked blurred on the iPad only (a laptop was fine). `sb-v21` turned
+off Safari's own button look (harmless, didn't fix it). The cause is iPadOS
+26's top-edge blur for Home Screen apps; `sb-v22` added `.edge-guard` (see
+"iOS Safari" above). **Not yet confirmed on the owner's iPad.** If it's still
+soft, the fallback is to move the top bars below the blurred band (about
+40 pt) when running as a Home Screen app on iPad.
 
 ## Ideas noted, not requested
 
