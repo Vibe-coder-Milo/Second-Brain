@@ -74,7 +74,7 @@ through a private GitHub repo. Everything is encrypted on the device.
   - models: transformers and onnxruntime (`ort/`) with the model files;
   - OCR: tesseract.
 - **Service worker** (`sw.js`):
-  - Bump `VERSION` (`sb-vN`; currently `sb-v21`) on every release.
+  - Bump `VERSION` (`sb-vN`; currently `sb-v22`) on every release.
   - Add every new JS/CSS file to `SHELL`, or it won't work offline.
   - The app shows an update bar (`js/appupdate.js`).
 - **Views:** `js/views/*.js` export `mount(main, params, ctx)`, returning
@@ -273,6 +273,11 @@ through a private GitHub repo. Everything is encrypted on the device.
   - `touch-action` is set on the page (fingers scroll, the Pencil writes).
   - Stylus touches are `preventDefault`ed.
   - The `maximum-scale=1` viewport on iOS stops auto-zoom.
+  - iPadOS 26 blurs the top of a Home Screen app (soft title and back
+    button) unless a solid full-width bar (> 10 px) sits on the top edge.
+    `.edge-guard` in `index.html` is that bar: background clipped to text so
+    it paints nothing, `pointer-events: none`. Keep it first in `<body>`,
+    outside `#app`. Chromium can't show the blur; `t6f` checks the bar.
 
 ## Testing
 

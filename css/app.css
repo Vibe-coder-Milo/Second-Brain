@@ -102,8 +102,12 @@ body {
   overscroll-behavior-y: none;
 }
 button, input, textarea, select { font: inherit; color: inherit; }
-/* iPad Safari draws its own button look (text came out soft and grey in the top bar); the app styles every button itself. */
 button { -webkit-appearance: none; appearance: none; }
+/* iPadOS 26 blurs the top of a Home Screen app (the title and back button came
+   out soft) unless a solid full-width bar sits on the top edge. This one counts
+   as solid but paints nothing (its colour is clipped to text it doesn't have)
+   and lets every tap through. */
+.edge-guard { position: fixed; top: 0; left: 0; right: 0; height: 12px; z-index: 2147483647; pointer-events: none; background: var(--bg); -webkit-background-clip: text; background-clip: text; color: transparent; }
 a { color: inherit; }
 img { max-width: 100%; display: block; }
 [hidden] { display: none !important; }

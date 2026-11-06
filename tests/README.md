@@ -55,6 +55,7 @@ python3 t5r.py phone         # one test directly (needs the server: python3 serv
 | t6b | Recently deleted: notes, boards and notebooks kept 30 days, put back (with links and files), delete now, empty, purge |
 | t6c | Today's "From your notes": on this day in past years, and one older note worth another look |
 | t6e | Two notes side by side: picker, writing on each side, shared pens, resize, swap, close, remembered pair, Beside |
+| t6f | Invisible bar on the top edge that stops iPadOS blurring the top bar: full width, on top, paints nothing, taps go through |
 | t6d | Highlights: words under neat and sloppy highlights (PDF, handwriting, typed), colours, remove a slip, lasso "Add to highlights" |
 
 Helpers: `dbg.py` (`run(steps, vp, mob)` creates a vault and runs steps),
