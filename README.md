@@ -147,6 +147,8 @@ sw.js                 offline cache
 vendor/, fonts/       bundled libraries and typefaces
 ```
 
+Tests: `tests/` (Playwright end-to-end; `cd tests && ./runall.sh`). Notes for working on the code with Claude: `CLAUDE.md`.
+
 When you change any file, bump `VERSION` in `sw.js` (e.g. `sb-v4`) so installed copies pick up the update on their next launch.
 
 To try it locally: `python3 -m http.server` in this folder, then open `http://localhost:8000`.
