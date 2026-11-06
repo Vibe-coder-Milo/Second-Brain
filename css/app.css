@@ -102,6 +102,8 @@ body {
   overscroll-behavior-y: none;
 }
 button, input, textarea, select { font: inherit; color: inherit; }
+/* iPad Safari draws its own button look (text came out soft and grey in the top bar); the app styles every button itself. */
+button { -webkit-appearance: none; appearance: none; }
 a { color: inherit; }
 img { max-width: 100%; display: block; }
 [hidden] { display: none !important; }
