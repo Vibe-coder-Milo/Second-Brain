@@ -134,21 +134,22 @@ export function mountNotebook(el, params, ctx) {
 
   const noteHref = (n) => (wide ? `#/notebook/${id}?note=${n.id}` : `#/note/${n.id}`);
 
+  // Notes are listed newest first: the one written in or made most recently is at the top.
+  const recentFirst = (a, x) => (x.updatedAt || 0) - (a.updatedAt || 0) || x.order - a.order;
+
   function treeHtml(b) {
     const all = notesIn(b.id);
-    const kids = (pid) => all.filter((n) => (n.parent || null) === pid && (pid || true)).sort((a, x) => a.order - x.order);
     const rows = (list, depth) => html`${list.map((n) => {
-      const sub = all.filter((c) => c.parent === n.id).sort((a, x) => a.order - x.order);
+      const sub = all.filter((c) => c.parent === n.id).sort(recentFirst);
       return html`<li><a class="nb-row ${current === n.id ? 'current' : ''}" href="${noteHref(n)}" style="--d:${depth}" ${current === n.id ? raw('aria-current="page"') : ''}>
         <span class="ic">${ROW_ICON(n)}</span><span class="t">${displayTitle(n)}</span>${n.kind === 'ink' && n.pages.length > 1 ? html`<span class="pc">${n.pages.length} pages</span>` : ''}</a>
         ${sub.length ? html`<ul class="nb-tree">${rows(sub, depth + 1)}</ul>` : ''}</li>`;
     })}`;
     const one = b.sections.length === 1;
     return html`${b.sections.map((s, si) => {
-      const top = all.filter((n) => !n.parent || !all.some((p) => p.id === n.parent)).filter((n) => (n.section || b.sections[0].id) === s.id || (!b.sections.some((x) => x.id === n.section) && si === 0)).sort((a, x) => a.order - x.order);
+      const top = all.filter((n) => !n.parent || !all.some((p) => p.id === n.parent)).filter((n) => (n.section || b.sections[0].id) === s.id || (!b.sections.some((x) => x.id === n.section) && si === 0)).sort(recentFirst);
       const count = all.filter((n) => (n.section || b.sections[0].id) === s.id).length;
       const open = !collapsed.has(s.id);
-      void kids;
       return html`<section class="nb-sec" aria-label="${s.name}">
         ${one ? '' : html`<div class="nb-sec-head">
           <button type="button" class="nb-sec-toggle" aria-expanded="${open ? 'true' : 'false'}" data-toggle="${s.id}">${icons.chevron({ size: 16 })}<span>${s.name}</span></button>

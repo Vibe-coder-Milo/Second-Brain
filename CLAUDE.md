@@ -76,7 +76,7 @@ through a private GitHub repo. Everything is encrypted on the device.
   - models: transformers and onnxruntime (`ort/`) with the model files;
   - OCR: tesseract.
 - **Service worker** (`sw.js`):
-  - Bump `VERSION` (`sb-vN`; currently `sb-v22`) on every release.
+  - Bump `VERSION` (`sb-vN`; currently `sb-v23`) on every release.
   - Add every new JS/CSS file to `SHELL`, or it won't work offline.
   - The app shows an update bar (`js/appupdate.js`).
 - **Views:** `js/views/*.js` export `mount(main, params, ctx)`, returning
@@ -363,6 +363,26 @@ button looked blurred on the iPad only (a laptop was fine). `sb-v21` turned
 off Safari's own button look (harmless, didn't fix it). The cause is iPadOS
 26's top-edge blur for Home Screen apps; `sb-v22` added `.edge-guard` (see
 "iOS Safari" above). The owner confirmed on their iPad that it's sharp now.
+
+### 6 Nov 2026, evening (`sb-v23`)
+
+1. **Text boxes go where you draw them** (handwritten notes): with the text
+   tool, a drag draws the box (dashed outline while dragging, `.tb-draft`);
+   the box takes that position and width, shows the drawn height while you
+   type (`drawnH`, not saved), and the words wrap inside. A tap still makes a
+   box, now kept inside the part of the page on screen (`visibleArea()`), so
+   it doesn't run off the screen when zoomed in. On the page,
+   `drawRichText` breaks a word wider than the box between letters, like
+   `overflow-wrap: anywhere` does while typing. `t6g`.
+2. **Changing a typed note's title**: the title could only be changed in
+   editing mode (Edit, or tapping the text), so tapping the title while
+   reading did nothing, which felt like "sometimes it works". Tapping the
+   title now starts editing with the cursor at the end of the title. Handwritten
+   notes and whiteboards already rename by tapping their name. `t6g`.
+3. **Notebook lists newest first**: notes (and sub-notes under a note) sort
+   by `updatedAt`, most recent at the top, instead of the order they were
+   made. Writing on a handwritten page counts (the page summary saves the
+   note). PDF export of a notebook still uses the order notes were made. `t6g`.
 
 ## Ideas noted, not requested
 

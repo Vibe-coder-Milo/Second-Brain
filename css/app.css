@@ -282,6 +282,7 @@ select { appearance: none; -webkit-appearance: none; padding-right: 36px; backgr
 .note-meta .region { font-weight: 600; }
 .note-title { margin: 0; font-family: var(--serif); font-weight: 500; font-size: 30px; line-height: 1.2; overflow-wrap: anywhere; }
 .panel .note-title { font-size: 26px; }
+.note-title.tap-edit { cursor: text; }
 .note-figure { margin: 0; display: flex; flex-direction: column; gap: 8px; }
 .note-figure img { width: 100%; max-height: 70vh; object-fit: contain; border-radius: 12px; background: var(--tint); border: 1px solid var(--line-soft); }
 .note-figure .ph { height: 160px; border-radius: 12px; background: var(--tint); display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 14px; }

@@ -338,6 +338,7 @@ body.inking { overscroll-behavior: none; }
 .tb-edit .rich h1 { font-size: 1.7em; } .tb-edit .rich h2 { font-size: 1.35em; } .tb-edit .rich h3 { font-size: 1.12em; color: #51606C; }
 .tb-actions { position: absolute; left: 0; top: 100%; margin-top: 6px; display: flex; gap: 4px; }
 .tb-actions button { min-height: 34px; padding: 0 12px; border-radius: 9px; border: 1px solid var(--field); background: var(--surface); color: var(--ink); font-size: 13px; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; }
+.tb-draft { position: absolute; z-index: 4; border: 1.5px dashed var(--focus); border-radius: 6px; background: rgba(120, 160, 200, 0.08); pointer-events: none; }
 .tb-width { position: absolute; right: -8px; top: 50%; width: 16px; height: 36px; margin-top: -18px; border-radius: 6px; border: 2px solid #FFFFFF; background: var(--focus); cursor: ew-resize; touch-action: none; padding: 0; }
 .postit-edit { position: absolute; z-index: 4; background: var(--pi, #FFF1B8); box-shadow: 0 8px 22px rgba(0, 0, 0, 0.2); border-radius: 2px; display: flex; flex-direction: column; }
 .postit-edit textarea { flex: 1; border: 0; background: transparent; resize: none; min-height: 140px; font-family: 'Caveat', cursive; font-size: var(--fs, 30px); line-height: 1.1; color: #1B2A38; padding: 10px 14px; border-radius: 0; }

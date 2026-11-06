@@ -494,7 +494,7 @@ export function mount(el, params, ctx) {
     } else if (t === 'move') {
       inner = html`<span class="props-hint">Drag anything to move it. Tap it for more options.</span>`;
     } else if (t === 'text') {
-      inner = html`<span class="props-hint">Tap the page where the text box should go</span>`;
+      inner = html`<span class="props-hint">Tap the page, or drag out a box, where the text should go</span>`;
     } else if (t === 'laser') {
       inner = html`<span class="props-hint laser-hint"><span class="laser-dot"></span>Draw to point things out. It fades away, nothing is saved</span>${wide ? '' : html`<button type="button" class="chip sm" data-act="laser-off">Done</button>`}`;
     }

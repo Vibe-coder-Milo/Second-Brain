@@ -738,7 +738,8 @@ export class InkSurface {
     } else if (t === 'lasso') {
       this.drawing = { pointerId: e.pointerId, kind: 'lasso', poly: [[x, y]], t0: Date.now() };
     } else if (t === 'text') {
-      this.drawing = { pointerId: e.pointerId, kind: 'tap', x, y };
+      // A tap starts a text box there; a drag draws the box's size.
+      this.drawing = { pointerId: e.pointerId, kind: 'tap', x, y, x2: x, y2: y };
     } else if (t === 'hand') {
       this.drawing = { pointerId: e.pointerId, kind: 'pan', sx: e.clientX, sy: e.clientY, st: this.scroll.scrollTop, sl: this.scroll.scrollLeft };
     }
@@ -772,6 +773,9 @@ export class InkSurface {
     } else if (d.kind === 'move') {
       const [x, y] = this.toPage(e);
       this.dragMove(x, y);
+    } else if (d.kind === 'tap') {
+      [d.x2, d.y2] = this.toPage(e);
+      this.drawTextArea(d);
     } else if (d.kind === 'pan') {
       this.scroll.scrollTop = d.st - (e.clientY - d.sy);
       this.scroll.scrollLeft = d.sl - (e.clientX - d.sx);
@@ -796,7 +800,11 @@ export class InkSurface {
     else if (d.kind === 'erase') { if (d.any) this.changed(); else this.undoStack.pop(); }
     else if (d.kind === 'lasso') this.finishLasso(d);
     else if (d.kind === 'move') this.endMove(d);
-    else if (d.kind === 'tap') this.tapAt(d.x, d.y, { tool: 'text' });
+    else if (d.kind === 'tap') {
+      this.drawTextArea(null);
+      const area = this.textArea(d);
+      if (area) this.addTextIn(area); else this.tapAt(d.x, d.y, { tool: 'text' });
+    }
     this.clearWet();
   }
 
@@ -806,11 +814,13 @@ export class InkSurface {
     if (!d || d.pointerId !== e.pointerId) return;
     // A cancelled Pencil stroke still counts; the system sometimes cancels at the end.
     if (d.kind === 'stroke' && d.pts.length > 2) { this.up(e); return; }
+    if (d.kind === 'tap' && this.textArea(d)) { this.up(e); return; }
     clearTimeout(this.holdTimer);
     this.drawing = null;
     this.updateTouchAction();
     if (d.kind === 'laser') { d.trail.end = performance.now(); return; }
     if (d.kind === 'move') this.endMove(d);
+    if (d.kind === 'tap') this.drawTextArea(null);
     this.clearWet();
   }
 
@@ -1494,13 +1504,64 @@ export class InkSurface {
     return o;
   }
 
+  // The part of the page on screen, in page units (zoomed in, it's less than the page).
+  visibleArea() {
+    const r = this.pageEl.getBoundingClientRect();
+    const sr = this.scroll.getBoundingClientRect();
+    const s = this.scale;
+    const left = Math.max(0, (Math.max(sr.left, 0) - r.left) / s);
+    const right = Math.min(PAGE_W, (Math.min(sr.right, window.innerWidth) - r.left) / s);
+    return right - left > 50 ? { left, right } : { left: 0, right: PAGE_W };
+  }
+
+  // A tap with the text tool: a box from there to the right, kept inside the
+  // part of the page you can see so the words don't run off the screen.
   addText(x, y) {
+    const vis = this.visibleArea();
+    const right = Math.min(PAGE_W - 30, vis.right - 10);
+    const bx = Math.max(vis.left + 4, Math.min(x, right - 160));
+    this.newTextBox({ x: bx, y: y - 14, w: Math.max(120, Math.min(520, right - bx)), h: 40 });
+  }
+
+  // The area dragged out with the text tool, if it was a drag and not a tap.
+  textArea(d) {
+    const minDrag = 12 / this.scale; // about 12 px on screen
+    if (Math.abs(d.x2 - d.x) < minDrag && Math.abs(d.y2 - d.y) < minDrag) return null;
+    const x = Math.max(0, Math.min(d.x, d.x2));
+    const y = Math.max(0, Math.min(d.y, d.y2));
+    const x2 = Math.min(PAGE_W, Math.max(d.x, d.x2));
+    const y2 = Math.min(this.page.h, Math.max(d.y, d.y2));
+    return { x, y, w: Math.max(60, x2 - x), h: Math.max(30, y2 - y) };
+  }
+
+  // A text box exactly where it was drawn: the words wrap inside its width.
+  addTextIn(a) {
+    const x = Math.min(a.x, PAGE_W - 60);
+    this.newTextBox({ x, y: a.y, w: Math.min(a.w, PAGE_W - x), h: a.h, drawnH: a.h });
+  }
+
+  // The dashed outline while dragging out a text box (null removes it).
+  drawTextArea(d) {
+    const a = d && this.textArea(d);
+    if (!a) { this.textDraft?.remove(); this.textDraft = null; return; }
+    if (!this.textDraft) {
+      this.textDraft = document.createElement('div');
+      this.textDraft.className = 'tb-draft';
+      this.overlay.appendChild(this.textDraft);
+    }
+    const s = this.scale;
+    Object.assign(this.textDraft.style, { left: `${a.x * s}px`, top: `${a.y * s}px`, width: `${a.w * s}px`, height: `${a.h * s}px` });
+  }
+
+  newTextBox({ x, y, w, h, drawnH }) {
     // New text boxes start in the default text from Settings; boxes already on
     // the page keep theirs, so they don't shift over the writing around them.
     const dt = state.config?.text || {};
     const extra = { ...(dt.font ? { font: dt.font } : {}), ...(dt.color ? { color: dt.color } : {}) };
     const size = boxSize(dt.size || TEXT_SIZE);
-    const o = this.stamp({ id: uid('o'), at: Date.now(), type: 'text', x: Math.min(x, PAGE_W - 240), y: y - 14, w: Math.min(520, PAGE_W - Math.min(x, PAGE_W - 240) - 30), h: 40, size, ...extra, doc: { type: 'doc', content: [{ type: 'paragraph' }] }, t: Date.now(), fresh: true });
+    const o = this.stamp({ id: uid('o'), at: Date.now(), type: 'text', x, y, w, h, size, ...extra, doc: { type: 'doc', content: [{ type: 'paragraph' }] }, t: Date.now(), fresh: true });
+    // While you type in a box you drew, it shows the size you drew (not saved).
+    if (drawnH) Object.defineProperty(o, 'drawnH', { value: drawnH, configurable: true, enumerable: false });
     this.snapshot();
     this.data.objects.push(o);
     this.edit(o);
@@ -1567,6 +1628,8 @@ export class InkSurface {
     const s = this.scale;
     if (o.type === 'text') {
       Object.assign(box.style, { left: `${o.x * s}px`, top: `${o.y * s}px`, width: `${o.w * s}px` });
+      const host = box.querySelector('.tb-host');
+      if (host) host.style.minHeight = o.drawnH ? `${o.drawnH * s}px` : '';
       box.style.setProperty('--fs', `${(o.size || BOX_SIZE) * s}px`);
       if (o.font) box.style.setProperty('--tbf', fontCss(o.font, BOX_FONT)); else box.style.removeProperty('--tbf');
       if (o.color) box.style.setProperty('--tbc', this.dark ? darkInk(o.color) : o.color); else box.style.removeProperty('--tbc');

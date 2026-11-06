@@ -538,6 +538,21 @@ export function drawRichText(ctx, doc, x, y, width, { size = BOX_SIZE, font = BO
     let line = [];
     let lw = 0;
     let maxSize = runs.find((r) => r.size)?.size || size;
+    // A word wider than the box breaks between letters, as it does while typing.
+    for (let i = 0; i < words.length; i++) {
+      const w = words[i];
+      if (!w.text || !w.text.trim()) continue;
+      ctx.font = fontOf(w);
+      if (ctx.measureText(w.text).width <= pw) continue;
+      const parts = [];
+      let cur = '';
+      for (const ch of w.text) {
+        if (cur && ctx.measureText(cur + ch).width > pw) { parts.push(cur); cur = ch; } else cur += ch;
+      }
+      if (cur) parts.push(cur);
+      words.splice(i, 1, ...parts.map((t) => ({ ...w, text: t })));
+      i += parts.length - 1;
+    }
     for (const w of words) {
       if (w.br) { lines.push(line); line = []; lw = 0; continue; }
       let ww;

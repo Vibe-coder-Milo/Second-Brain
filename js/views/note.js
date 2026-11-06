@@ -181,7 +181,7 @@ function mountTyped(el, params, ctx) {
       </div>
       ${editing
         ? html`<label class="sr-only" for="n-title">Title</label><textarea id="n-title" class="title-input note-title" rows="1" placeholder="Title" enterkeyhint="next">${n.title}</textarea>`
-        : html`<h1 class="note-title">${displayTitle(n)}</h1>`}
+        : html`<h1 class="note-title ${compact ? '' : 'tap-edit'}" ${compact ? '' : raw('role="button" tabindex="0" aria-label="Edit the title"')}>${displayTitle(n)}</h1>`}
     </div>
     ${n.inbox && !editing ? html`<div class="file-in"><span>File in</span>
       ${sugg.map((x) => html`<button type="button" class="chip sm" data-file-in="${x.id}"><span class="dot" style="background:${regionColors(x).dot}"></span>${x.name}</button>`)}
@@ -199,6 +199,12 @@ function mountTyped(el, params, ctx) {
         e.preventDefault();
         if (editor) { editor.view.focus(); editor.commands.focus('start'); } else { focusWhenReady = true; t.blur(); }
       });
+    }
+    // Tap the title while reading to change it.
+    const h = box.querySelector('h1.tap-edit');
+    if (h) {
+      h.onclick = () => startEditing(undefined, { title: true });
+      h.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); startEditing(undefined, { title: true }); } };
     }
     box.querySelectorAll('[data-file-in]').forEach((b) => { b.onclick = async () => { await V.fileNote(n.id, b.dataset.fileIn); toast('Filed'); }; });
     const fo = box.querySelector('[data-act=file-other]');
@@ -547,7 +553,7 @@ function mountTyped(el, params, ctx) {
   const outlineSoon = debounce(drawOutline, 600);
 
   // ---------- Editing and saving ----------
-  function startEditing(pos) {
+  function startEditing(pos, { title = false } = {}) {
     if (editing) return;
     editing = true;
     editor?.setEditable(true);
@@ -560,7 +566,11 @@ function mountTyped(el, params, ctx) {
     drawConnections();
     setupBar();
     document.body.classList.add('editing');
-    if (editor) {
+    const t = title && $('#n-title', el);
+    if (t) {
+      t.focus();
+      t.setSelectionRange(t.value.length, t.value.length);
+    } else if (editor) {
       if (typeof pos === 'number') editor.chain().focus().setTextSelection(pos).run();
       else editor.commands.focus('end');
     }

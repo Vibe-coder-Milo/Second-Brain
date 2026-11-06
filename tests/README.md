@@ -56,6 +56,7 @@ python3 t5r.py phone         # one test directly (needs the server: python3 serv
 | t6c | Today's "From your notes": on this day in past years, and one older note worth another look |
 | t6e | Two notes side by side: picker, writing on each side, shared pens, resize, swap, close, remembered pair, Beside |
 | t6f | Invisible bar on the top edge that stops iPadOS blurring the top bar: full width, on top, paints nothing, taps go through |
+| t6g | Notebook lists newest first (sub-notes too); tap a typed note's title to change it, again and again, in the notebook pane and on its own; a text box dragged out on a handwritten page sits where drawn and wraps inside it (long words too); a tapped box stays on screen when zoomed in |
 | t6d | Highlights: words under neat and sloppy highlights (PDF, handwriting, typed), colours, remove a slip, lasso "Add to highlights" |
 
 Helpers: `dbg.py` (`run(steps, vp, mob)` creates a vault and runs steps),
