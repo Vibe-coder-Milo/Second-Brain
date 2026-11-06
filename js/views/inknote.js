@@ -1123,6 +1123,8 @@ export function mount(el, params, ctx) {
       const data = await V.loadPage(p.id).catch(() => null);
       for (const o of data?.objects || []) if (o.fileId) await V.deleteFile(o.fileId);
       if (p.bg) await V.deleteFile(p.bg);
+      // The original PDF goes once none of its pages are left.
+      if (p.pdf && !V.pdfInUse(p.pdf.file, { page: p.id }) && !pages.some((x) => x.pdf?.file === p.pdf.file)) await V.deleteFile(p.pdf.file);
       await V.deleteFile(p.id);
       V.forgetPageCache(p.id);
       await V.saveNote({ ...n, pages, pageTomb: [...(n.pageTomb || []), p.id] });

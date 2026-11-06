@@ -144,6 +144,8 @@ export function treeOrder(nb) {
 
 const PX = 1240; // pixel width of a rendered page (about 150 dpi on A4)
 
+const INK_PX = 1860; // pixel width of the writing drawn over an original PDF page (about 225 dpi on A4)
+
 async function inkCanvases(n) {
   const { renderPageCanvas, layerView } = await import('./editor/inkdraw.js');
   const { A4_H, PAGE_W } = await import('./model.js');
@@ -151,6 +153,13 @@ async function inkCanvases(n) {
   const view = layerView(n, { forExport: true });
   for (const p of n.pages) {
     const data = await V.loadPage(p.id);
+    // A page from a PDF: the original page goes in as it is (sharp text and
+    // drawings), with the writing on top as a see-through picture.
+    if (p.pdf && !view.paperHidden) {
+      const writing = (data.strokes || []).length || (data.objects || []).length;
+      out.push({ pdf: p.pdf, h: p.h, overlay: writing ? await renderPageCanvas(p, data, INK_PX, { ...view, noPaper: true }) : null, fallback: () => renderPageCanvas(p, data, PX, view) });
+      continue;
+    }
     if (p.h <= A4_H * 1.1) { out.push(await renderPageCanvas(p, data, PX, view)); continue; }
     // A long (endless) page is printed as A4-sized pieces.
     for (let y = 0; y < p.h; y += A4_H) out.push(await renderPageCanvas(p, data, PX, { ...view, crop: { x: 0, y, w: PAGE_W, h: Math.min(A4_H, p.h - y) } }));
@@ -290,13 +299,50 @@ async function coverCanvas(nb) {
   return c;
 }
 
+// An original PDF page put into the export, with the writing over it.
+// False if it can't be (then the page goes in as a picture).
+async function addPdfPage(pdf, item, sources, PDFDocument) {
+  const { pdfBytes } = await import('./pdfview.js');
+  try {
+    if (!sources.has(item.pdf.file)) {
+      const bytes = await pdfBytes(item.pdf.file);
+      sources.set(item.pdf.file, bytes ? await PDFDocument.load(bytes, { ignoreEncryption: true, updateMetadata: false }) : null);
+    }
+    const src = sources.get(item.pdf.file);
+    const sp = src?.getPages()[item.pdf.n - 1];
+    if (!sp || sp.getRotation().angle % 360) return false; // turned pages: as a picture, the way they show
+    const cb = sp.getCropBox();
+    const emb = await pdf.embedPage(sp, { left: cb.x, bottom: cb.y, right: cb.x + cb.width, top: cb.y + cb.height });
+    const w = 595.28;
+    const h = (w * item.h) / PAGE_W;
+    const ph = Math.min(h, (w * cb.height) / cb.width);
+    const page = pdf.addPage([w, h]);
+    page.drawPage(emb, { x: 0, y: h - ph, width: w, height: ph });
+    if (item.overlay) {
+      const blob = await new Promise((r) => item.overlay.toBlob(r, 'image/png'));
+      page.drawImage(await pdf.embedPng(new Uint8Array(await blob.arrayBuffer())), { x: 0, y: 0, width: w, height: h });
+    }
+    return true;
+  } catch (e) {
+    console.warn('export pdf page', e);
+    return false;
+  } finally {
+    if (item.overlay) { item.overlay.width = 0; item.overlay.height = 0; }
+  }
+}
+
 async function canvasesToPdf(canvases, title) {
   const { PDFDocument } = await import('../vendor/pdf-lib.esm.min.js');
   const pdf = await PDFDocument.create();
   pdf.setTitle(title);
   pdf.setCreator('Second brain');
   pdf.setProducer('Second brain');
-  for (const c of canvases) {
+  const sources = new Map();
+  for (let c of canvases) {
+    if (c.pdf) {
+      if (await addPdfPage(pdf, c, sources, PDFDocument)) continue;
+      c = await c.fallback();
+    }
     const blob = await new Promise((r) => c.toBlob(r, 'image/jpeg', 0.9));
     const img = await pdf.embedJpg(new Uint8Array(await blob.arrayBuffer()));
     const w = 595.28;

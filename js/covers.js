@@ -10,47 +10,47 @@ const SPRITE = "<pattern id=\"cv-pt-pera\" patternUnits=\"userSpaceOnUse\" width
 export const COVER_GROUPS = [['classic', 'Classic'], ['nature', 'Nature'], ['asia', 'Singapore & Asia'], ['pattern', 'Patterns'], ['bold', 'Bold'], ['night', 'Night']];
 
 export const COVERS = [
-  { id: 'kraft', name: 'Kraft', group: 'classic', t: { x: 102, y: 100, font: 'hand', size: 25, fill: '#1B2A38', anchor: 'middle', max: 108 } },
-  { id: 'cloth', name: 'Cloth', group: 'classic', t: { x: 108, y: 147, font: 'serif', size: 20, fill: '#D9B36C', anchor: 'middle', max: 140 } },
-  { id: 'composition', name: 'Composition', group: 'classic', t: { x: 120, y: 96, font: 'hand', size: 24, fill: '#1B2A38', anchor: 'middle', max: 106 } },
-  { id: 'leather', name: 'Leather', group: 'classic', t: { x: 101, y: 134, font: 'serif', size: 20, fill: '#E2C27A', anchor: 'middle', max: 122 } },
-  { id: 'tide', name: 'Tide', group: 'nature', t: { x: 28, y: 268, font: 'serif', italic: true, size: 26, fill: '#FFFFFF', max: 165 } },
-  { id: 'botanical', name: 'Botanical', group: 'nature', t: { x: 28, y: 64, font: 'serif', italic: true, size: 25, fill: '#E8EFE6', max: 160 } },
-  { id: 'peaks', name: 'Peaks at dawn', group: 'nature', t: { x: 26, y: 266, font: 'serif', italic: true, size: 25, fill: '#F6EEE6', max: 165 } },
-  { id: 'pines', name: 'Pine forest', group: 'nature', t: { x: 26, y: 54, font: 'serif', italic: true, size: 25, fill: '#2F4B40', max: 168 } },
-  { id: 'wildflowers', name: 'Wildflowers', group: 'nature', t: { x: 111, y: 72, font: 'serif', italic: true, size: 24, fill: '#3B3A36', anchor: 'middle', max: 160 } },
-  { id: 'monstera', name: 'Monstera', group: 'nature', t: { x: 26, y: 50, font: 'serif', italic: true, size: 25, fill: '#244A38', max: 168 } },
-  { id: 'pera', name: 'Peranakan tile', group: 'asia', t: { x: 111, y: 230, font: 'serif', size: 21, fill: '#1B2A38', anchor: 'middle', max: 128 } },
-  { id: 'shophouse', name: 'Shophouses', group: 'asia', t: { x: 111, y: 167, font: 'serif', size: 17, fill: '#E8C46A', anchor: 'middle', max: 152 } },
-  { id: 'estate', name: 'HDB estate', group: 'asia', t: { x: 24, y: 40, font: 'serif', size: 22, fill: '#1B2A38', max: 170 } },
-  { id: 'lanterns', name: 'Lanterns', group: 'asia', t: { x: 111, y: 260, font: 'serif', size: 24, fill: '#F2C76A', anchor: 'middle', max: 160 } },
-  { id: 'waves', name: 'Waves', group: 'asia', t: { x: 111, y: 252, font: 'serif', size: 24, fill: '#F3EBDD', anchor: 'middle', max: 160 } },
-  { id: 'koi', name: 'Koi pond', group: 'asia', t: { x: 26, y: 262, font: 'serif', italic: true, size: 26, fill: '#F4EFE6', max: 165 } },
-  { id: 'shibori', name: 'Shibori', group: 'asia', t: { x: 111, y: 238, font: 'serif', size: 17, fill: '#1E2F63', anchor: 'middle', max: 122 } },
-  { id: 'marbled', name: 'Marbled', group: 'pattern', t: { x: 111, y: 143, font: 'serif', size: 20, fill: '#1B2A38', anchor: 'middle', max: 112 } },
-  { id: 'terrazzo', name: 'Terrazzo', group: 'pattern', t: { x: 110, y: 236, font: 'sans', weight: 600, size: 17, fill: '#FFFFFF', anchor: 'middle', max: 118 } },
-  { id: 'gingham', name: 'Gingham', group: 'pattern', t: { x: 111, y: 142, font: 'serif', size: 20, fill: '#2F4B3C', anchor: 'middle', max: 120 } },
-  { id: 'tweed', name: 'Tweed', group: 'pattern', t: { x: 111, y: 222, font: 'serif', size: 15, fill: '#F2E3CB', anchor: 'middle', max: 100 } },
-  { id: 'polka', name: 'Polka dots', group: 'pattern', t: { x: 111, y: 243, font: 'serif', size: 22, fill: '#9E2430', anchor: 'middle', max: 170 } },
-  { id: 'stripes', name: 'Stripes', group: 'pattern', t: { x: 111, y: 147, font: 'sans', weight: 700, size: 20, fill: '#FFFFFF', anchor: 'middle', max: 172 } },
-  { id: 'tartan', name: 'Tartan', group: 'pattern', t: { x: 111, y: 73, font: 'serif', size: 18, fill: '#1F3B5C', anchor: 'middle', max: 118 } },
-  { id: 'bauhaus', name: 'Bauhaus', group: 'bold', t: { x: 26, y: 138, font: 'sans', weight: 700, size: 34, fill: '#1B2A38', max: 170 } },
-  { id: 'blueprint', name: 'Blueprint', group: 'bold', t: { x: 151, y: 234, font: 'sans', weight: 600, size: 12, fill: '#FFFFFF', anchor: 'middle', max: 84 } },
-  { id: 'riso', name: 'Risograph', group: 'bold', t: { x: 24, y: 264, font: 'sans', weight: 700, size: 26, fill: '#1B2A38', max: 172 } },
-  { id: 'memphis', name: 'Memphis', group: 'bold', t: { x: 26, y: 160, font: 'sans', weight: 700, size: 30, fill: '#1B1B1B', max: 172 } },
-  { id: 'aura', name: 'Aura', group: 'bold', t: { x: 111, y: 150, font: 'serif', italic: true, size: 28, fill: '#2C2440', anchor: 'middle', max: 160 } },
-  { id: 'retro', name: 'Seventies', group: 'bold', t: { x: 198, y: 50, font: 'sans', weight: 700, size: 22, fill: '#5A2E1E', anchor: 'end', max: 150 } },
-  { id: 'planes', name: 'Paper planes', group: 'bold', t: { x: 26, y: 264, font: 'sans', weight: 700, size: 22, fill: '#21436E', max: 170 } },
-  { id: 'citrus', name: 'Citrus', group: 'bold', t: { x: 111, y: 236, font: 'sans', weight: 700, size: 18, fill: '#D2691E', anchor: 'middle', max: 132 } },
-  { id: 'contour', name: 'Contour', group: 'night', t: { x: 28, y: 70, font: 'serif', italic: true, size: 26, fill: '#F1F4F2', max: 160 } },
-  { id: 'night', name: 'Night chart', group: 'night', t: { x: 28, y: 262, font: 'serif', size: 26, fill: '#E4ECE9', max: 150 } },
-  { id: 'aurora', name: 'Aurora', group: 'night', t: { x: 26, y: 262, font: 'serif', size: 25, fill: '#E8F2EE', max: 165 } },
-  { id: 'orbit', name: 'Orbit', group: 'night', t: { x: 26, y: 50, font: 'sans', weight: 700, size: 22, fill: '#F2F0E8', max: 165 } },
-  { id: 'city', name: 'City at dusk', group: 'night', t: { x: 26, y: 54, font: 'serif', italic: true, size: 26, fill: '#F6EAF0', max: 165 } },
-  { id: 'deco', name: 'Art deco', group: 'night', t: { x: 111, y: 88, font: 'sans', weight: 600, size: 15, fill: '#E2C27A', anchor: 'middle', max: 124 } },
+  { id: 'kraft', name: 'Kraft', group: 'classic', t: { x: 102, y: 100, font: 'hand', size: 25, fill: '#1B2A38', anchor: 'middle', max: 114, g: 'mid', b: [70, 138] } },
+  { id: 'cloth', name: 'Cloth', group: 'classic', t: { x: 108, y: 147, font: 'serif', size: 20, fill: '#D9B36C', anchor: 'middle', max: 140, g: 'mid', b: [124, 158] } },
+  { id: 'composition', name: 'Composition', group: 'classic', t: { x: 120, y: 96, font: 'hand', size: 24, fill: '#1B2A38', anchor: 'middle', max: 112, g: 'mid', b: [61, 127] } },
+  { id: 'leather', name: 'Leather', group: 'classic', t: { x: 101, y: 134, font: 'serif', size: 20, fill: '#E2C27A', anchor: 'middle', max: 122, g: 'mid', b: [111, 145] } },
+  { id: 'tide', name: 'Tide', group: 'nature', t: { x: 28, y: 268, font: 'serif', italic: true, size: 26, fill: '#FFFFFF', max: 165, g: 'up' } },
+  { id: 'botanical', name: 'Botanical', group: 'nature', t: { x: 28, y: 64, font: 'serif', italic: true, size: 25, fill: '#E8EFE6', max: 160, g: 'down' } },
+  { id: 'peaks', name: 'Peaks at dawn', group: 'nature', t: { x: 26, y: 266, font: 'serif', italic: true, size: 25, fill: '#F6EEE6', max: 165, g: 'up' } },
+  { id: 'pines', name: 'Pine forest', group: 'nature', t: { x: 26, y: 54, font: 'serif', italic: true, size: 25, fill: '#2F4B40', max: 168, g: 'down' } },
+  { id: 'wildflowers', name: 'Wildflowers', group: 'nature', t: { x: 111, y: 72, font: 'serif', italic: true, size: 24, fill: '#3B3A36', anchor: 'middle', max: 160, g: 'up', b: [14, 84] } },
+  { id: 'monstera', name: 'Monstera', group: 'nature', t: { x: 26, y: 50, font: 'serif', italic: true, size: 25, fill: '#244A38', max: 168, g: 'down' } },
+  { id: 'pera', name: 'Peranakan tile', group: 'asia', t: { x: 111, y: 230, font: 'serif', size: 21, fill: '#1B2A38', anchor: 'middle', max: 128, g: 'mid', b: [204, 242] } },
+  { id: 'shophouse', name: 'Shophouses', group: 'asia', t: { x: 111, y: 167, font: 'serif', size: 17, fill: '#E8C46A', anchor: 'middle', max: 152, g: 'mid', b: [146, 176] } },
+  { id: 'estate', name: 'HDB estate', group: 'asia', t: { x: 24, y: 40, font: 'serif', size: 22, fill: '#1B2A38', max: 170, g: 'mid', b: [6, 60] } },
+  { id: 'lanterns', name: 'Lanterns', group: 'asia', t: { x: 111, y: 260, font: 'serif', size: 24, fill: '#F2C76A', anchor: 'middle', max: 160, g: 'mid', b: [236, 276] } },
+  { id: 'waves', name: 'Waves', group: 'asia', t: { x: 111, y: 252, font: 'serif', size: 24, fill: '#F3EBDD', anchor: 'middle', max: 160, g: 'mid', b: [214, 276] } },
+  { id: 'koi', name: 'Koi pond', group: 'asia', t: { x: 26, y: 262, font: 'serif', italic: true, size: 26, fill: '#F4EFE6', max: 165, g: 'up' } },
+  { id: 'shibori', name: 'Shibori', group: 'asia', t: { x: 111, y: 238, font: 'serif', size: 17, fill: '#1E2F63', anchor: 'middle', max: 122, g: 'mid', b: [218, 246] } },
+  { id: 'marbled', name: 'Marbled', group: 'pattern', t: { x: 111, y: 143, font: 'serif', size: 20, fill: '#1B2A38', anchor: 'middle', max: 112, g: 'mid', b: [110, 164] } },
+  { id: 'terrazzo', name: 'Terrazzo', group: 'pattern', t: { x: 110, y: 236, font: 'sans', weight: 600, size: 17, fill: '#FFFFFF', anchor: 'middle', max: 118, g: 'mid', b: [212, 248] } },
+  { id: 'gingham', name: 'Gingham', group: 'pattern', t: { x: 111, y: 142, font: 'serif', size: 20, fill: '#2F4B3C', anchor: 'middle', max: 120, g: 'mid', b: [106, 164] } },
+  { id: 'tweed', name: 'Tweed', group: 'pattern', t: { x: 111, y: 222, font: 'serif', size: 15, fill: '#F2E3CB', anchor: 'middle', max: 100, g: 'mid', b: [202, 232] } },
+  { id: 'polka', name: 'Polka dots', group: 'pattern', t: { x: 111, y: 243, font: 'serif', size: 22, fill: '#9E2430', anchor: 'middle', max: 170, g: 'mid', b: [220, 253] } },
+  { id: 'stripes', name: 'Stripes', group: 'pattern', t: { x: 111, y: 147, font: 'sans', weight: 700, size: 20, fill: '#FFFFFF', anchor: 'middle', max: 172, g: 'mid', b: [121, 159] } },
+  { id: 'tartan', name: 'Tartan', group: 'pattern', t: { x: 111, y: 73, font: 'serif', size: 18, fill: '#1F3B5C', anchor: 'middle', max: 118, g: 'mid', b: [46, 88] } },
+  { id: 'bauhaus', name: 'Bauhaus', group: 'bold', t: { x: 26, y: 138, font: 'sans', weight: 700, size: 34, fill: '#1B2A38', max: 170, g: 'up', b: [8, 149] } },
+  { id: 'blueprint', name: 'Blueprint', group: 'bold', t: { x: 151, y: 234, font: 'sans', weight: 600, size: 12, fill: '#FFFFFF', anchor: 'middle', max: 84, g: 'mid', b: [219, 239] } },
+  { id: 'riso', name: 'Risograph', group: 'bold', t: { x: 24, y: 264, font: 'sans', weight: 700, size: 26, fill: '#1B2A38', max: 172, g: 'up' } },
+  { id: 'memphis', name: 'Memphis', group: 'bold', t: { x: 26, y: 160, font: 'sans', weight: 700, size: 30, fill: '#1B1B1B', max: 172, g: 'up' } },
+  { id: 'aura', name: 'Aura', group: 'bold', t: { x: 111, y: 150, font: 'serif', italic: true, size: 28, fill: '#2C2440', anchor: 'middle', max: 160, g: 'mid', b: [60, 240] } },
+  { id: 'retro', name: 'Seventies', group: 'bold', t: { x: 198, y: 50, font: 'sans', weight: 700, size: 22, fill: '#5A2E1E', anchor: 'end', max: 150, g: 'down' } },
+  { id: 'planes', name: 'Paper planes', group: 'bold', t: { x: 26, y: 264, font: 'sans', weight: 700, size: 22, fill: '#21436E', max: 170, g: 'up' } },
+  { id: 'citrus', name: 'Citrus', group: 'bold', t: { x: 111, y: 236, font: 'sans', weight: 700, size: 18, fill: '#D2691E', anchor: 'middle', max: 128, g: 'mid', b: [213, 247] } },
+  { id: 'contour', name: 'Contour', group: 'night', t: { x: 28, y: 70, font: 'serif', italic: true, size: 26, fill: '#F1F4F2', max: 160, g: 'down' } },
+  { id: 'night', name: 'Night chart', group: 'night', t: { x: 28, y: 262, font: 'serif', size: 26, fill: '#E4ECE9', max: 118, g: 'up' } },
+  { id: 'aurora', name: 'Aurora', group: 'night', t: { x: 26, y: 262, font: 'serif', size: 25, fill: '#E8F2EE', max: 165, g: 'up' } },
+  { id: 'orbit', name: 'Orbit', group: 'night', t: { x: 26, y: 50, font: 'sans', weight: 700, size: 22, fill: '#F2F0E8', max: 165, g: 'down' } },
+  { id: 'city', name: 'City at dusk', group: 'night', t: { x: 26, y: 54, font: 'serif', italic: true, size: 26, fill: '#F6EAF0', max: 165, g: 'down' } },
+  { id: 'deco', name: 'Art deco', group: 'night', t: { x: 111, y: 88, font: 'sans', weight: 600, size: 15, fill: '#E2C27A', anchor: 'middle', max: 124, g: 'mid', b: [68, 96] } },
 ];
 export const PLAIN_COLORS = [['Chart blue', '#2B5684'], ['Forest', '#1F6F50'], ['Oxblood', '#8A3537'], ['Ochre', '#C0802F'], ['Charcoal', '#2B2F33'], ['Plum', '#5B3E99'], ['Sea', '#2A8C9C'], ['Rose', '#B8578E']];
-const PLAIN_T = { x: 28, y: 70, font: 'serif', size: 26, fill: '#FFFFFF', max: 160 };
+const PLAIN_T = { x: 28, y: 70, font: 'serif', size: 26, fill: '#FFFFFF', max: 160, g: 'down' };
 
 const FAMILY = { serif: "Spectral, Georgia, serif", sans: "Overpass, system-ui, sans-serif", hand: "Caveat, cursive" };
 
@@ -62,17 +62,78 @@ export function ensureCoverSprite() {
   document.body.appendChild(holder.firstChild);
 }
 
+// Fitting a title on a cover. A name that fits stays on one line (shrinking
+// a little if needed). A longer one breaks into two lines at a word (three if
+// two would be tiny), which grow upwards, downwards or from the middle of a
+// label (the cover's `g`), staying inside the space the cover leaves for it
+// (`b`, top and bottom). Only a name too long even for that ends in "…".
+const LINE = 1.12; // gap between lines' baselines, as a share of the size
+const ASC = 0.8; // how far letters reach above the baseline
+const DESC = 0.3; // and below it (g, j, y)
+const ONE_LINE_MIN = 0.8; // below this share of the size, two lines read better
+const TWO_LINE_MIN = 0.55; // below this, try three lines
 let mctx;
 function fit(text, t, family) {
   if (!mctx) mctx = document.createElement('canvas').getContext('2d');
-  let size = t.size;
   const font = (sz) => `${t.italic ? 'italic ' : ''}${t.weight || 400} ${sz}px ${family}`;
-  mctx.font = font(size);
-  let w = mctx.measureText(text).width;
-  if (w > t.max) { size = Math.max(t.size * 0.62, (t.size * t.max) / w); mctx.font = font(size); w = mctx.measureText(text).width; }
-  let out = text;
-  while (w > t.max && out.length > 3) { out = out.slice(0, -2); mctx.font = font(size); w = mctx.measureText(`${out}…`).width; if (w <= t.max) { out = `${out}…`; break; } }
-  return { text: out, size: Math.round(size * 10) / 10 };
+  const width = (s, sz) => { mctx.font = font(sz); return mctx.measureText(s).width; };
+  const S = t.size;
+  const w1 = width(text, S);
+  if (w1 <= t.max) return { lines: [text], size: S };
+  const s1 = (S * t.max) / w1;
+  const words = text.split(/\s+/).filter(Boolean);
+  const single = () => settled([text], t, Math.max(S * 0.62, s1), width);
+  if (s1 >= S * ONE_LINE_MIN || words.length < 2) return single();
+  let pick = lines(words, 2, t, S, width);
+  if ((pick.cut || pick.size < S * TWO_LINE_MIN) && words.length > 2) {
+    const three = lines(words, 3, t, S, width);
+    if ((pick.cut && !three.cut) || (three.cut === pick.cut && three.size > pick.size * 1.1)) pick = three;
+  }
+  if (pick.size <= s1) return single();
+  return settled(pick.lines, t, pick.size, width);
+}
+// The most even split of the words into n lines (the longest line sets the
+// size), and the size that fits both across and in the space above/below.
+function lines(words, n, t, S, width) {
+  let best = null;
+  const splits = n === 2 ? words.slice(1).map((_, i) => [i + 1]) : words.slice(1).flatMap((_, i) => words.slice(i + 2).map((__, j) => [i + 1, i + 2 + j]));
+  for (const cuts of splits) {
+    const ls = [0, ...cuts].map((c, k) => words.slice(c, k < cuts.length ? cuts[k] : undefined).join(' '));
+    const wide = Math.max(...ls.map((l) => width(l, S)));
+    if (!best || wide < best.wide) best = { ls, wide };
+  }
+  const [top, bottom] = t.b || [6, 274];
+  const gaps = (n - 1) * LINE;
+  const room = t.g === 'up' ? (t.y - top) / (gaps + ASC) : t.g === 'down' ? (bottom - t.y) / (gaps + DESC) : (bottom - top) / (gaps + ASC + DESC);
+  let size = Math.min(S, room, Math.max(S * 0.45, (S * t.max) / best.wide));
+  // A word too long for any line gets cut anyway, so don't make it tiny too.
+  const cut = (best.wide * size) / S > t.max;
+  if (cut) size = Math.min(S, room, Math.max(S * 0.62, size));
+  return { lines: best.ls, size, cut };
+}
+// Text doesn't scale exactly with size, so a line worked out to just fit can
+// be a hair too wide: step down a little rather than cut it. Then shorten any
+// line that still doesn't fit with "…".
+function settled(ls, t, size, width) {
+  size = Math.floor(size * 10) / 10;
+  for (let i = 0; i < 5 && ls.some((l) => width(l, size) > t.max); i++) size = Math.round((size - 0.1) * 10) / 10;
+  return { lines: ls.map((l) => cut(l, t.max, size, width)), size };
+}
+function cut(line, max, size, width) {
+  if (width(line, size) <= max) return line;
+  let out = line;
+  while (out.length > 1) { out = out.slice(0, -1).trimEnd(); if (width(`${out}…`, size) <= max) break; }
+  return `${out}…`;
+}
+// Baselines for the lines: extra lines grow up, down or from the middle.
+function baselines(t, n, size) {
+  const gap = size * LINE;
+  if (n === 1) return [t.y];
+  if (t.g === 'up') return [...Array(n)].map((_, i) => t.y - (n - 1 - i) * gap);
+  if (t.g === 'down') return [...Array(n)].map((_, i) => t.y + i * gap);
+  // Centred in the label, or where the one-line title's letters were centred.
+  const mid = (t.b ? (t.b[0] + t.b[1]) / 2 : t.y - (ASC - DESC) * t.size / 2) + (ASC - DESC) * size / 2;
+  return [...Array(n)].map((_, i) => mid + (i - (n - 1) / 2) * gap);
 }
 
 // The cover as an SVG string. `photoUrl` is the decrypted cover photo, if any.
@@ -85,7 +146,7 @@ export function coverSVG(nb, { width = 140, photoUrl = null, label = true } = {}
   let t;
   if (style === 'photo') {
     art = `<rect width="210" height="280" fill="#DCE3E1"/>${photoUrl ? `<image href="${esc(photoUrl)}" width="210" height="280" preserveAspectRatio="xMidYMid slice"/>` : ''}<rect width="210" height="280" fill="url(#cv-shade)"/><rect width="12" height="280" fill="#000" fill-opacity="0.22"/>`;
-    t = { ...PLAIN_T, y: 252 };
+    t = { ...PLAIN_T, y: 252, g: 'up' };
   } else if (style === 'plain' || !preset) {
     art = `<rect width="210" height="280" fill="${esc(cv.color || '#2B5684')}"/><rect width="12" height="280" fill="#000" fill-opacity="0.2"/>`;
     t = PLAIN_T;
@@ -100,7 +161,9 @@ export function coverSVG(nb, { width = 140, photoUrl = null, label = true } = {}
     const fam = hand ? FAMILY.hand : FAMILY[t.font];
     const base = hand ? { ...t, size: t.size * 1.18, italic: false, weight: 400 } : t;
     const f = fit(nb.title, base, fam);
-    title = `<text x="${t.x}" y="${t.y}" font-family="${fam}" font-size="${f.size}" ${base.italic ? 'font-style="italic"' : ''} font-weight="${base.weight || 400}" fill="${t.fill}" ${t.anchor ? `text-anchor="${t.anchor}"` : ''}>${esc(f.text)}</text>`;
+    const ys = baselines(base, f.lines.length, f.size);
+    const body = f.lines.length === 1 ? esc(f.lines[0]) : f.lines.map((l, i) => `<tspan x="${t.x}" y="${Math.round(ys[i] * 10) / 10}">${esc(l)}</tspan>`).join('');
+    title = `<text class="cover-title" x="${t.x}" y="${Math.round(ys[0] * 10) / 10}" font-family="${fam}" font-size="${f.size}" ${base.italic ? 'font-style="italic"' : ''} font-weight="${base.weight || 400}" fill="${t.fill}" ${t.anchor ? `text-anchor="${t.anchor}"` : ''}>${body}</text>`;
   }
   const h = Math.round(width * 4 / 3);
   return `<svg class="cover-svg" width="${width}" height="${h}" viewBox="0 0 210 280" ${label ? `role="img" aria-label="${esc(nb.title || 'Notebook')} cover"` : 'aria-hidden="true"'}>${art}${title}</svg>`;

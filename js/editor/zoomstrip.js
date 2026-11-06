@@ -6,6 +6,7 @@ import { html, raw, uid, toast } from '../util.js';
 import { PAGE_W } from '../model.js';
 import { icons } from '../icons.js';
 import { drawPaper, drawContent, drawStroke, fileImage, setInkTone, pageDark } from './inkdraw.js';
+import { pdfTile } from '../pdfview.js';
 import { penExtras } from './ink.js';
 
 const GAP = { ruled: 36, cornell: 36, narrow: 28, grid: 37.5, dotted: 37.5, blank: 36 };
@@ -128,7 +129,10 @@ export class ZoomStrip {
     c.save();
     c.beginPath(); c.rect(b.x, b.y, b.w, b.h); c.clip();
     if (this.s.layers?.paperHidden) drawPaper(c, { ...this.page, paper: 'blank', bg: null }, this.k, null);
-    else drawPaper(c, this.page, this.k, this.page.bg ? fileImage(this.page.bg, () => this.render()) : null);
+    else {
+      const sharp = this.page.pdf ? pdfTile(this.page.pdf, this.k * (window.devicePixelRatio || 1), b, () => this.render(), 'strip') : null;
+      drawPaper(c, this.page, this.k, this.page.bg ? fileImage(this.page.bg, () => this.render()) : null, null, sharp);
+    }
     // The baseline, stronger than the paper's own lines.
     c.strokeStyle = dk ? 'rgba(169,198,234,0.4)' : 'rgba(43,86,132,0.35)';
     c.lineWidth = 1.2 / this.k;

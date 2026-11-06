@@ -12,6 +12,12 @@ pip install playwright
 python -m playwright install chromium
 ```
 
+The handwriting test (t5h) draws letters from the Hershey fonts:
+
+```
+mkdir -p dl/hershey && npm pack hersheytext@2.0.0 && tar -xzf hersheytext-2.0.0.tgz -C dl/hershey && rm hersheytext-2.0.0.tgz
+```
+
 ## Run
 
 ```
@@ -37,11 +43,13 @@ python3 t5r.py phone         # one test directly (needs the server: python3 serv
 | t5o | Mark up a PDF (`sample.pdf`), laser pointer |
 | t5q | Speed: map library loaded on demand, map rests when still, long PDFs keep memory flat, page turning, reopen at last page |
 | t5r | Continuous view (pages one under another) |
-| t5s | Notebook covers and collections |
+| t5s | Notebook covers and collections; long names fit on two lines |
 | t5t | Touch ID / Face ID unlock (virtual authenticator on `localhost`) |
 | t5u | Bringing in many PDFs / a zip (Notability) |
 | t5v | Sync in batches within GitHub's limits |
 | t5w | Notes close in meaning: kept lists match a full recompute (real model) |
+| t5x | Zoomed in on a handwritten page: scroll and drag to its far left and right edges |
+| t5y | Sharp PDFs: the PDF is kept, zoomed text is crisp, exports keep the original pages |
 
 Helpers: `dbg.py` (`run(steps, vp, mob)` creates a vault and runs steps),
 `mockgh.py` (in-memory GitHub Git Data API), `calib.py`, `hershey_ink.py`

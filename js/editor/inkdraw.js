@@ -9,6 +9,7 @@ import * as V from '../vault.js';
 import { stickerDef, stickerSVG, svgImage, labelDef, tapePattern, postitColor } from '../stickers.js';
 import { labelMap } from '../model.js';
 import { isDarkUI, darkInk, darkHighlight } from '../theme.js';
+import { pdfAreaReady } from '../pdfview.js';
 
 export { darkInk };
 
@@ -173,17 +174,26 @@ export function drawStroke(ctx, s, fade = 1) {
 
 export const paperColor = (page) => (dark ? PAPER_COLORS.find((c) => c.id === 'night') : PAPER_COLORS.find((c) => c.id === page.color)) || PAPER_COLORS[0];
 
-export function drawPaper(ctx, page, scale, bgImage = null, area = null) {
+// `sharp` (optional) is part of the page drawn from the original PDF at the
+// size it's shown ({ canvas, x, y, w, h } in page units, see pdfview.js); it
+// goes over the page's picture.
+export function drawPaper(ctx, page, scale, bgImage = null, area = null, sharp = null) {
   const h = page.h;
   const pc = paperColor(page);
   ctx.save();
   ctx.fillStyle = pc.bg;
   ctx.fillRect(0, 0, PAGE_W, h);
-  if (bgImage) {
+  if (bgImage || sharp) {
     // At its own shape: if the page has grown (endless scroll), the PDF or
     // photo stays as it was and there's plain paper below it.
-    const ih = bgImage.width ? (PAGE_W * bgImage.height) / bgImage.width : h;
-    ctx.drawImage(bgImage, 0, 0, PAGE_W, Math.min(h, ih));
+    if (bgImage) {
+      const ih = bgImage.width ? (PAGE_W * bgImage.height) / bgImage.width : h;
+      ctx.drawImage(bgImage, 0, 0, PAGE_W, Math.min(h, ih));
+    }
+    if (sharp && sharp.y < h) {
+      const sh = Math.min(sharp.h, h - sharp.y);
+      ctx.drawImage(sharp.canvas, 0, 0, sharp.canvas.width, Math.max(1, Math.round((sharp.canvas.height * sh) / sharp.h)), sharp.x, sharp.y, sharp.w, sh);
+    }
     ctx.restore();
     return;
   }
@@ -704,24 +714,28 @@ export function drawContent(ctx, data, { redraw, skip = null, hidden = null, dim
 }
 
 // Render a page to a new canvas at a given pixel width (thumbnails, export, crops).
-export async function renderPageCanvas(page, data, widthPx, { crop = null, visible = null, paperHidden = false, dark: darkPage = false, thumb = false } = {}) {
-  if (paperHidden) page = { ...page, paper: 'blank', bg: null };
-  const bg = page.bg ? (thumb ? await thumbImage(page.bg, widthPx * 2) : await fileImageReady(page.bg)) : null;
+// `noPaper` leaves the paper out (transparent), for drawing over a PDF page.
+export async function renderPageCanvas(page, data, widthPx, { crop = null, visible = null, paperHidden = false, dark: darkPage = false, thumb = false, noPaper = false } = {}) {
+  if (paperHidden) page = { ...page, paper: 'blank', bg: null, pdf: null };
+  const area = crop || { x: 0, y: 0, w: PAGE_W, h: page.h };
+  const scale = widthPx / area.w;
+  // From the original PDF at this size when there is one (not for small thumbnails).
+  const sharp = page.pdf && !thumb && !noPaper ? await pdfAreaReady(page.pdf, scale, area) : null;
+  const bg = page.bg && !sharp && !noPaper ? (thumb ? await thumbImage(page.bg, widthPx * 2) : await fileImageReady(page.bg)) : null;
   for (const o of data.objects || []) {
     if (o.type === 'image') await fileImageReady(o.fileId);
     if (o.type === 'mine') await fileImageReady((state.config?.myStickers || []).find((m) => m.id === o.mine)?.fileId);
   }
   await document.fonts?.ready;
-  const area = crop || { x: 0, y: 0, w: PAGE_W, h: page.h };
-  const scale = widthPx / area.w;
   const c = document.createElement('canvas');
   c.width = Math.max(1, Math.round(area.w * scale));
   c.height = Math.max(1, Math.round(area.h * scale));
   const ctx = c.getContext('2d');
   ctx.setTransform(scale, 0, 0, scale, -area.x * scale, -area.y * scale);
   setInkTone(darkPage);
-  drawPaper(ctx, page, scale, bg);
+  if (!noPaper) drawPaper(ctx, page, scale, bg, null, sharp);
   setInkTone(false);
+  if (sharp) sharp.canvas.width = 0;
   // stickers drawn from SVG need to be decoded first
   await Promise.all((data.objects || []).filter((o) => o.type === 'sticker').map((o) => new Promise((res) => {
     const def = stickerDef(o.pack, o.key);

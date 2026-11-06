@@ -148,7 +148,7 @@ function orderPushes(pushes) {
   const owner = new Map();
   for (const n of [...state.notes.values(), ...state.notebooks.values()]) {
     for (const f of n.files || []) owner.set(f.id, n.id);
-    for (const p of n.pages || []) { owner.set(p.id, n.id); if (p.bg) owner.set(p.bg, n.id); }
+    for (const p of n.pages || []) { owner.set(p.id, n.id); if (p.bg) owner.set(p.bg, n.id); if (p.pdf?.file) owner.set(p.pdf.file, n.id); }
     for (const r of n.recordings || []) if (r.fileId) owner.set(r.fileId, n.id);
     if (n.cover?.photo) owner.set(n.cover.photo, n.id);
   }

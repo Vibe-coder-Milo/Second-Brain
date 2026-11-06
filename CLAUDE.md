@@ -74,7 +74,7 @@ through a private GitHub repo. Everything is encrypted on the device.
   - models: transformers and onnxruntime (`ort/`) with the model files;
   - OCR: tesseract.
 - **Service worker** (`sw.js`):
-  - Bump `VERSION` (`sb-vN`; currently `sb-v15`) on every release.
+  - Bump `VERSION` (`sb-vN`; currently `sb-v16`) on every release.
   - Add every new JS/CSS file to `SHELL`, or it won't work offline.
   - The app shows an update bar (`js/appupdate.js`).
 - **Views:** `js/views/*.js` export `mount(main, params, ctx)`, returning
@@ -114,7 +114,7 @@ through a private GitHub repo. Everything is encrypted on the device.
 | Note model, regions, search | `js/model.js`, `js/doc.js`, `js/notework.js` (tasks, daily notes, ink summaries) |
 | Typed notes | `js/views/note.js`, `js/editor/rich.js` (Tiptap), `js/editor/toolbar.js` |
 | Handwritten notes | `js/views/inknote.js` (screen), `js/editor/ink.js` (InkSurface), `js/editor/inkdraw.js` (drawing pages, pens, paper, PDF backgrounds), `js/editor/pagestack.js` (continuous view), `js/editor/zoomstrip.js` (writing window), `js/handwriting.js` |
-| PDFs | `js/pdf.js` (import), `js/bulkimport.js` + `js/views/importsheet.js` (many at once / Notability), `js/export.js` (PDF/Markdown export) |
+| PDFs | `js/pdf.js` (import), `js/pdfview.js` (drawing pages sharp from the kept PDF), `js/bulkimport.js` + `js/views/importsheet.js` (many at once / Notability), `js/export.js` (PDF/Markdown export) |
 | Whiteboards | `js/views/board.js`, `js/boarddraw.js` |
 | Notebooks, covers | `js/views/notebooks.js`, `js/covers.js`, `js/coverart.js` (generated, see `tools/covergen.py`) |
 | Map | `js/views/map.js`, `js/graph.js` (force-graph canvas), `js/mapdata.js` (connections, themes), `js/mapassist.js` (Noticed, weekly digest, auto-link), `js/minimap.js` |
@@ -133,10 +133,12 @@ through a private GitHub repo. Everything is encrypted on the device.
   - flags: `sealed`, `daily`.
 - **Notebook:** `kind: notebook`, `sections[]`, `cover { style, color,
   photo, titleStyle }`, `paper`, `paperColor`.
-- **Handwritten pages:** each page `{ id, paper, color, h, bg? }`. The page's
-  ink lives in a separate encrypted file (id = page id, gzip JSON with strokes
-  and objects). `bg` is the file id of a background image (PDF page or photo).
-  `PAGE_W` = 1000 units.
+- **Handwritten pages:** each page `{ id, paper, color, h, bg?, pdf? }`. The
+  page's ink lives in a separate encrypted file (id = page id, gzip JSON with
+  strokes and objects). `bg` is the file id of a background image (PDF page or
+  photo). `pdf: { file, n }` points at the original PDF (one encrypted file per
+  import, shared by its pages) and the page number there. `PAGE_W` = 1000
+  units.
 - **Sync repo layout:** `notes/<id>.json`, `files/<id>.bin`, `keyring.json`.
   One commit per sync.
 - **Device settings** (`state.device`, kept encrypted on each device, not
@@ -162,7 +164,20 @@ through a private GitHub repo. Everything is encrypted on the device.
 - **Saving ink:** saves are debounced (600 ms) per page id. Always `flush()`
   before switching pages. The `fresh` map keeps the newest data of pages just
   left.
-- **PDF import:** pages are rasterised to JPEG at import (see open task 3).
+- **PDFs:** import (`pdf.js`) keeps the original PDF (up to 40 MB; GitHub's
+  100 MB file limit and base64 in sync) plus a 1240 px JPEG per page (`bg`,
+  for thumbnails, first paint and older app versions). Bigger PDFs get 2400 px
+  JPEGs only.
+  - `pdfview.js` draws the visible window from the PDF: `pdfTile()` for the
+    live page (`ink.js`) and the writing window (`zoomstrip.js`, its own
+    `who` so they don't cancel each other), cached by (page, scale, window)
+    within 96 MB; `pdfAreaReady()` for pictures (continuous view) and
+    exports. At most 3 PDFs stay open.
+  - `normPage` must keep `pdf`. `pageFileIds` includes it once; deleting a
+    page or note deletes the PDF only when no page uses it (`pdfInUse`).
+  - PDF export embeds the original page with pdf-lib (`embedPage`, crop box)
+    and draws the writing on top as a transparent PNG; turned (rotated) pages
+    fall back to a picture.
 - **Meaning lists** (`nearLists()` in `semantic.js`):
   - Worked out for all pairs once (time-sliced in the background when big),
     then patched for changed notes only.
@@ -197,7 +212,7 @@ through a private GitHub repo. Everything is encrypted on the device.
 ## Testing
 
 Playwright (Python) end-to-end tests are in `tests/`; see `tests/README.md`.
-`cd tests && ./runall.sh` serves the app on 127.0.0.1:8765 and runs about 50
+`cd tests && ./runall.sh` serves the app on 127.0.0.1:8765 and runs about 55
 tests at phone and iPad sizes, in about 20 minutes. Every test must pass before
 pushing, and new features get a new test.
 - `tests/mockgh.py` stands in for the GitHub API.
@@ -216,60 +231,24 @@ Baselines at 10,000 notes (headless, no GPU):
 | Startup JS before unlock | ~510 KB |
 | Long PDF flipping | memory stays flat (decoded pages kept: about 8) |
 
-## Open requests from the owner (3 Nov 2026), not started
+## Requests from the owner (3 Nov 2026)
 
-1. **Long notebook names get cut off on covers.** The owner wants them to fit,
-   in a smaller size or on a second line.
-   - Where: `fit()` in `js/covers.js` shrinks to 62% and then truncates with
-     "…". Each cover has a title box `t { x, y, size, max, anchor, font }` in
-     `COVERS`.
-   - Suggested fix: when one line would need to drop below about 80% size,
-     break into two lines (`<tspan>`s) at a word boundary.
-     - For covers whose title sits at the bottom (Peaks, Tide, Koi, Aurora,
-       Night chart, Planes, Riso), grow upwards.
-     - For covers with a fixed label (Shophouses signboard, Tweed patch,
-       Shibori tag, Art deco panel, Gingham, Tartan, Composition, Leather,
-       Citrus pill, Polka/Stripes/Waves bands, Marbled, Peranakan, Kraft,
-       Terrazzo, Blueprint), make the label taller or allow a smaller size.
-     - Check every cover with `tests/perf/covershot.py all`, using long and
-       short names.
-   - Also check other places a notebook name shows (the shelf's `.nb-name`
-     wraps already; the notebook header; pickers).
-2. **Can't move around when zoomed in on a handwritten note.** After a pinch or
-   Ctrl+scroll zoom, only the zoomed area shows.
-   - Likely cause: `.ink-scroll` (and `.ink-stack`) use `display: flex;
-     align-items: center`. When the page is wider than the screen, flexbox
-     centring pushes the left part into negative overflow that can't be
-     scrolled to.
-   - Fix: use `align-items: flex-start` with `margin-inline: auto` on the
-     page, stack and slots (auto margins never go negative), or `safe center`.
-   - Then check that horizontal scrolling, finger panning (`touch-action:
-     pan-x pan-y`), the continuous view, the writing window (`zoomstrip.js`)
-     and the canvas windowing (`wantedView` uses `scrollLeft - offsetLeft`)
-     still behave.
-   - Add a test: zoom to 2×, then scroll to the far left and right edges of
-     the page.
-3. **PDF import loses resolution; the owner asked to remove that.**
-   - How it works now: `js/pdf.js` renders each page at `min(3, 1700 / width)`
-     scale (about 1700 px wide, roughly 200 dpi for A4) and saves it as JPEG at
-     quality 0.86. A page fills up to 900 CSS px (1240 in focus mode) × device
-     pixel ratio 2 × zoom up to 3, so it looks soft when zoomed and in focus
-     mode, and JPEG blurs text.
-   - Proper fix: keep the original PDF.
-     - Store the PDF bytes once as an encrypted file, and give each page
-       `pdf: { file, n }` alongside a small raster for thumbnails and quick
-       first paint.
-     - Render pages with pdf.js on demand at the current scale, for the
-       visible window only. This hooks into `drawPaper`/`fileImage` in
-       `inkdraw.js` and the windowed canvases in `ink.js`; cache by
-       (page, scale), with an LRU like `fileImage`.
-     - Export (`export.js`) can embed the original vector pages with pdf-lib
-       (`embedPdf`), so exported PDFs are sharp too.
-   - Limits to check: a GitHub file must stay under 100 MB (files are
-     `files/<id>.bin`), and the upload budget.
-   - Notes imported before keep their JPEGs; optionally offer "Make sharper"
-     to re-import if the original PDF is still at hand.
-   - Quick interim option: render at about 2600 px, JPEG quality 0.92.
+Done on 6 Nov 2026 (`sb-v16`):
+
+1. **Long notebook names fit on covers.** `fit()` in `js/covers.js` breaks a
+   name onto two lines at a word (three if two would be tiny) once one line
+   would drop below 80% size. Each cover's title box has `g` (a second line
+   grows `up`, `down` or from the `mid`dle) and `b` (the top and bottom the
+   letters may use: the label or band). "…" only for a name that can't fit
+   even then. `t5s` checks every cover, printed and handwritten, with long
+   names; `tests/perf/covershot.py all` shows them.
+2. **Moving around when zoomed in on a handwritten note.** `.ink-scroll` and
+   `.ink-stack` use `align-items: flex-start` with `margin-inline: auto` on
+   their children, so a page wider than the screen starts at the left edge.
+   `t5x` zooms to 2x and scrolls and drags to both edges, in both views.
+3. **PDF import keeps full resolution.** See "PDFs" above; `t5y`. Notes
+   imported before keep their JPEGs ("Make sharper" not built: re-importing
+   the PDF does it).
 4. The owner started a fourth point but left it blank. Ask what it was.
 
 ## Ideas noted, not requested

@@ -10,3 +10,4 @@ tests/shot*.png
 tests/**/__pycache__/
 tests/perf/shots5/
 tests/state*.json
+tests/dl/

@@ -255,7 +255,8 @@ export async function deleteNote(id) {
   if (!n) return;
   for (const f of n.files || []) await deleteFile(f.id);
   for (const r of n.recordings || []) await deleteFile(r.fileId);
-  for (const fid of await pageFileIds(n)) await deleteFile(fid);
+  const pdfs = new Set((n.pages || []).map((p) => p.pdf?.file).filter(Boolean));
+  for (const fid of await pageFileIds(n)) if (!pdfs.has(fid) || !pdfInUse(fid, { note: n.id })) await deleteFile(fid);
   for (const p of n.pages || []) pageCache.delete(p.id);
   // Sub-notes move up a level rather than vanishing with their parent.
   for (const child of [...state.notes.values()].filter((c) => c.parent === id)) {
@@ -481,16 +482,27 @@ export async function savePage(pageId, data, { sealed = false } = {}) {
 // Every file a handwritten note owns: page ink, page backgrounds, and photos
 // placed on pages.
 export async function pageFileIds(n) {
-  const out = [];
+  const out = new Set();
   for (const p of n.pages || []) {
-    out.push(p.id);
-    if (p.bg) out.push(p.bg);
+    out.add(p.id);
+    if (p.bg) out.add(p.bg);
+    if (p.pdf?.file) out.add(p.pdf.file); // shared by the pages of one PDF
     try {
       const d = await loadPage(p.id);
-      for (const o of d.objects || []) if (o.fileId) out.push(o.fileId);
+      for (const o of d.objects || []) if (o.fileId) out.add(o.fileId);
     } catch { /* page not downloaded yet */ }
   }
-  return out;
+  return [...out];
+}
+
+// Is this original PDF still used by a page of some note (leaving out one
+// page, or one whole note)?
+export function pdfInUse(fileId, { page = null, note = null } = {}) {
+  for (const n of state.notes.values()) {
+    if (n.id === note) continue;
+    for (const p of n.pages || []) if (p.pdf?.file === fileId && p.id !== page) return true;
+  }
+  return false;
 }
 
 export function revokeFileURLs() {

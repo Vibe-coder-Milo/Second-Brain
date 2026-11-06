@@ -159,6 +159,8 @@ export function normPage(p) {
     color: PAPER_COLORS.some((x) => x.id === p.color) ? p.color : 'white',
     h: Number(p.h) > 100 ? Number(p.h) : A4_H,
     bg: p.bg || null,
+    // The original PDF this page came from, and its page number there.
+    pdf: p.pdf?.file && Number(p.pdf.n) >= 1 ? { file: String(p.pdf.file), n: Math.floor(Number(p.pdf.n)) } : null,
     bookmark: !!p.bookmark,
   };
 }

@@ -6,6 +6,7 @@ import { PAGE_W } from '../model.js';
 import { uid, html, raw, toast } from '../util.js';
 import { state } from '../vault.js';
 import * as V from '../vault.js';
+import { pdfTile } from '../pdfview.js';
 import { PENS, HL, strokePath, strokeBox, drawStroke, drawPaper, drawContent, fileImage, drawRichText, renderPageCanvas, layerOf, setInkTone, pageDark, darkInk, paperColor } from './inkdraw.js';
 import { onTheme } from '../theme.js';
 import { getStroke } from '../../vendor/freehand.js';
@@ -391,7 +392,11 @@ export class InkSurface {
     setInkTone(this.dark);
     this.pageEl.style.background = this.page.bg ? '#FFFFFF' : paperColor(this.page).bg;
     if (this.layers.paperHidden) drawPaper(b, { ...this.page, paper: 'blank', bg: null }, this.scale, null, this.area);
-    else drawPaper(b, this.page, this.scale, bgImg, this.area);
+    else {
+      // A page from a PDF: the part on screen, drawn from the PDF at this size.
+      const sharp = this.page.pdf ? pdfTile(this.page.pdf, this.scale * this.dpr, this.area, () => this.render()) : null;
+      drawPaper(b, this.page, this.scale, bgImg, this.area, sharp);
+    }
     this.renderMain();
     if (this.drawing?.kind === 'stroke') this.drawWet();
   }

@@ -41,7 +41,9 @@ def steps(page):
     # colour picker: text colours by hue, highlights, recent
     nid = J("""(async () => { const V = await import('./js/vault.js'); const M = await import('./js/model.js'); return (await V.saveNote(M.newNote({ title: 'Colours', titleAuto: false, region: 'career', inbox: false, body: 'Some words to colour' }))).id; })()""")
     page.goto(BASE + f'#/note/{nid}'); page.wait_for_selector('#n-fprops [data-act=colour]'); page.wait_for_timeout(400)
-    page.locator('.ProseMirror p').first.click(); page.keyboard.press('End'); page.keyboard.press('Shift+Home')
+    page.locator('.ProseMirror p').first.click(); page.keyboard.press('End')
+    # Shift+Home selects nothing in Chromium's phone emulation; select letter by letter.
+    for _ in range(25): page.keyboard.press('Shift+ArrowLeft')
     page.locator('#n-fprops [data-act=colour]').click(); page.wait_for_selector('.cpick')
     assert page.locator('.cpick .cgrid').first.locator('.cswatch').count() == 30
     page.locator('.cpick [data-color="#9B2C2C"]').click(); page.wait_for_timeout(300)
