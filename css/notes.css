@@ -1165,3 +1165,22 @@ td.tv-tags, td.tv-select { min-width: 150px; }
 .hl-acts { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
 .hl-go { font-size: 14px; color: var(--muted); white-space: nowrap; }
 @media (max-width: 600px) { .hl-card { grid-template-columns: 6px minmax(0, 1fr); } .hl-acts { grid-column: 2; flex-direction: row; justify-content: space-between; align-items: center; } }
+
+/* Two notes side by side (views/split.js) */
+@media (min-width: 900px) {
+  body.split-on .sidebar { display: none; }
+  body.split-on .main { margin-left: 0; }
+  .split { --split: 50%; position: fixed; inset: 0; display: grid; grid-template-columns: minmax(0, var(--split)) 14px minmax(0, 1fr); background: var(--bg); z-index: 5; }
+  .split-pane { position: relative; min-width: 0; height: 100vh; height: 100dvh; overflow-y: auto; transform: translateZ(0); border: 2px solid transparent; }
+  .split-pane.active { border-color: color-mix(in srgb, var(--focus) 55%, transparent); }
+  .split-pane .inkview, .split-pane .bd { position: absolute; inset: 0; left: 0 !important; }
+  .split-pane .ink-tools, .split-pane .bd-tools { transition: opacity 0.15s ease; }
+  .split-pane:not(.active) .ink-tools, .split-pane:not(.active) .bd-tools { opacity: 0.55; }
+  .split-pane .icon-btn.focus-btn { display: none !important; }
+  .split-bar { display: flex; align-items: center; justify-content: center; background: var(--line-soft); cursor: col-resize; touch-action: none; }
+  .split-bar span { width: 4px; height: 48px; border-radius: 2px; background: var(--field-strong); }
+  .split-bar:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+  .split-ctl { position: fixed; left: var(--split); bottom: calc(14px + env(safe-area-inset-bottom)); transform: translateX(calc(-50% + 7px)); z-index: 30; display: flex; gap: 6px; padding: 5px; border-radius: 14px; background: var(--surface); border: 1px solid var(--line); box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12); }
+  .split-ctl .btn { gap: 6px; }
+}
+@media (max-width: 899px) { .beside-btn { display: none; } }

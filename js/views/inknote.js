@@ -232,6 +232,7 @@ export function mount(el, params, ctx) {
     if (e.defaultPrevented || e.target.closest?.('input, textarea, [contenteditable=true], .tb-edit, .postit-edit')) return;
     if (surface?.sel || surface?.editing || e.altKey || e.ctrlKey || e.metaKey) return;
     if (document.querySelector('.overlay, .popover')) return; // a sheet or menu is open
+    if (el.closest('.split-pane:not(.active)')) return; // side by side: the other side has the keys
     if (e.key === 'PageDown' || e.key === 'ArrowRight') { e.preventDefault(); turn(1); }
     if (e.key === 'PageUp' || e.key === 'ArrowLeft') { e.preventDefault(); turn(-1); }
   };
@@ -1318,9 +1319,9 @@ export function mount(el, params, ctx) {
     const s = openSheet(`${html`<div class="sheet-head"><span class="side"></span><h2>Connections</h2><span class="side"><button type="button" class="btn btn-ghost btn-sm" data-close>Done</button></span></div>
       ${raw(miniMapHtml(n.id, { wide: isWide() }))}
       ${kids.length ? html`<h3 class="section-title">Sub-notes</h3><ul class="links-list">${kids.map((k) => html`<li><a href="#/note/${k.id}">${icons.sub({ size: 16 })}<span style="flex:1">${displayTitle(k)}</span></a></li>`)}</ul>` : ''}
-      ${linked.length ? html`<h3 class="section-title">Linked</h3><ul class="links-list">${linked.map((x) => html`<li><a href="#/note/${x.note.id}"><span style="flex:1">${displayTitle(x.note)}</span></a></li>`)}</ul>` : ''}
+      ${linked.length ? html`<h3 class="section-title">Linked</h3><ul class="links-list">${linked.map((x) => html`<li><a href="#/note/${x.note.id}"><span style="flex:1">${displayTitle(x.note)}</span></a>${isWide() ? html`<button type="button" class="btn btn-sm btn-ghost" data-beside="${x.note.id}" aria-label="Open ${displayTitle(x.note)} beside this note">Beside</button>` : ''}</li>`)}</ul>` : ''}
       ${ment.length ? html`<h3 class="section-title">Mentioned, not linked</h3><ul class="links-list">${ment.map((m) => html`<li><a href="#/note/${m.note.id}"><span style="flex:1">${displayTitle(m.note)}</span></a><button type="button" class="btn btn-sm" data-acc="${m.note.id}">Link</button></li>`)}</ul>` : ''}
-      ${rel.length ? html`<h3 class="section-title">Related, found on this device</h3><ul class="links-list">${rel.map((x) => html`<li><a href="#/note/${x.note.id}"><span style="flex:1">${displayTitle(x.note)}</span></a><button type="button" class="btn btn-sm" data-acc="${x.note.id}">Link</button></li>`)}</ul>` : ''}
+      ${rel.length ? html`<h3 class="section-title">Related, found on this device</h3><ul class="links-list">${rel.map((x) => html`<li><a href="#/note/${x.note.id}"><span style="flex:1">${displayTitle(x.note)}</span></a>${isWide() ? html`<button type="button" class="btn btn-sm btn-ghost" data-beside="${x.note.id}" aria-label="Open ${displayTitle(x.note)} beside this note">Beside</button>` : ''}<button type="button" class="btn btn-sm" data-acc="${x.note.id}">Link</button></li>`)}</ul>` : ''}
       ${!kids.length && !linked.length && !ment.length && !rel.length ? html`<p class="hint">No connections yet. Text boxes can link notes with [[ ]].</p>` : ''}
       <div class="btn-row"><button type="button" class="btn btn-sm" data-sub="note">${icons.plus({ size: 16 })}Typed sub-note</button><button type="button" class="btn btn-sm" data-sub="ink">${icons.pen({ size: 16 })}Handwritten sub-note</button></div>`}`, { label: 'Connections' });
     s.el.querySelector('[data-close]').onclick = () => s.close();
@@ -1417,6 +1418,12 @@ export function mount(el, params, ctx) {
     onEvent(evt) {
       const n = note();
       if (!n) return;
+      // Pens and colours are shared (side by side, or another device's change):
+      // pick up the latest, unless you're writing right now.
+      if (evt.type === 'device' && state.device?.ink && !surface?.drawing && JSON.stringify({ ...tool, ...state.device.ink }) !== JSON.stringify(tool)) {
+        Object.assign(tool, state.device.ink);
+        drawTools();
+      }
       if (evt.type === 'page' && evt.id === n.pages[pageIdx]?.id && !pending && !surface?.drawing && !surface?.editing) {
         V.loadPage(evt.id).then((d) => surface?.replaceData(d));
       }

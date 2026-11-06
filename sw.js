@@ -99,6 +99,7 @@ const SHELL = [
   './js/views/settings.js',
   './js/views/deleted.js',
   './js/views/highlights.js',
+  './js/views/split.js',
   './js/views/shell.js',
   './js/views/tableview.js',
   './js/views/tasks.js',

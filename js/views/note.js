@@ -409,13 +409,13 @@ function mountTyped(el, params, ctx) {
         <div class="btn-row"><button type="button" class="btn btn-sm" data-sub="note">${icons.plus({ size: 16 })}Typed sub-note</button><button type="button" class="btn btn-sm" data-sub="ink">${icons.pen({ size: 16 })}Handwritten sub-note</button></div></div>` : ''}
       ${linked.length ? html`<div class="conn-group"><h3><span class="kind-line" style="--k:var(--c-link)"></span>Linked <span class="count">${linked.length}</span></h3>
         <ul class="links-list k-link">${linked.map(({ note: o, explicit, context }) => html`<li><a href="${href(o)}"><span class="dot" style="background:${dot(o)}"></span><span style="flex:1;min-width:0"><span class="lt">${displayTitle(o)}</span>${context ? html`<span class="ctx">…${context.slice(0, 110)}</span>` : ''}</span></a>
-          ${explicit ? html`<button type="button" class="icon-btn bare" data-unlink="${o.id}" aria-label="Unlink ${displayTitle(o)}">${icons.close({ size: 16 })}</button>` : ''}</li>`)}</ul></div>` : ''}
+          ${isWide() ? html`<button type="button" class="btn btn-sm btn-ghost" data-beside="${o.id}" aria-label="Open ${displayTitle(o)} beside this note">Beside</button>` : ''}${explicit ? html`<button type="button" class="icon-btn bare" data-unlink="${o.id}" aria-label="Unlink ${displayTitle(o)}">${icons.close({ size: 16 })}</button>` : ''}</li>`)}</ul></div>` : ''}
       ${ment.length ? html`<div class="conn-group"><h3>Mentioned, not linked</h3>
         <ul class="links-list">${ment.map((m) => html`<li><a href="${href(m.note)}"><span class="dot" style="background:${dot(m.note)}"></span><span style="flex:1;min-width:0"><span class="lt">${displayTitle(m.note)}</span><span class="ctx">…${m.before}<mark>${m.match}</mark>${m.after}…</span></span></a>
           <button type="button" class="btn btn-sm" data-accept="${m.note.id}">Link</button></li>`)}</ul></div>` : ''}
       ${rel.length ? html`<div class="conn-group"><h3><span class="kind-line dash" style="--k:var(--c-related)"></span>Related, found on this device</h3>
         <ul class="links-list">${rel.map((x) => html`<li><a href="${href(x.note)}"><span class="dot" style="background:${dot(x.note)}"></span><span style="flex:1;min-width:0"><span class="lt">${displayTitle(x.note)}</span><span class="ctx">${x.meaning ? 'Close in meaning' : `Shares: ${x.shared.join(', ')}`}</span></span></a>
-          <button type="button" class="btn btn-sm" data-accept="${x.note.id}">Link</button></li>`)}</ul>
+          ${isWide() ? html`<button type="button" class="btn btn-sm btn-ghost" data-beside="${x.note.id}" aria-label="Open ${displayTitle(x.note)} beside this note">Beside</button>` : ''}<button type="button" class="btn btn-sm" data-accept="${x.note.id}">Link</button></li>`)}</ul>
         <p class="hint">Worked out on this device. Nothing is sent anywhere.</p></div>` : ''}
       ${sugg.map(({ other, reason }) => html`<div class="suggest" aria-label="Suggested link">
         <span class="flag">Suggested link</span>

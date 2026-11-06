@@ -22,6 +22,7 @@ import * as SettingsView from './views/settings.js';
 import * as TodayView from './views/today.js';
 import * as DeletedView from './views/deleted.js';
 import * as HighlightsView from './views/highlights.js';
+import * as SplitView from './views/split.js';
 import * as TasksView from './views/tasks.js';
 import * as LabelsView from './views/labels.js';
 import * as NotebooksView from './views/notebooks.js';
@@ -36,7 +37,7 @@ const iOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform 
 if (iOS) document.querySelector('meta[name=viewport]')?.setAttribute('content', 'width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover');
 
 const NotebookView = { mount: NotebooksView.mountNotebook };
-const VIEWS = { today: TodayView, map: MapView, inbox: InboxView, notes: NotesView, note: NoteView, notebooks: NotebooksView, notebook: NotebookView, tasks: TasksView, labels: LabelsView, ask: AskView, review: ReviewView, settings: SettingsView, deleted: DeletedView, highlights: HighlightsView };
+const VIEWS = { today: TodayView, map: MapView, inbox: InboxView, notes: NotesView, note: NoteView, notebooks: NotebooksView, notebook: NotebookView, tasks: TasksView, labels: LabelsView, ask: AskView, review: ReviewView, settings: SettingsView, deleted: DeletedView, highlights: HighlightsView, split: SplitView };
 // Which tab or sidebar item lights up for each screen.
 const CHROME = { note: 'notes', notebook: 'notebooks' };
 
@@ -111,9 +112,18 @@ function route() {
   if (silentHash && location.hash === silentHash) { silentHash = null; return; }
   silentHash = null;
   closePopover();
-  const { name, params } = parseHash();
+  let { name, params } = parseHash();
   const main = document.getElementById('main');
   if (!main) return;
+  // Two notes side by side (wide screens): asked for, or the pair you left open.
+  if (name === 'note' && params.id !== 'new' && isWide()) {
+    const pair = params.beside || SplitView.pairOf(params.id);
+    if (pair) {
+      if (!params.beside) history.replaceState(null, '', SplitView.besideHash(params.id, pair));
+      name = 'split';
+      params = { ...params, beside: pair };
+    }
+  }
   const key = name === 'note' ? `note:${params.id}` : name === 'notebook' ? `notebook:${params.id}` : name;
   if (current.name === name && current.inst?.update && (name !== 'note' || current.key === key || params.id !== 'new')) {
     current.inst.update(params);
@@ -150,6 +160,23 @@ function startUnlocked() {
   })).catch(() => {});
 }
 
+// Open a note beside the one in view. From a side of a split, the other side changes.
+async function openBeside(btn) {
+  const { name, params } = parseHash();
+  if (name !== 'note' || params.id === 'new') return;
+  const side = btn.closest('.split-pane')?.dataset.side || 'a';
+  const here = params.beside && side === 'b' ? params.beside : params.id;
+  let other = btn.dataset.beside;
+  if (!other) {
+    const { notePicker } = await import('./ui.js');
+    other = await notePicker({ title: 'Open beside', exclude: [here] });
+  }
+  if (!other || other === here) return;
+  closeAllSheets();
+  if (params.beside && side === 'b') ctx.navigate(SplitView.besideHash(other, here));
+  else ctx.navigate(SplitView.besideHash(here, other));
+}
+
 async function boot() {
   registerServiceWorker();
   await V.init();
@@ -169,11 +196,20 @@ async function boot() {
     if (['note', 'remote', 'ocr'].includes(evt.type)) import('./organiser.js').then((O) => O.autoSoon()).catch(() => {});
   });
   window.addEventListener('hashchange', route);
+  // Side by side: the button in a note's top bar, and "Beside" next to connections.
+  document.addEventListener('click', (e) => {
+    const pick = e.target.closest('[data-beside-pick], [data-beside]');
+    if (!pick || state.status !== 'unlocked') return;
+    e.preventDefault();
+    e.stopPropagation();
+    openBeside(pick).catch(() => {});
+  }, true);
   document.addEventListener('click', (e) => {
     const a = e.target.closest('[data-action]');
     if (!a || state.status !== 'unlocked') return;
     const act = a.dataset.action;
     if (act === 'capture') { e.preventDefault(); ctx.openCapture(); }
+
     if (act === 'open-sync') { e.preventDefault(); ctx.navigate('#/settings'); }
     if (act === 'toggle-sealed') {
       e.preventDefault();

@@ -3,6 +3,7 @@
 // this device; the side panel comes back on other screens.
 
 import { icons } from './icons.js';
+import { isWide } from './util.js';
 
 const KEY = 'sb-focus';
 export function focusPref() {
@@ -11,7 +12,8 @@ export function focusPref() {
 
 const label = () => (focusPref() ? 'Show the side panel' : 'Hide the side panel, for more room to write');
 
-export const focusButtonHtml = () => `<button type="button" class="icon-btn bare focus-btn" data-act="focus" aria-label="${label()}" aria-pressed="${focusPref() ? 'true' : 'false'}">${icons.sidebar()}</button>`;
+// Next to it on wide screens: open another note beside this one (see views/split.js).
+export const focusButtonHtml = () => `<button type="button" class="icon-btn bare focus-btn" data-act="focus" aria-label="${label()}" aria-pressed="${focusPref() ? 'true' : 'false'}">${icons.sidebar()}</button>${isWide() ? `<button type="button" class="icon-btn bare beside-btn" data-beside-pick aria-label="Open another note beside this one" title="Open another note beside this one">${icons.splitView()}</button>` : ''}`;
 
 function sync() {
   for (const b of document.querySelectorAll('.focus-btn')) {
