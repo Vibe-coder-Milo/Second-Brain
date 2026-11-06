@@ -78,6 +78,17 @@ def steps(page):
     assert page.locator('.split [data-side=a] .rich').count() == 1, 'the typed note stays on the left'
     page.screenshot(path=f'{OUT}/e-split-typed-{tag}.png')
     page.locator('[data-split=close]').click(); page.wait_for_timeout(500)
+    # 9. From a note open inside a notebook (how the iPad shows notebooks), tapped with a finger.
+    nb = J(f"""(async () => {{ const V = await import('./js/vault.js'); const M = await import('./js/model.js');
+      const b = await V.saveNotebook(M.newNotebook({{ title: 'Investing', region: 'investing' }}));
+      const n = V.state.notes.get('{ids['a']}'); await V.saveNote({{ ...n, notebook: b.id, section: b.sections[0].id }});
+      return b.id; }})()""")
+    page.goto(BASE + f"#/notebook/{nb}?note={ids['a']}"); page.wait_for_selector('#nb-pane .ink-page canvas.ink-main'); page.wait_for_timeout(600)
+    page.locator('#nb-pane [data-beside-pick]').first.tap(); page.wait_for_selector('#np-list [data-id]')
+    page.locator(f"#np-list [data-id=\"{ids['b']}\"]").tap()
+    page.wait_for_selector('.split [data-side=b] .ink-page canvas.ink-main', timeout=10000)
+    assert f"#/note/{ids['a']}?beside={ids['b']}" in page.url, 'opens beside from inside a notebook'
+    page.locator('[data-split=close]').tap(); page.wait_for_timeout(500)
     print('OK')
 if __name__ == '__main__':
     mob = len(sys.argv) > 1 and sys.argv[1] == 'phone'

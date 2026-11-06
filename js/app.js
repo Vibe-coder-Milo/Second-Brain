@@ -163,9 +163,14 @@ function startUnlocked() {
 // Open a note beside the one in view. From a side of a split, the other side changes.
 async function openBeside(btn) {
   const { name, params } = parseHash();
-  if (name !== 'note' || params.id === 'new') return;
+  // The note in view: on its own (#/note/A), or open inside a notebook
+  // (#/notebook/B?note=A, as on the iPad), or one side of a split.
+  const inBook = name === 'notebook' && params.note;
+  const id = name === 'note' ? params.id : inBook ? params.note : null;
+  if (!id) return;
+  if (id === 'new' || !state.notes.has(id)) { toast('Write something in this note first, then open another beside it.'); return; }
   const side = btn.closest('.split-pane')?.dataset.side || 'a';
-  const here = params.beside && side === 'b' ? params.beside : params.id;
+  const here = name === 'note' && params.beside && side === 'b' ? params.beside : id;
   let other = btn.dataset.beside;
   if (!other) {
     const { notePicker } = await import('./ui.js');
@@ -173,7 +178,7 @@ async function openBeside(btn) {
   }
   if (!other || other === here) return;
   closeAllSheets();
-  if (params.beside && side === 'b') ctx.navigate(SplitView.besideHash(other, here));
+  if (name === 'note' && params.beside && side === 'b') ctx.navigate(SplitView.besideHash(other, here));
   else ctx.navigate(SplitView.besideHash(here, other));
 }
 
