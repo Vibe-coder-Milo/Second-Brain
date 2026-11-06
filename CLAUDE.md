@@ -267,8 +267,7 @@ Baselines at 10,000 notes (headless, no GPU):
 3. **PDF import keeps full resolution.** See "PDFs" above; `t5y`. Notes
    imported before keep their JPEGs ("Make sharper" not built: re-importing
    the PDF does it).
-4. The owner started a fourth point but left it blank. Asked on 6 Nov; no
-   answer yet.
+4. (Left blank. On 6 Nov the owner said to ignore it.)
 
 ### 6 Nov 2026, done the same day (`sb-v17`)
 
@@ -283,8 +282,8 @@ Baselines at 10,000 notes (headless, no GPU):
    then re-centred it, and it stopped at 3x.
 
 A redesign mockup (slim menu rail, one-row writing toolbar, cover shelf) was
-shown on 6 Nov as a private page; nothing of it is built. Wait for the owner's
-answer before building it.
+shown on 6 Nov; the owner said to ignore it. Don't build it or bring it up
+unless they ask.
 
 ## Ideas noted, not requested
 
