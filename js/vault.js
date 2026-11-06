@@ -14,6 +14,8 @@ export const state = {
   keys: { m: null, s: null },
   notes: new Map(),
   notebooks: new Map(),
+  // Recently deleted: notes and notebooks kept for 30 days (id -> note or notebook).
+  bin: new Map(),
   config: null,
   device: null,
   hiddenSealed: 0,
@@ -75,8 +77,16 @@ async function writeRecord(id, obj, kid) {
   await records.put({ id, env, rev: (prev?.rev || 0) + 1, dirty: true, deleted: false, remoteSha: prev?.remoteSha || null });
 }
 
-// Records hold either a note or a notebook; put each in the right map.
+// Records hold either a note or a notebook; put each in the right map
+// (or in Recently deleted, out of everything else's sight).
 function place(id, obj) {
+  if (obj?.binnedAt) {
+    state.bin.set(id, obj.kind === 'notebook' ? normNotebook(obj) : normNote(obj));
+    state.notes.delete(id);
+    state.notebooks.delete(id);
+    return;
+  }
+  state.bin.delete(id);
   if (obj?.kind === 'notebook') {
     state.notebooks.set(id, normNotebook(obj));
     state.notes.delete(id);
@@ -162,6 +172,7 @@ export async function loadAll() {
   const recs = await records.all();
   state.notes = new Map();
   state.notebooks = new Map();
+  state.bin = new Map();
   let hidden = 0;
   let config = null;
   for (const r of recs) {
@@ -196,6 +207,7 @@ export async function applyRemoteRecord(rec) {
   if (!key) {
     state.notes.delete(rec.id);
     state.notebooks.delete(rec.id);
+    state.bin.delete(rec.id);
     state.hiddenSealed++;
     return;
   }
@@ -207,6 +219,7 @@ export async function applyRemoteRecord(rec) {
 export function forgetNote(id) {
   state.notes.delete(id);
   state.notebooks.delete(id);
+  state.bin.delete(id);
 }
 export async function decryptEnv(id, env) {
   const key = state.keys[env.k];
@@ -250,8 +263,10 @@ export async function saveNotes(list) {
   return out;
 }
 
+// Deleting for good (from Recently deleted, after 30 days, or an empty note
+// nobody wrote in). To delete as people mean it, use binNote.
 export async function deleteNote(id) {
-  const n = state.notes.get(id);
+  const n = state.notes.get(id) || (state.bin.get(id)?.kind !== 'notebook' ? state.bin.get(id) : null);
   if (!n) return;
   for (const f of n.files || []) await deleteFile(f.id);
   for (const r of n.recordings || []) await deleteFile(r.fileId);
@@ -266,6 +281,7 @@ export async function deleteNote(id) {
   if (prev?.remoteSha) await records.put({ ...prev, deleted: true, dirty: true, rev: (prev.rev || 0) + 1 });
   else await records.del(id);
   state.notes.delete(id);
+  state.bin.delete(id);
   for (const other of [...state.notes.values()]) {
     if (other.links.includes(id) || other.suggested.some((s) => s.id === id)) {
       await saveNote({ ...other, links: other.links.filter((x) => x !== id), suggested: other.suggested.filter((s) => s.id !== id) }, { touch: false });
@@ -386,16 +402,111 @@ export async function saveNotebook(nb, { touch = true } = {}) {
 export const notesIn = (notebookId) => [...state.notes.values()].filter((n) => n.notebook === notebookId);
 
 export async function deleteNotebook(id) {
-  const b = state.notebooks.get(id);
+  const b = state.notebooks.get(id) || (state.bin.get(id)?.kind === 'notebook' ? state.bin.get(id) : null);
   if (!b) return;
   for (const n of notesIn(id)) await deleteNote(n.id);
+  // Notes deleted along with it from Recently deleted go with it.
+  for (const n of [...state.bin.values()]) if (n.kind !== 'notebook' && b.binBatch && n.binBatch === b.binBatch) await deleteNote(n.id);
   if (b.cover?.photo) await deleteFile(b.cover.photo);
   const prev = await records.get(id);
   if (prev?.remoteSha) await records.put({ ...prev, deleted: true, dirty: true, rev: (prev.rev || 0) + 1 });
   else await records.del(id);
   state.notebooks.delete(id);
+  state.bin.delete(id);
   emit({ type: 'delete', id });
   changed();
+}
+
+// ---- Recently deleted ----------------------------------------------------------
+// Deleting a note, board or notebook puts it here for 30 days (it syncs, so
+// every device sees the same list); put it back, or delete it for good.
+export const BIN_DAYS = 30;
+const BIN_MS = BIN_DAYS * 24 * 3600 * 1000;
+
+async function writeBinned(item, patch) {
+  const obj = { ...item, ...patch };
+  await writeRecord(obj.id, obj, obj.sealed ? 's' : 'm');
+  place(obj.id, obj);
+  return obj;
+}
+
+// Move a note (or board) to Recently deleted. Its sub-notes move up a level,
+// as they always have; its links stay, so putting it back reconnects it.
+export async function binNote(id, { batch = null } = {}) {
+  const n = state.notes.get(id);
+  if (!n) return;
+  for (const child of [...state.notes.values()].filter((c) => c.parent === id)) {
+    await saveNote({ ...child, parent: n.parent || null }, { touch: false });
+  }
+  for (const p of n.pages || []) pageCache.delete(p.id);
+  await writeBinned(n, { binnedAt: Date.now(), binBatch: batch });
+  emit({ type: 'delete', id });
+  changed();
+}
+
+// Move a notebook to Recently deleted. withNotes: its notes go too (and come
+// back with it); otherwise they've already been moved out by the caller.
+export async function binNotebook(id, { withNotes = true } = {}) {
+  const b = state.notebooks.get(id);
+  if (!b) return;
+  const batch = uid('bin');
+  if (withNotes) for (const n of notesIn(id)) await binNote(n.id, { batch });
+  await writeBinned(b, { binnedAt: Date.now(), binBatch: batch });
+  emit({ type: 'delete', id });
+  changed();
+}
+
+// Put something back. A notebook brings back the notes deleted with it; a
+// note whose notebook is still in Recently deleted comes back on its own.
+export async function restore(id) {
+  const item = state.bin.get(id);
+  if (!item) return null;
+  const back = { binnedAt: null, binBatch: null };
+  if (item.kind === 'notebook') {
+    await writeBinned(item, back);
+    for (const n of [...state.bin.values()]) if (n.kind !== 'notebook' && item.binBatch && n.binBatch === item.binBatch) await writeBinned(n, back);
+    emit({ type: 'notebook', id });
+  } else {
+    const nbGone = item.notebook && !state.notebooks.has(item.notebook);
+    const parentGone = item.parent && !state.notes.has(item.parent);
+    await writeBinned(item, { ...back, ...(nbGone ? { notebook: null, section: null, inbox: !item.region } : {}), ...(parentGone ? { parent: null } : {}) });
+    emit({ type: 'note', id });
+  }
+  changed();
+  return state.notes.get(id) || state.notebooks.get(id) || null;
+}
+
+// What's in Recently deleted, newest first, each with the days it has left.
+// Notes deleted along with a notebook are listed under that notebook.
+export function binItems() {
+  const all = [...state.bin.values()];
+  const books = new Set(all.filter((x) => x.kind === 'notebook' && x.binBatch).map((x) => x.binBatch));
+  return all
+    .filter((x) => x.kind === 'notebook' || !x.binBatch || !books.has(x.binBatch))
+    .map((x) => ({
+      item: x,
+      with: x.kind === 'notebook' ? all.filter((n) => n.kind !== 'notebook' && n.binBatch && n.binBatch === x.binBatch) : [],
+      daysLeft: Math.max(0, Math.ceil((x.binnedAt + BIN_MS - Date.now()) / (24 * 3600 * 1000))),
+    }))
+    .sort((a, b) => b.item.binnedAt - a.item.binnedAt);
+}
+
+export async function deleteForever(id) {
+  const item = state.bin.get(id);
+  if (!item) return;
+  if (item.kind === 'notebook') await deleteNotebook(id); else await deleteNote(id);
+}
+
+// Clear out what has been in Recently deleted for 30 days (on unlock and
+// after a sync). `now` can be moved for testing.
+export async function purgeBin(now = Date.now()) {
+  let n = 0;
+  for (const item of [...state.bin.values()]) {
+    if (!state.bin.has(item.id) || now - item.binnedAt < BIN_MS) continue;
+    await deleteForever(item.id);
+    n++;
+  }
+  return n;
 }
 
 // Sealing a notebook seals every note in it, and the notebook itself.
@@ -543,6 +654,7 @@ export function lockSealed() {
     if (n.sealed) { state.notes.delete(n.id); hidden++; for (const p of n.pages) pageCache.delete(p.id); }
   }
   for (const b of [...state.notebooks.values()]) if (b.sealed) state.notebooks.delete(b.id);
+  for (const x of [...state.bin.values()]) if (x.sealed) state.bin.delete(x.id);
   state.hiddenSealed += hidden;
   revokeFileURLs();
   emit({ type: 'sealed' });

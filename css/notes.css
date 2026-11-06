@@ -1123,3 +1123,22 @@ td.tv-tags, td.tv-select { min-width: 150px; }
 .imp-bar > span { display: block; height: 100%; width: 0; background: var(--ink); border-radius: 99px; transition: width 0.3s ease; }
 .imp-done { display: flex; align-items: center; gap: 10px; color: var(--good); }
 .imp-done p { color: var(--ink); }
+
+/* Recently deleted */
+.bin-list { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 0; }
+.bin-row { display: flex; align-items: center; gap: 14px; padding: 14px 4px; border-bottom: 1px solid var(--line-soft); flex-wrap: wrap; }
+.bin-ic { color: var(--muted); display: inline-flex; }
+.bin-t { flex: 1; min-width: 200px; display: flex; flex-direction: column; gap: 2px; }
+.bin-t .t { font-weight: 600; overflow-wrap: anywhere; }
+.bin-t .m { color: var(--muted); font-size: 14px; }
+.bin-acts { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* Today: old notes coming back */
+.back-group { display: flex; flex-direction: column; gap: 4px; margin-top: 4px; }
+.back-h { margin: 6px 0 0; font-size: 14px; font-weight: 600; color: var(--muted); }
+.back-list .time { width: 92px; }
+.back-card { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 14px; background: var(--surface); border: 1px solid var(--line); }
+.back-open { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; text-decoration: none; color: var(--ink); }
+.back-open .t { font-weight: 600; overflow-wrap: anywhere; }
+.back-open .s { font-family: var(--serif); color: var(--ink); opacity: 0.85; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.back-open .m { font-size: 13px; color: var(--muted); }

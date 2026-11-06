@@ -1582,11 +1582,11 @@ export function mount(el, params, ctx) {
       try { await V.setSealed(n.id, sealed); toast(sealed ? 'Sealed' : 'Unsealed'); } catch (e) { toast(e.message); }
     }
     if (act === 'delete') {
-      const ok = await confirmSheet({ title: 'Delete this board?', body: 'The notes on it stay; only the board goes. This syncs to your other devices.', confirm: 'Delete', danger: true });
+      const ok = await confirmSheet({ title: 'Delete this board?', body: 'The notes on it stay; the board goes to Recently deleted for 30 days, on all your devices, so you can put it back.', confirm: 'Delete', danger: true });
       if (ok) {
         pending = false;
-        await V.deleteNote(n.id);
-        toast('Deleted');
+        await V.binNote(n.id);
+        toast('Moved to Recently deleted');
         ctx.navigate(n.notebook ? `#/notebook/${n.notebook}` : '#/notebooks', { replace: true });
       }
     }

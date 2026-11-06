@@ -1,9 +1,10 @@
 // Today: the week at a glance, what's due, today's note, and what you captured.
 
-import { html, raw, $, toast, debounce, fmtTime } from '../util.js';
+import { html, raw, $, toast, debounce, fmtTime, fmtDate, firstLine } from '../util.js';
 import * as V from '../vault.js';
 import { state } from '../vault.js';
-import { displayTitle, regionColors } from '../model.js';
+import { displayTitle, regionColors, kindName } from '../model.js';
+import { onThisDay, worthAnotherLook } from '../resurface.js';
 import { icons } from '../icons.js';
 import { datePicker, labelPicker } from '../ui.js';
 import { allTasks, setTask, dailyNote, ensureDaily, addTaskToDaily, isoToday, addDays, isoOf, dueLabel } from '../notework.js';
@@ -50,6 +51,15 @@ export function bindTaskRows(root, tasks, { onDone } = {}) {
       try { await setTask(t, { due: d }); } catch (e) { toast(e.message || 'Couldn’t change the date.'); }
     };
   });
+}
+
+// Notes passed over today with "Another" (kept on this device for the day).
+const PASS_KEY = 'sb-back-passed';
+function passed(iso) {
+  try { const v = JSON.parse(localStorage.getItem(PASS_KEY) || '{}'); return v.day === iso ? v.ids || [] : []; } catch { return []; }
+}
+function pass(iso, id) {
+  try { localStorage.setItem(PASS_KEY, JSON.stringify({ day: iso, ids: [...passed(iso), id].slice(-200) })); } catch { /* private mode */ }
 }
 
 export function mount(el, params, ctx) {
@@ -103,6 +113,10 @@ export function mount(el, params, ctx) {
         <h2 class="section-title" id="t-cap-h">${isToday ? 'Captured today' : 'Captured that day'}</h2>
         <ul class="cap-list" id="t-caps"></ul>
       </section>
+      ${isToday ? html`<section class="today-sec" aria-labelledby="t-back-h" id="t-back-sec" hidden>
+        <h2 class="section-title" id="t-back-h">From your notes</h2>
+        <div id="t-back"></div>
+      </section>` : ''}
       <nav class="quick-links" aria-label="More places">
         <a href="#/tasks">${icons.tasks({ size: 20 })}Tasks</a><a href="#/labels">${icons.tag({ size: 20 })}Labels</a><a href="#/notes">${icons.notes({ size: 20 })}All notes</a><a href="#/inbox">${icons.inbox({ size: 20 })}Inbox</a><a href="#/settings">${icons.settings({ size: 20 })}Settings</a>
       </nav>
@@ -124,7 +138,30 @@ export function mount(el, params, ctx) {
     drawTasks();
     drawCaptures();
     drawWeek();
+    drawBack();
     mountEditor();
+  }
+
+  // Old notes coming back: on this day in past years, and one older note worth
+  // another look (a fresh one each day; "Another" passes over it for today).
+  function drawBack() {
+    const box = $('#t-back', el);
+    if (!box) return;
+    const iso = isoToday();
+    const notes = [...state.notes.values()];
+    const past = onThisDay(notes, iso).slice(0, 4);
+    const pick = worthAnotherLook(notes, iso, { skip: passed(iso), exclude: past.map((p) => p.note.id) })[0];
+    $('#t-back-sec', el).hidden = !past.length && !pick;
+    const snippet = (n) => firstLine(n.doc ? docPlainText(n.doc) : n.body || n.pdfText || Object.values(n.hw || {}).join(' '), 110);
+    box.innerHTML = `${html`
+      ${past.length ? html`<div class="back-group"><h3 class="back-h">On this day</h3><ul class="cap-list back-list">${past.map(({ note: n, yearsAgo }) => html`<li><a href="#/note/${n.id}"><span class="time">${yearsAgo === 1 ? '1 year ago' : `${yearsAgo} years ago`}</span><span class="t">${displayTitle(n)}</span>${n.kind === 'ink' ? raw(icons.pen({ size: 14 })) : n.kind === 'board' ? raw(icons.board({ size: 14 })) : ''}</a></li>`)}</ul></div>` : ''}
+      ${pick ? html`<div class="back-group"><h3 class="back-h">Worth another look</h3>
+        <div class="back-card">
+          <a class="back-open" href="#/note/${pick.id}"><span class="t">${displayTitle(pick)}</span>${snippet(pick) && snippet(pick) !== displayTitle(pick) ? html`<span class="s">${snippet(pick)}</span>` : ''}<span class="m">${kindName(pick)}, written ${fmtDate(pick.createdAt)}${pick.updatedAt - pick.createdAt > 864e5 ? `, last changed ${fmtDate(pick.updatedAt)}` : ''}</span></a>
+          <button type="button" class="btn btn-sm btn-ghost" data-back-next>Another</button>
+        </div></div>` : ''}`}`;
+    const next = box.querySelector('[data-back-next]');
+    if (next) next.onclick = () => { pass(iso, pick.id); drawBack(); };
   }
 
   // Your map this week: what's new, what the assistant did, one thing to look at.

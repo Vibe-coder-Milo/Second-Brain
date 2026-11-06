@@ -20,6 +20,7 @@ import * as AskView from './views/ask.js';
 import * as ReviewView from './views/review.js';
 import * as SettingsView from './views/settings.js';
 import * as TodayView from './views/today.js';
+import * as DeletedView from './views/deleted.js';
 import * as TasksView from './views/tasks.js';
 import * as LabelsView from './views/labels.js';
 import * as NotebooksView from './views/notebooks.js';
@@ -34,7 +35,7 @@ const iOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform 
 if (iOS) document.querySelector('meta[name=viewport]')?.setAttribute('content', 'width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover');
 
 const NotebookView = { mount: NotebooksView.mountNotebook };
-const VIEWS = { today: TodayView, map: MapView, inbox: InboxView, notes: NotesView, note: NoteView, notebooks: NotebooksView, notebook: NotebookView, tasks: TasksView, labels: LabelsView, ask: AskView, review: ReviewView, settings: SettingsView };
+const VIEWS = { today: TodayView, map: MapView, inbox: InboxView, notes: NotesView, note: NoteView, notebooks: NotebooksView, notebook: NotebookView, tasks: TasksView, labels: LabelsView, ask: AskView, review: ReviewView, settings: SettingsView, deleted: DeletedView };
 // Which tab or sidebar item lights up for each screen.
 const CHROME = { note: 'notes', notebook: 'notebooks' };
 
@@ -133,6 +134,9 @@ function startUnlocked() {
   startAutoSync();
   runOcrQueue().catch(() => {});
   startAutoLock();
+  // Recently deleted: clear out what has been there 30 days (now, and twice a day).
+  setTimeout(() => V.purgeBin().catch(() => {}), 3000);
+  setInterval(() => V.purgeBin().catch(() => {}), 12 * 3600 * 1000);
   import('./semantic.js').then((S) => S.buildSoon(5000)).catch(() => {});
   import('./organiser.js').then((O) => O.autoSoon(25000)).catch(() => {});
   setTimeout(() => MapView.preloadMap().catch(() => {}), 4000);

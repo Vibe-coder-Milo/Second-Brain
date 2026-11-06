@@ -132,6 +132,9 @@ export function normNote(n) {
     hw: kind === 'ink' && n.hw && typeof n.hw === 'object' ? n.hw : {},
     layout: kind === 'ink' && n.layout === 'scroll' ? 'scroll' : 'pages',
     editedOn: n.editedOn || null,
+    // In Recently deleted since this time (and deleted with these others).
+    binnedAt: Number(n.binnedAt) > 0 ? Number(n.binnedAt) : null,
+    binBatch: n.binBatch || null,
     createdAt: n.createdAt || Date.now(),
     updatedAt: n.updatedAt || Date.now(),
   };
@@ -179,6 +182,8 @@ export function normNotebook(b) {
     sealed: !!b.sealed,
     sections: Array.isArray(b.sections) && b.sections.length ? b.sections : [{ id: 's_notes', name: 'Notes' }],
     order: Number.isFinite(b.order) ? b.order : (b.createdAt || 0),
+    binnedAt: Number(b.binnedAt) > 0 ? Number(b.binnedAt) : null,
+    binBatch: b.binBatch || null,
     createdAt: b.createdAt || Date.now(),
     updatedAt: b.updatedAt || Date.now(),
   };

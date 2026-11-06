@@ -704,11 +704,11 @@ function mountTyped(el, params, ctx) {
     if (act === 'out') await V.saveNote({ ...n, notebook: null, section: null, parent: null, inbox: !n.region });
     if (act === 'delete') {
       const kids = subNotes(n).length;
-      const ok = await confirmSheet({ title: 'Delete this note?', body: `Its images go too.${kids ? ` Its ${kids} sub-note${kids === 1 ? '' : 's'} will move up a level.` : ''} This syncs to your other devices.`, confirm: 'Delete', danger: true });
+      const ok = await confirmSheet({ title: 'Delete this note?', body: `It goes to Recently deleted for 30 days, on all your devices, so you can put it back.${kids ? ` Its ${kids} sub-note${kids === 1 ? '' : 's'} will move up a level.` : ''}`, confirm: 'Delete', danger: true });
       if (ok) {
         destroyEditor();
-        await V.deleteNote(n.id);
-        toast('Deleted');
+        await V.binNote(n.id);
+        toast('Moved to Recently deleted');
         ctx.navigate(compact ? '#/map' : n.notebook ? `#/notebook/${n.notebook}` : '#/notes', { replace: true });
       }
     }

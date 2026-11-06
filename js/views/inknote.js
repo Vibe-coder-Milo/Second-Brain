@@ -1366,12 +1366,12 @@ export function mount(el, params, ctx) {
       try { await V.setSealed(n.id, sealed); toast(sealed ? 'Sealed' : 'Unsealed'); } catch (e) { toast(e.message); }
     }
     if (act === 'delete') {
-      const ok = await confirmSheet({ title: 'Delete this note?', body: `All ${n.pages.length} page${n.pages.length === 1 ? '' : 's'} go too. This syncs to your other devices.`, confirm: 'Delete', danger: true });
+      const ok = await confirmSheet({ title: 'Delete this note?', body: `It goes to Recently deleted for 30 days, with all ${n.pages.length} page${n.pages.length === 1 ? '' : 's'}, on all your devices, so you can put it back.`, confirm: 'Delete', danger: true });
       if (ok) {
         surface?.destroy();
         surface = null;
-        await V.deleteNote(n.id);
-        toast('Deleted');
+        await V.binNote(n.id);
+        toast('Moved to Recently deleted');
         ctx.navigate(n.notebook ? `#/notebook/${n.notebook}` : '#/notebooks', { replace: true });
       }
     }

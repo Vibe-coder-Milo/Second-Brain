@@ -390,14 +390,14 @@ export function mountNotebook(el, params, ctx) {
       ]) : 'all';
       if (!how) return;
       if (how === 'all') {
-        const ok = await confirmSheet({ title: 'Delete everything in it?', body: `${plural(n, 'note')}, with their pages and images. This syncs to your other devices.`, confirm: 'Delete', danger: true });
+        const ok = await confirmSheet({ title: 'Delete everything in it?', body: `The notebook and ${plural(n, 'note')} go to Recently deleted for 30 days, on all your devices. Putting the notebook back brings them all back.`, confirm: 'Delete', danger: true });
         if (!ok) return;
       } else {
         for (const x of notesIn(id)) await V.saveNote({ ...x, notebook: null, section: null, inbox: !x.region }, { touch: false });
       }
       closePane();
-      await V.deleteNotebook(id);
-      toast('Notebook deleted');
+      await V.binNotebook(id, { withNotes: how === 'all' });
+      toast('Moved to Recently deleted');
       ctx.navigate('#/notebooks', { replace: true });
     }
   }

@@ -264,6 +264,7 @@ export function mount(main, params, ctx) {
         <div class="btn-row"><button type="button" class="btn" data-act="backup">Download encrypted backup</button></div>
         <p class="hint">Or take your notes anywhere: every note as a Markdown file, with images and handwritten pages as pictures, in one zip. This copy is <strong>not</strong> encrypted, so keep it somewhere safe.</p>
         <div class="btn-row"><button type="button" class="btn" data-act="export-md">Export everything as Markdown</button></div>
+        <p class="hint">Deleted something by mistake? <a href="#/deleted">Recently deleted</a> keeps notes, boards and notebooks for 30 days.</p>
       </section>
 
       <section aria-labelledby="s-about">

@@ -2,7 +2,7 @@
 // your notes live in encrypted on-device storage, not in this cache.
 // Bump VERSION whenever app files change.
 
-const VERSION = 'sb-v18';
+const VERSION = 'sb-v19';
 const SHELL = [
   './',
   './index.html',
@@ -74,6 +74,7 @@ const SHELL = [
   './js/sync.js',
   './js/theme.js',
   './js/fonts.js',
+  './js/resurface.js',
   './js/ui.js',
   './js/util.js',
   './js/vault.js',
@@ -95,6 +96,7 @@ const SHELL = [
   './js/views/review.js',
   './js/views/scanner.js',
   './js/views/settings.js',
+  './js/views/deleted.js',
   './js/views/shell.js',
   './js/views/tableview.js',
   './js/views/tasks.js',

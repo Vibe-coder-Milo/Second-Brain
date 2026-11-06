@@ -1,7 +1,7 @@
 // Persistent frame: sidebar (iPad/desktop) and tab bar (phone).
 
 import { html, fmtAgo } from '../util.js';
-import { state, sealedState } from '../vault.js';
+import { state, sealedState, binItems } from '../vault.js';
 import { regionColors, noteTasks } from '../model.js';
 import { isoToday } from '../doc.js';
 import { icons } from '../icons.js';
@@ -38,6 +38,9 @@ function lateTasks() {
   return n;
 }
 
+// What Recently deleted lists (notes deleted with a notebook count with it).
+const binCount = () => binItems().length;
+
 export function refreshChrome(route) {
   const notes = [...state.notes.values()];
   const inboxCount = notes.filter((n) => n.inbox).length;
@@ -63,6 +66,7 @@ export function refreshChrome(route) {
         <a class="side-link" href="#/notes" aria-current="${at('notes')}">${icons.notes()}All notes</a>
         <a class="side-link" href="#/ask" aria-current="${at('ask')}">${icons.ask()}Ask Claude</a>
         <a class="side-link" href="#/settings" aria-current="${at('settings')}">${icons.settings()}Settings</a>
+        <a class="side-link" href="#/deleted" aria-current="${at('deleted')}">${icons.trash()}<span class="grow">Recently deleted</span>${state.bin.size ? html`<span class="count">${binCount()}</span>` : ''}</a>
       </nav>
       <section class="side-section" aria-labelledby="side-regions">
         <h2 id="side-regions">Regions</h2>
