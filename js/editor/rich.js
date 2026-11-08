@@ -13,9 +13,11 @@ import * as V from '../vault.js';
 import { labelMap, titleIndex } from '../model.js';
 import { docToMarkdown } from '../doc.js';
 import { stickerDef, stickerSVG, labelDef, postitColor } from '../stickers.js';
-import { esc } from '../util.js';
+import { esc, toast } from '../util.js';
 import { darkInk, darkHighlight } from '../theme.js';
 import { FONTS, fontCss } from '../fonts.js';
+import { compressImage } from '../images.js';
+import { imagesIn } from '../clipimages.js';
 
 // The fonts live in fonts.js; re-exported for the toolbar and note screen.
 export { FONTS, fontCss };
@@ -526,14 +528,47 @@ export function appendMarkdown(n, md) {
 
 // ---- The editor -----------------------------------------------------------------
 
-export function createRichEditor(el, { doc, editable = false, placeholder, onChange, onOpenLink, pickLabel, pickDate, font } = {}) {
-  const editor = new Editor({
+// Put pictures into a typed note: each is made smaller, encrypted and stored
+// like a picture added with Insert > Image. `pos` is where (else the cursor).
+export async function insertImageFiles(editor, files, { sealed = false, pos = null } = {}) {
+  let added = 0;
+  for (const f of files) {
+    try {
+      const img = await compressImage(f);
+      const fileId = await V.addFile(img.bytes, { sealed });
+      const node = { type: 'imageFile', attrs: { fileId, w: img.w, h: img.h } };
+      // A picture (or other block) is selected: go after it rather than replace it.
+      const sel = editor.state.selection;
+      if (typeof pos !== 'number' && sel.node) pos = sel.to;
+      if (typeof pos === 'number') { editor.chain().focus().insertContentAt(pos, node).run(); pos = null; }
+      else editor.chain().focus().insertContent(node).run();
+      added++;
+    } catch { toast(`Couldn’t add ${f.name || 'that picture'}.`); }
+  }
+  return added;
+}
+
+// images: { sealed() } lets pictures be pasted (Ctrl/Cmd+V) or dropped in.
+export function createRichEditor(el, { doc, editable = false, placeholder, onChange, onOpenLink, pickLabel, pickDate, font, images = null } = {}) {
+  let editor = null;
+  const takeImages = (files, pos) => { insertImageFiles(editor, files, { sealed: !!images.sealed?.(), pos }); return true; };
+  editor = new Editor({
     element: el,
     extensions: extensions({ placeholder }),
     content: doc || { type: 'doc', content: [{ type: 'paragraph' }] },
     editable,
     editorProps: {
       attributes: { class: 'rich', spellcheck: 'true', autocapitalize: 'sentences' },
+      handlePaste: (view, event) => {
+        const files = images && imagesIn(event.clipboardData);
+        return files?.length ? takeImages(files) : false;
+      },
+      handleDrop: (view, event) => {
+        const files = images && imagesIn(event.dataTransfer);
+        if (!files?.length) return false;
+        event.preventDefault();
+        return takeImages(files, view.posAtCoords({ left: event.clientX, top: event.clientY })?.pos ?? null);
+      },
     },
     onUpdate: ({ editor: ed }) => onChange?.(ed.getJSON()),
   });

@@ -11,6 +11,7 @@ import { rerunOcr } from '../ocr.js';
 import { confirmSheet, menuSheet, notePicker, regionPicker, passphraseSheet, datePicker, labelPicker, labelChipHtml } from '../ui.js';
 import { icons } from '../icons.js';
 import { focusButtonHtml, toggleFocus, enterNote, leaveNote } from '../focus.js';
+import { imagesIn, isTypingTarget } from '../clipimages.js';
 import { linkedWith, mentions, related, subNotes } from '../connections.js';
 import { miniMapHtml } from '../minimap.js';
 import { notebookPicker } from './notebooks.js';
@@ -461,6 +462,7 @@ function mountTyped(el, params, ctx) {
       },
       pickLabel: (cb) => labelPicker(host, { title: 'Callout label' }).then(cb),
       pickDate: (cur, cb) => datePicker(host, cur).then((d) => cb(d === undefined ? undefined : d)),
+      images: { sealed: () => !!note()?.sealed },
     });
     // A note with its own font keeps it; others use the default from Settings.
     if (n.font) host.style.setProperty('--note-font', R.fontCss(n.font)); else host.style.removeProperty('--note-font');
@@ -519,6 +521,24 @@ function mountTyped(el, params, ctx) {
     vvHandler?.();
     vvHandler = null;
   }
+
+  // A picture pasted while reading (nothing focused): start editing and add it at
+  // the end. While typing, the editor takes the paste itself, at the cursor.
+  const onPaste = async (e) => {
+    if (compact || !editor || !el.isConnected || document.querySelector('.overlay')) return;
+    if (isTypingTarget(e.target)) return;
+    // Side by side: only the side you last touched.
+    const pane = el.closest('.split-pane');
+    if (pane && !pane.classList.contains('active')) return;
+    const files = imagesIn(e.clipboardData);
+    if (!files.length) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    if (!editing) startEditing();
+    const R = await loadRich();
+    await R.insertImageFiles(editor, files, { sealed: !!note()?.sealed, pos: editor.state.doc.content.size });
+  };
+  document.addEventListener('paste', onPaste, true);
 
   function destroyEditor() {
     player?.destroy();
@@ -758,6 +778,7 @@ function mountTyped(el, params, ctx) {
       }
     },
     destroy() {
+      document.removeEventListener('paste', onPaste, true);
       flush();
       destroyEditor();
       if (!compact) leaveNote();

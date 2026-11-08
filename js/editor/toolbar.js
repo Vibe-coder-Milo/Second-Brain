@@ -7,7 +7,7 @@ import * as V from '../vault.js';
 import { icons } from '../icons.js';
 import { popover, closePopover, labelPicker, datePicker, stickerDrawer, tooltips } from '../ui.js';
 import { searchNotes, displayTitle } from '../model.js';
-import { compressImage } from '../images.js';
+import { readClipboardImages } from '../clipimages.js';
 import { TEXT_PALETTE, HL_PALETTE, colourName, suggestKey } from './rich.js';
 import { FONTS, NOTE_FONT, TEXT_SIZE } from '../fonts.js';
 import { POSTIT_COLORS } from '../stickers.js';
@@ -33,6 +33,7 @@ const EXTRA = [
   { id: 'sticker', name: 'Sticker or post-it', icon: 'sticker', keys: 'sticker star emoji post-it postit' },
   { id: 'due', name: 'Due date', icon: 'calendar', keys: 'due date deadline' },
   { id: 'image', name: 'Image', icon: 'image', keys: 'image photo picture' },
+  { id: 'paste-image', name: 'Paste a picture', icon: 'image', keys: 'paste picture screenshot clipboard image' },
   { id: 'link', name: 'Link to a note', icon: 'link', keys: 'link note wiki [[' },
 ];
 
@@ -78,16 +79,20 @@ export async function runAction(editor, id, anchor, opts = {}) {
     input.accept = 'image/*';
     input.multiple = true;
     input.onchange = async () => {
-      for (const f of input.files) {
-        try {
-          const img = await compressImage(f);
-          const fileId = await V.addFile(img.bytes, { sealed: !!opts.sealed?.() });
-          opts.onFile?.(fileId, img);
-          editor.chain().focus().insertContent({ type: 'imageFile', attrs: { fileId, w: img.w, h: img.h } }).run();
-        } catch { toast(`Couldn’t add ${f.name || 'that image'}.`); }
-      }
+      const R = await import('./rich.js');
+      await R.insertImageFiles(editor, [...input.files], { sealed: !!opts.sealed?.() });
     };
     input.click();
+    return;
+  }
+  if (id === 'paste-image') {
+    // A Paste button for the iPad and iPhone, where there may be no keyboard.
+    try {
+      const files = await readClipboardImages();
+      if (!files.length) { toast('No picture to paste. Copy a screenshot or picture first.'); return; }
+      const R = await import('./rich.js');
+      await R.insertImageFiles(editor, files, { sealed: !!opts.sealed?.() });
+    } catch (e) { toast(e.message); }
     return;
   }
   if (id === 'link') editor.chain().focus().insertContent('[[').run();

@@ -758,7 +758,8 @@ export function mount(el, params, ctx) {
       e.preventDefault();
       addImages(files, toWorld(e.clientX, e.clientY));
     });
-    el.addEventListener('paste', onPaste);
+    // On the whole page: with nothing focused, a paste goes to the page, not the board.
+    document.addEventListener('paste', onPaste, true);
     // Pinch-zoom and page scrolling are handled here, not by the browser.
     stage.addEventListener('touchmove', (e) => e.preventDefault(), { passive: false });
     stage.addEventListener('gesturestart', (e) => e.preventDefault());
@@ -1483,12 +1484,15 @@ export function mount(el, params, ctx) {
   window.addEventListener('keyup', onKeyUp);
 
   function onPaste(e) {
+    if (destroyed || !el.isConnected || document.querySelector('.overlay')) return;
+    if (el.closest('.split-pane:not(.active)')) return; // side by side: the other side
     if (editing || e.target.closest?.('input, textarea, [contenteditable="true"], [contenteditable="plaintext-only"]')) return;
     const files = [...(e.clipboardData?.files || [])].filter((f) => f.type.startsWith('image/'));
-    if (files.length) { e.preventDefault(); addImages(files); return; }
+    if (files.length) { e.preventDefault(); e.stopImmediatePropagation(); addImages(files); return; }
     const text = e.clipboardData?.getData('text/plain')?.trim();
     if (!text) return;
     e.preventDefault();
+    e.stopImmediatePropagation();
     checkpoint();
     const { w, h } = B.DEFAULTS.sticky;
     const p = placeAt(w, h);
@@ -1642,6 +1646,7 @@ export function mount(el, params, ctx) {
     },
     destroy() {
       destroyed = true;
+      document.removeEventListener('paste', onPaste, true);
       window.removeEventListener('resize', onResize);
       window.removeEventListener('sb-theme', onThemeChange);
       window.removeEventListener('keyup', onKeyUp);

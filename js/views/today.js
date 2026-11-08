@@ -241,6 +241,7 @@ export function mount(el, params, ctx) {
       },
       pickLabel: (cb) => labelPicker(host, { title: 'Callout label' }).then(cb),
       pickDate: (cur, cb) => datePicker(host, cur).then((d) => cb(d)),
+      images: { sealed: () => false },
     });
     editor.on('focus', showBar);
     // Tapping the empty part of the card starts typing at the end.

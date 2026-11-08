@@ -224,6 +224,7 @@ async function boot() {
   // Paste an image anywhere (outside text fields) to capture it.
   document.addEventListener('paste', (e) => {
     if (state.status !== 'unlocked' || document.querySelector('.overlay')) return;
+    if (e.defaultPrevented) return; // a note took it (pasted into the note)
     if (e.target.closest?.('input, textarea')) return;
     const imgs = [...(e.clipboardData?.files || [])].filter((f) => f.type.startsWith('image/'));
     if (imgs.length) { e.preventDefault(); ctx.openCapture({ files: imgs }); }

@@ -21,6 +21,7 @@ import { linkedWith, mentions, related, subNotes } from '../connections.js';
 import { miniMapHtml } from '../minimap.js';
 import { notebookPicker, textSheet } from './notebooks.js';
 import { BOX_FONT, TEXT_SIZE } from '../fonts.js';
+import { imagesIn, isTypingTarget, readClipboardImages } from '../clipimages.js';
 
 const activeLayers = new Map(); // note id -> the layer you're writing on (this session)
 
@@ -237,6 +238,24 @@ export function mount(el, params, ctx) {
     if (e.key === 'PageUp' || e.key === 'ArrowLeft') { e.preventDefault(); turn(-1); }
   };
   document.addEventListener('keydown', onPageKeys);
+
+  // A picture pasted (Ctrl/Cmd+V) goes onto the page, where you're looking,
+  // like Insert > Photo. Pasting into a text box or post-it stays text.
+  const pasteImages = async (files) => {
+    let ok = 0;
+    for (const f of files) { try { await surface.insertImage(f); ok++; } catch { toast('Couldn’t add that picture.'); } }
+    if (ok) afterPlace();
+  };
+  const onPaste = (e) => {
+    if (!surface || isTypingTarget(e.target) || document.querySelector('.overlay')) return;
+    if (el.closest('.split-pane:not(.active)')) return;
+    const files = imagesIn(e.clipboardData);
+    if (!files.length) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    pasteImages(files);
+  };
+  document.addEventListener('paste', onPaste, true);
 
   // ---------- Endless scroll ----------
   // In endless layout the page gets longer as you near the bottom.
@@ -538,6 +557,7 @@ export function mount(el, params, ctx) {
       ${I('sticker', 'sticker', 'Sticker', 'Decoration, tape and marks')}
       ${I('table', 'table', 'Table', 'Rows and columns to write in')}
       ${I('photo', 'image', 'Photo')}
+      ${I('paste-image', 'image', 'Paste a picture', 'A screenshot or picture you copied')}
       ${I('scan', 'scan', 'Scan paper', 'Adds pages after this one')}
       ${I('pdf', 'pdf', 'PDF', 'Adds its pages to write on')}
       ${wide ? '' : html`<div class="pop-head">More tools</div>
@@ -549,6 +569,11 @@ export function mount(el, params, ctx) {
     p.el.querySelectorAll('[data-ins]').forEach((b) => {
       b.onclick = async () => {
         const a = b.dataset.ins;
+        if (a === 'paste-image') {
+          p.close();
+          try { const files = await readClipboardImages(); if (files.length) await pasteImages(files); else toast('No picture to paste. Copy a screenshot or picture first.'); } catch (e) { toast(e.message); }
+          return;
+        }
         if (a === 'photo') { pickFile('image/*', async (f) => { try { await surface.insertImage(f); afterPlace(); } catch { toast('Couldn’t add that image.'); } }); p.close(); return; }
         if (a === 'pdf') { pickFile('application/pdf', (f) => importPdf(f)); p.close(); return; }
         p.close();
@@ -1457,6 +1482,7 @@ export function mount(el, params, ctx) {
       window.removeEventListener('resize', onResize);
       window.removeEventListener('sb-theme', onThemeChange);
       document.removeEventListener('keydown', onPageKeys);
+      document.removeEventListener('paste', onPaste, true);
       clearTimeout(indTimer);
       exitReplay();
       surface?.endEdit();

@@ -76,7 +76,7 @@ through a private GitHub repo. Everything is encrypted on the device.
   - models: transformers and onnxruntime (`ort/`) with the model files;
   - OCR: tesseract.
 - **Service worker** (`sw.js`):
-  - Bump `VERSION` (`sb-vN`; currently `sb-v24`) on every release.
+  - Bump `VERSION` (`sb-vN`; currently `sb-v25`) on every release.
   - Add every new JS/CSS file to `SHELL`, or it won't work offline.
   - The app shows an update bar (`js/appupdate.js`).
 - **Views:** `js/views/*.js` export `mount(main, params, ctx)`, returning
@@ -399,6 +399,36 @@ change is sent at once when the app is hidden. A computer only picks it up
 when it syncs (tab shown again, every 3 min, or Sync now). `t6h` (two
 devices; its waits use `page.wait_for_timeout`, since `mockgh` answers from
 the test's own thread and `time.sleep` would stall it).
+
+### 8 Nov 2026 (`sb-v25`)
+
+1. **Moving a text box without switching tools** (handwritten notes): with
+   the text tool, a drag that starts on a text box or post-it moves it (it
+   becomes a selection and uses `startMove`, then the selection is cleared;
+   `drawing.hit`, `fromText`); a tap still opens it. While typing, the round
+   grip (`.tb-move`) moves the box. Moving or widening (`editGeom`) is saved
+   on Done even if the words didn't change (before, a width change alone was
+   only saved with a later change), with one undo step taken at the first
+   drag. `t6i`.
+2. **Pasting pictures** (`js/clipimages.js`): Ctrl/Cmd+V with a picture goes
+   into the note, never Capture. Typed notes and Today's note: the editor's
+   `handlePaste`/`handleDrop` (`createRichEditor({ images })`,
+   `insertImageFiles`); while reading, `note.js` catches the paste on
+   `document` (capture phase), starts editing and adds it at the end.
+   Handwritten pages: `inknote.js` places it in view (`insertImage`).
+   Whiteboards: their paste listener moved from the board element to
+   `document` (with nothing focused a paste never reached it). Each skips
+   typing targets, open sheets and the inactive side-by-side pane, and calls
+   `stopImmediatePropagation`; `app.js` ignores `defaultPrevented` pastes.
+   "Paste a picture" (typed Insert menu, handwritten + menu) uses
+   `navigator.clipboard.read()` for the iPad without a keyboard. A picture
+   inserted while another is selected goes after it (it used to replace it,
+   with Insert > Image too). `t6i`.
+
+Asked the same day, waiting for the owner to pick from a mockup: counts
+beside Today, Tasks (by region), Labels and Highlights in the menu; a
+contents page for long typed notes. (The typed-note Outline exists but only
+at >= 1180 px and never inside a notebook, so the owner hasn't seen it.)
 
 ## Ideas noted, not requested
 

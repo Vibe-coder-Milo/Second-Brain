@@ -738,8 +738,10 @@ export class InkSurface {
     } else if (t === 'lasso') {
       this.drawing = { pointerId: e.pointerId, kind: 'lasso', poly: [[x, y]], t0: Date.now() };
     } else if (t === 'text') {
-      // A tap starts a text box there; a drag draws the box's size.
-      this.drawing = { pointerId: e.pointerId, kind: 'tap', x, y, x2: x, y2: y };
+      // A tap starts a text box there; a drag draws the box's size. Starting on
+      // a text box or post-it, a drag moves it and a tap opens it.
+      const on = this.objectAt(x, y);
+      this.drawing = { pointerId: e.pointerId, kind: 'tap', x, y, x2: x, y2: y, hit: on && (on.type === 'text' || on.type === 'postit') ? on.id : null };
     } else if (t === 'hand') {
       this.drawing = { pointerId: e.pointerId, kind: 'pan', sx: e.clientX, sy: e.clientY, st: this.scroll.scrollTop, sl: this.scroll.scrollLeft };
     }
@@ -775,7 +777,16 @@ export class InkSurface {
       this.dragMove(x, y);
     } else if (d.kind === 'tap') {
       [d.x2, d.y2] = this.toPage(e);
-      this.drawTextArea(d);
+      if (d.hit && this.textArea(d)) {
+        // Dragging a text box with the text tool: move it, as the Move tool would.
+        this.select(new Set(), new Set([d.hit]));
+        if (!this.sel) { d.hit = null; return; }
+        this.startMove(e, d.x, d.y, 'move');
+        this.drawing.fromText = true;
+        this.dragMove(d.x2, d.y2);
+        return;
+      }
+      if (!d.hit) this.drawTextArea(d);
     } else if (d.kind === 'pan') {
       this.scroll.scrollTop = d.st - (e.clientY - d.sy);
       this.scroll.scrollLeft = d.sl - (e.clientX - d.sx);
@@ -799,10 +810,10 @@ export class InkSurface {
     if (d.kind === 'stroke') this.commitStroke(d);
     else if (d.kind === 'erase') { if (d.any) this.changed(); else this.undoStack.pop(); }
     else if (d.kind === 'lasso') this.finishLasso(d);
-    else if (d.kind === 'move') this.endMove(d);
+    else if (d.kind === 'move') { this.endMove(d); if (d.fromText) this.clearSelection(); }
     else if (d.kind === 'tap') {
       this.drawTextArea(null);
-      const area = this.textArea(d);
+      const area = !d.hit && this.textArea(d);
       if (area) this.addTextIn(area); else this.tapAt(d.x, d.y, { tool: 'text' });
     }
     this.clearWet();
@@ -1577,7 +1588,7 @@ export class InkSurface {
     if (o.type === 'text') {
       const box = document.createElement('div');
       box.className = 'tb-edit';
-      box.innerHTML = '<div class="tb-host"></div><div class="tb-actions"><button type="button" class="tb-done">Done</button><button type="button" class="tb-del" aria-label="Delete text box">' + icons.trash({ size: 16 }) + '</button></div><button type="button" class="tb-width" aria-label="Change width"></button>';
+      box.innerHTML = '<div class="tb-host"></div><div class="tb-actions"><button type="button" class="tb-done">Done</button><button type="button" class="tb-del" aria-label="Delete text box">' + icons.trash({ size: 16 }) + '</button></div><button type="button" class="tb-width" aria-label="Change width"></button><button type="button" class="tb-move" aria-label="Move text box">' + icons.move({ size: 16 }) + '</button>';
       this.overlay.appendChild(box);
       this.editorBox = box;
       this.positionEditor();
@@ -1588,15 +1599,23 @@ export class InkSurface {
       this.textEditor = ed;
       box.querySelector('.tb-done').onclick = () => this.endEdit();
       box.querySelector('.tb-del').onclick = () => { this.snapshot(); this.data.objects = this.data.objects.filter((x) => x.id !== o.id); this.data.tomb.push(o.id); this.endEdit(false); this.changed(); };
-      // Drag the right edge to change width.
-      const wh = box.querySelector('.tb-width');
-      wh.addEventListener('pointerdown', (e) => {
+      // Drag the right edge to change width, or the grip to move the box.
+      const dragHandle = (sel, apply) => box.querySelector(sel).addEventListener('pointerdown', (e) => {
         e.preventDefault(); e.stopPropagation();
-        const startX = e.clientX; const w0 = o.w;
-        const mv = (ev) => { o.w = Math.max(120, Math.min(PAGE_W - o.x - 10, w0 + (ev.clientX - startX) / this.scale)); this.positionEditor(); };
-        const upf = () => { window.removeEventListener('pointermove', mv); window.removeEventListener('pointerup', upf); };
+        // Undo puts the box back where it was (once per time the box is open).
+        if (!o.fresh && !this.editGeom) this.snapshot();
+        this.editGeom = true;
+        const sx = e.clientX; const sy = e.clientY; const o0 = { x: o.x, y: o.y, w: o.w };
+        const mv = (ev) => { apply(o0, (ev.clientX - sx) / this.scale, (ev.clientY - sy) / this.scale); this.positionEditor(); };
+        const upf = () => { window.removeEventListener('pointermove', mv); window.removeEventListener('pointerup', upf); window.removeEventListener('pointercancel', upf); };
         window.addEventListener('pointermove', mv);
         window.addEventListener('pointerup', upf);
+        window.addEventListener('pointercancel', upf);
+      });
+      dragHandle('.tb-width', (o0, dx) => { o.w = Math.max(120, Math.min(PAGE_W - o.x - 10, o0.w + dx)); });
+      dragHandle('.tb-move', (o0, dx, dy) => {
+        o.x = Math.max(0, Math.min(PAGE_W - Math.min(o.w, 60), o0.x + dx));
+        o.y = Math.max(0, Math.min(this.page.h - 20, o0.y + dy));
       });
       this.opts.onTextEditing?.(ed);
       setTimeout(() => ed.commands.focus('end'), 30);
@@ -1643,6 +1662,8 @@ export class InkSurface {
     const o = this.editing;
     if (!o) return;
     this.editing = null;
+    const geom = this.editGeom; // moved or resized while open
+    this.editGeom = false;
     const box = this.editorBox;
     this.editorBox = null;
     if (o.type === 'text' && this.textEditor) {
@@ -1657,8 +1678,8 @@ export class InkSurface {
         if (empty) {
           this.data.objects = this.data.objects.filter((x) => x.id !== o.id);
           if (!o.fresh) { this.data.tomb.push(o.id); this.changed(); } else this.undoStack.pop();
-        } else if (JSON.stringify(doc) !== JSON.stringify(o.doc) || o.fresh) {
-          if (!o.fresh) this.snapshot();
+        } else if (JSON.stringify(doc) !== JSON.stringify(o.doc) || o.fresh || geom) {
+          if (!o.fresh && !geom) this.snapshot();
           const i = this.data.objects.findIndex((x) => x.id === o.id);
           if (i >= 0) this.data.objects[i] = { ...strip(o), doc, h: domH, t: Date.now() };
           this.changed();

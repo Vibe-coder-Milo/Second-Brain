@@ -2,7 +2,7 @@
 // your notes live in encrypted on-device storage, not in this cache.
 // Bump VERSION whenever app files change.
 
-const VERSION = 'sb-v24';
+const VERSION = 'sb-v25';
 const SHELL = [
   './',
   './index.html',
@@ -57,6 +57,7 @@ const SHELL = [
   './js/handwriting.js',
   './js/icons.js',
   './js/images.js',
+  './js/clipimages.js',
   './js/markdown.js',
   './js/mapassist.js',
   './js/mapdata.js',
