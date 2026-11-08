@@ -1,4 +1,5 @@
-// Tasks from every note, typed or handwritten, by date or by note.
+// Tasks from every note, typed or handwritten, by date, by note or by region
+// (the menu's region lines open this screen showing just one region).
 
 import { html, raw, $, toast, debounce } from '../util.js';
 import * as V from '../vault.js';
@@ -10,7 +11,9 @@ import { allTasks, addTaskToDaily, isoToday, addDays, isoOf } from '../notework.
 import { taskRowHtml, bindTaskRows } from './today.js';
 
 export function mount(el, params, ctx) {
-  let mode = params.by === 'note' ? 'note' : (state.device?.tasksBy || 'date');
+  const MODES = ['date', 'note', 'region'];
+  let mode = MODES.includes(params.by) ? params.by : (MODES.includes(state.device?.tasksBy) ? state.device.tasksBy : 'date');
+  let only = params.region || null; // one region from the menu ('none' = no region)
   let due = null;
   let showDone = false;
 
@@ -32,11 +35,27 @@ export function mount(el, params, ctx) {
     const today = isoToday();
     const all = allTasks();
     const open = all.filter((t) => !t.checked);
-    const late = open.filter((t) => t.due && t.due < today).length;
+    const dueN = open.filter((t) => t.due && t.due <= today).length;
     const weekAgo = Date.now() - 7 * 86400000;
     const done = all.filter((t) => t.checked && (t.doneAt || 0) >= weekAgo).sort((a, b) => (b.doneAt || 0) - (a.doneAt || 0));
     let body;
-    if (mode === 'date') {
+    if (mode === 'region') {
+      // Regions in their usual order, then tasks in notes with no region (inbox, daily notes).
+      const regionKey = (n) => (n.inbox || !n.region ? 'none' : n.region);
+      const rows = [...state.config.regions.map((r) => ({ id: r.id, name: r.name, dot: regionColors(r).dot })), { id: 'none', name: 'No region', dot: regionColors(null).dot }]
+        .filter((r) => !only || r.id === only);
+      const byDue = (a, b) => (a.due ? 0 : 1) - (b.due ? 0 : 1) || String(a.due).localeCompare(String(b.due)) || b.note.updatedAt - a.note.updatedAt;
+      body = rows.map((r) => ({ ...r, items: open.filter((t) => regionKey(t.note) === r.id).sort(byDue) })).filter((r) => r.items.length).map((r) => {
+        const d = r.items.filter((t) => t.due && t.due <= today).length;
+        return html`<section class="task-group" aria-labelledby="tg-r-${r.id}">
+        <h2 class="tg-h region" id="tg-r-${r.id}"><span class="dot lg" style="background:${r.dot}"></span>${r.name}<span class="tg-n">${r.items.length} to do</span>${d ? html`<span class="due-count">${d} due</span>` : ''}</h2>
+        <ul class="task-list">${r.items.map((t) => raw(String(taskRowHtml(t, { today }))))}</ul></section>`;
+      });
+      if (only) {
+        const name = only === 'none' ? 'No region' : state.config.regions.find((r) => r.id === only)?.name || 'This region';
+        body = [html`<p class="tasks-only">Showing ${name} only. <button type="button" class="link-btn" data-all-regions>Show all regions</button></p>`, ...body];
+      }
+    } else if (mode === 'date') {
       body = groups(all, today).map((g) => html`<section class="task-group" aria-labelledby="tg-${g.id}">
         <h2 class="tg-h ${g.id === 'late' ? 'late' : ''}" id="tg-${g.id}">${g.name}</h2>
         <ul class="task-list">${g.items.map((t) => raw(String(taskRowHtml(t, { today }))))}</ul></section>`);
@@ -53,10 +72,11 @@ export function mount(el, params, ctx) {
     }
     el.innerHTML = `${html`<div class="page tasks-page">
       <div class="page-head">
-        <div><h1 class="page-title">Tasks</h1><p class="page-sub">From every note, typed or handwritten${late ? html`, <span class="late-text">${late} late</span>` : ''}</p></div>
+        <div><h1 class="page-title">Tasks</h1><p class="page-sub">From every note, typed or handwritten${dueN ? html`, <span class="late-text">${dueN} due</span>` : ''}</p></div>
         <div class="seg" role="radiogroup" aria-label="Group tasks">
           <button type="button" role="radio" aria-checked="${mode === 'date' ? 'true' : 'false'}" data-mode="date">By date</button>
           <button type="button" role="radio" aria-checked="${mode === 'note' ? 'true' : 'false'}" data-mode="note">By note</button>
+          <button type="button" role="radio" aria-checked="${mode === 'region' ? 'true' : 'false'}" data-mode="region">By region</button>
         </div>
       </div>
       <form class="quick-task big" id="tk-add" novalidate>
@@ -69,8 +89,10 @@ export function mount(el, params, ctx) {
         <ul class="task-list">${done.map((t) => raw(String(taskRowHtml(t, { today }))))}</ul></details>` : ''}
     </div>`}`;
     el.querySelectorAll('[data-mode]').forEach((b) => {
-      b.onclick = () => { mode = b.dataset.mode; V.updateDevice({ tasksBy: mode }).catch(() => {}); draw(); };
+      b.onclick = () => { mode = b.dataset.mode; only = null; V.updateDevice({ tasksBy: mode }).catch(() => {}); draw(); };
     });
+    const allR = el.querySelector('[data-all-regions]');
+    if (allR) allR.onclick = () => { only = null; ctx.navigate('#/tasks?by=region', { replace: true, silent: true }); draw(); };
     $('#tk-due', el).onclick = async (e) => { const d = await datePicker(e.currentTarget, due); if (d !== undefined) { due = d; draw(); $('#tk-in', el)?.focus(); } };
     $('#tk-add', el).onsubmit = async (e) => {
       e.preventDefault();
@@ -94,7 +116,7 @@ export function mount(el, params, ctx) {
     if (typing !== null) { const i = $('#tk-in', el); i.value = typing; i.focus(); }
   }, 250);
   return {
-    update(p) { if (p.by) mode = p.by; draw(); },
+    update(p) { if (MODES.includes(p.by)) mode = p.by; only = p.region || null; draw(); },
     onEvent(evt) { if (['note', 'delete', 'remote', 'sealed', 'page'].includes(evt.type)) soon(); },
     destroy() { gone = true; },
   };

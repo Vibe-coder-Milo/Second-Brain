@@ -20,6 +20,27 @@ export const PALETTE = {
   amber: { light: ['#B8860B', '#7D5A05'], dark: ['#D9A92E', '#ECCB7A'] },
   moss: { light: ['#4F7F3A', '#355A26'], dark: ['#78A862', '#AFCF9F'] },
   slate: { light: ['#5F7486', '#3E4F5E'], dark: ['#8EA2B3', '#BFCCD7'] },
+  // Added 8 Nov 2026. Text colours pass 4.5:1 on the page in both themes (5.9 or more).
+  coral: { light: ['#D0664A', '#9A4027'], dark: ['#E88B70', '#F3B9A8'] },
+  tangerine: { light: ['#D77A1F', '#8F4C0B'], dark: ['#EE9B48', '#F6C48F'] },
+  gold: { light: ['#A8901A', '#685807'], dark: ['#CDB33E', '#E5D485'] },
+  lime: { light: ['#6E9A23', '#466510'], dark: ['#97C44A', '#C4E08F'] },
+  emerald: { light: ['#2E9358', '#1B643B'], dark: ['#4FBF7E', '#94DDB2'] },
+  mint: { light: ['#3A9E8A', '#22685A'], dark: ['#62C6B1', '#A5E2D5'] },
+  sky: { light: ['#3C93C9', '#20628A'], dark: ['#66B4E3', '#A7D5F0'] },
+  navy: { light: ['#34508F', '#223766'], dark: ['#6F8CCB', '#ADC0E6'] },
+  lavender: { light: ['#8C7FC9', '#574B94'], dark: ['#ABA1E0', '#D1CBF0'] },
+  magenta: { light: ['#B0469E', '#7F2C72'], dark: ['#D271C2', '#EAAFE1'] },
+  cherry: { light: ['#C0394B', '#8E2333'], dark: ['#E2687A', '#F2A9B4'] },
+  cocoa: { light: ['#8B5E3C', '#5F3E25'], dark: ['#B98A66', '#DCC0AA'] },
+  graphite: { light: ['#5A6069', '#33383F'], dark: ['#9AA0A8', '#C9CDD2'] },
+};
+// Names for the colour picker, in the order it shows them (warm to cool, then greys).
+export const REGION_COLOUR_NAMES = {
+  cherry: 'Cherry', brick: 'Brick', coral: 'Coral', tangerine: 'Tangerine', ochre: 'Ochre', amber: 'Amber', gold: 'Gold',
+  olive: 'Olive', lime: 'Lime', moss: 'Moss', emerald: 'Emerald', sea: 'Sea green', mint: 'Mint', teal: 'Teal',
+  sky: 'Sky', chart: 'Chart blue', navy: 'Navy', indigo: 'Indigo', lavender: 'Lavender', plum: 'Plum', magenta: 'Magenta', rose: 'Rose',
+  cocoa: 'Cocoa', slate: 'Slate', graphite: 'Graphite',
 };
 export const UNSORTED = { light: ['#8A96A1', '#51606C'], dark: ['#7D8C99', '#A7B4B0'] };
 
@@ -133,6 +154,7 @@ export function normNote(n) {
     layout: kind === 'ink' && n.layout === 'scroll' ? 'scroll' : 'pages',
     // Pages with highlighter marks (null: not worked out yet; see highlights.js).
     hlPages: kind === 'ink' && Array.isArray(n.hlPages) ? n.hlPages : null,
+    hlCount: kind === 'ink' && Number.isFinite(n.hlCount) ? n.hlCount : null, // highlights (grouped as on the Highlights screen)
     editedOn: n.editedOn || null,
     // In Recently deleted since this time (and deleted with these others).
     binnedAt: Number(n.binnedAt) > 0 ? Number(n.binnedAt) : null,

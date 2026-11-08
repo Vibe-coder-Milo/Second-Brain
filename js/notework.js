@@ -4,6 +4,7 @@
 import { state } from './vault.js';
 import * as V from './vault.js';
 import { newNote, noteTasks, labelMap } from './model.js';
+import { groupStrokes } from './highlights.js';
 import { setTaskChecked, setTaskDue, mdSetTask, docToMarkdown, docTasks, docLabels, appendTask, emptyDoc, isoToday } from './doc.js';
 
 export { isoToday };
@@ -16,10 +17,11 @@ export async function inkSummary(n, pdfText = null) {
   const labels = [];
   const tasks = [];
   const hlPages = [];
+  let hlCount = 0;
   for (const [i, p] of n.pages.entries()) {
     let d;
     try { d = await V.loadPage(p.id); } catch { continue; }
-    if ((d.strokes || []).some((s) => s.t === 'hl')) hlPages.push(p.id);
+    if ((d.strokes || []).some((s) => s.t === 'hl')) { hlPages.push(p.id); hlCount += groupStrokes(d.strokes).length; }
     const texts = [];
     // Handwriting read on a device (see handwriting.js) comes first.
     const hand = (n.hw?.[p.id]?.lines || []).map((l) => l.t).filter(Boolean).join('\n');
@@ -36,7 +38,7 @@ export async function inkSummary(n, pdfText = null) {
     if (texts.length) parts.push(`${n.pages.length > 1 ? `### Page ${i + 1}\n\n` : ''}${texts.join('\n\n')}`);
   }
   const body = [parts.join('\n\n'), pdfText ?? n.pdfText ?? ''].filter(Boolean).join('\n\n');
-  return { body, labels, tasks, hlPages };
+  return { body, labels, tasks, hlPages, hlCount };
 }
 
 // Re-read a handwritten note's pages and save the summary if it changed.
@@ -45,7 +47,7 @@ export async function refreshInkSummary(id, { pdfText = null, touch = true } = {
   if (!n || n.kind !== 'ink') return null;
   const s = await inkSummary(n, pdfText);
   const cur = state.notes.get(id);
-  const same = cur.body === s.body && JSON.stringify(cur.labels) === JSON.stringify(s.labels) && JSON.stringify(cur.tasks) === JSON.stringify(s.tasks) && JSON.stringify(cur.hlPages) === JSON.stringify(s.hlPages);
+  const same = cur.body === s.body && JSON.stringify(cur.labels) === JSON.stringify(s.labels) && JSON.stringify(cur.tasks) === JSON.stringify(s.tasks) && JSON.stringify(cur.hlPages) === JSON.stringify(s.hlPages) && cur.hlCount === s.hlCount;
   if (same && !touch) return cur;
   return V.saveNote({ ...cur, ...s, ...(pdfText ? { pdfText } : {}) });
 }

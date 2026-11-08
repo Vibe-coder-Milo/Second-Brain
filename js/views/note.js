@@ -117,6 +117,7 @@ function mountTyped(el, params, ctx) {
         <div class="top-actions">
           ${wideBar ? '' : html`<button type="button" class="icon-btn bare" data-act="h-undo" aria-label="Undo">${icons.undo()}</button><button type="button" class="icon-btn bare" data-act="h-redo" aria-label="Redo">${icons.redo()}</button>`}
           ${compact ? '' : raw(focusButtonHtml())}
+          ${compact ? '' : html`<button type="button" class="btn btn-sm btn-ghost cts-btn" data-act="contents" aria-label="Contents and pages">${icons.lines({ size: 18 })}<span class="hide-sm">Contents</span></button>`}
           <button type="button" class="icon-btn bare" data-act="link" aria-label="Link to another note">${icons.link()}</button>
           ${compact ? html`<a class="icon-btn bare" href="#/note/${n.id}" aria-label="Open full note">${icons.external()}</a>` : ''}
           <button type="button" class="icon-btn bare" data-act="more" aria-label="More actions">${icons.more()}</button>
@@ -153,6 +154,12 @@ function mountTyped(el, params, ctx) {
     on('[data-act=back]', async () => { await flush(); ctx.back(); });
     on('[data-act=close]', async () => { await flush(); ctx.navigate('#/map', { replace: true }); });
     on('[data-act=toggle-edit]', () => (editing ? stopEditing() : startEditing()));
+    on('[data-act=contents]', async () => {
+      if (!editor) return;
+      const C = await import('./contents.js');
+      const btn = $('[data-act=contents]', el);
+      C.openContents(btn, { host: el, editor, note, flush: () => flush(), wide: isWide() || window.innerWidth >= 700 });
+    });
     on('[data-act=link]', () => linkTo());
     on('[data-act=focus]', () => toggleFocus());
     on('[data-act=h-undo]', () => { if (!editing) startEditing(); editor?.chain().focus().undo().run(); });

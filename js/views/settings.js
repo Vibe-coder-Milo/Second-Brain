@@ -4,11 +4,11 @@ import { html, raw, $, fmtAgo, toast, downloadText, isoDay } from '../util.js';
 import * as V from '../vault.js';
 import { state } from '../vault.js';
 import { meta } from '../db.js';
-import { PALETTE, TEXT_DEFAULT_COLORS } from '../model.js';
+import { PALETTE, TEXT_DEFAULT_COLORS, REGION_COLOUR_NAMES, regionColors } from '../model.js';
 import { FONT_IDS, TEXT_SIZES, TEXT_SIZE, fontCss } from '../fonts.js';
 import { passphraseStrength } from '../crypto.js';
 import { probe, syncNow, explainError } from '../sync.js';
-import { confirmSheet, openSheet } from '../ui.js';
+import { confirmSheet, openSheet, popover } from '../ui.js';
 import * as C from '../crypto.js';
 import * as B from '../deviceunlock.js';
 import { syncFields, readSyncFields } from './gate.js';
@@ -120,7 +120,7 @@ function bioSetup() {
   });
 }
 
-const COLOR_NAMES = { ochre: 'Ochre', sea: 'Sea green', chart: 'Chart blue', plum: 'Plum', brick: 'Brick', olive: 'Olive', teal: 'Teal', rose: 'Rose', indigo: 'Indigo', amber: 'Amber', moss: 'Moss', slate: 'Slate' };
+const COLOR_NAMES = REGION_COLOUR_NAMES;
 
 export function mount(main, params, ctx) {
   let editingSync = !state.device?.sync;
@@ -228,8 +228,7 @@ export function mount(main, params, ctx) {
         <h2 id="s-regions">Regions</h2>
         <p class="hint">The territories on your map. A region can only be removed once it’s empty.</p>
         ${state.config.regions.map((r, i) => html`<div class="region-edit">
-          <label class="sr-only" for="rc-${i}">Colour for ${r.name}</label>
-          <select id="rc-${i}" data-color="${i}" style="min-height:44px;font-size:14px">${Object.keys(PALETTE).map((k) => html`<option value="${k}" ${r.color === k ? raw('selected') : ''}>${COLOR_NAMES[k]}</option>`)}</select>
+          <button type="button" class="region-colour" data-color="${i}" aria-label="Colour for ${r.name}: ${COLOR_NAMES[r.color] || 'none'}. Change"><span class="dot lg" style="background:${regionColors(r).dot}"></span><span class="rc-name">${COLOR_NAMES[r.color] || 'Colour'}</span></button>
           <label class="sr-only" for="rn-${i}">Name</label>
           <input id="rn-${i}" type="text" value="${r.name}" data-name="${i}" style="min-height:44px">
           <button type="button" class="icon-btn bare" data-del="${i}" aria-label="Remove ${r.name}" ${counts.get(r.id) ? raw('disabled') : ''}>${icons.close({ size: 18 })}</button>
@@ -374,10 +373,22 @@ export function mount(main, params, ctx) {
     on('[data-act=unseal]', async () => { if (await ctx.unlockSealed()) draw(); });
     on('[data-act=reseal]', () => { V.lockSealed(); toast('Sealed notes locked'); draw(); });
 
-    main.querySelectorAll('[data-color]').forEach((sel) => {
-      sel.onchange = async () => {
-        const regions = state.config.regions.map((r, i) => (i === Number(sel.dataset.color) ? { ...r, color: sel.value } : r));
-        await V.saveConfig({ regions });
+    // Region colour: a grid of every colour, the ones other regions use marked.
+    main.querySelectorAll('[data-color]').forEach((btn) => {
+      btn.onclick = () => {
+        const idx = Number(btn.dataset.color);
+        const cur = state.config.regions[idx];
+        const taken = new Map(state.config.regions.filter((_, i) => i !== idx).map((r) => [r.color, r.name]));
+        const p = popover(btn, `${html`<div class="pop-head">Colour for ${cur.name}</div>
+          <div class="rc-grid" role="radiogroup" aria-label="Colour for ${cur.name}">${Object.keys(COLOR_NAMES).filter((k) => PALETTE[k]).map((k) => html`<button type="button" class="rc-swatch" role="radio" data-pick="${k}" aria-checked="${cur.color === k ? 'true' : 'false'}" aria-label="${COLOR_NAMES[k]}${taken.has(k) ? `, used by ${taken.get(k)}` : ''}" title="${COLOR_NAMES[k]}${taken.has(k) ? ` (${taken.get(k)})` : ''}"><span class="dot" style="background:${regionColors({ color: k }).dot}"></span>${taken.has(k) ? html`<span class="rc-used" aria-hidden="true"></span>` : ''}</button>`)}</div>
+          <p class="hint" style="margin:8px 4px 2px">A small mark means another region uses it.</p>`}`, { label: `Colour for ${cur.name}`, width: 276 });
+        p.el.querySelectorAll('[data-pick]').forEach((b) => {
+          b.onclick = async () => {
+            p.close();
+            const regions = state.config.regions.map((r, i) => (i === idx ? { ...r, color: b.dataset.pick } : r));
+            await V.saveConfig({ regions });
+          };
+        });
       };
     });
     main.querySelectorAll('[data-name]').forEach((inp) => {

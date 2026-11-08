@@ -1,6 +1,6 @@
 import os, sys
 from playwright.sync_api import sync_playwright
-BASE = 'http://127.0.0.1:8765/'; PASS = 'harbour lights fold four'
+BASE = os.environ.get('SB_BASE', 'http://127.0.0.1:8765/'); PASS = 'harbour lights fold four'
 def run(steps, vp=(390,844), mob=True):
     with sync_playwright() as p:
         b = p.chromium.launch()

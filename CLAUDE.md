@@ -76,7 +76,7 @@ through a private GitHub repo. Everything is encrypted on the device.
   - models: transformers and onnxruntime (`ort/`) with the model files;
   - OCR: tesseract.
 - **Service worker** (`sw.js`):
-  - Bump `VERSION` (`sb-vN`; currently `sb-v25`) on every release.
+  - Bump `VERSION` (`sb-vN`; currently `sb-v26`) on every release.
   - Add every new JS/CSS file to `SHELL`, or it won't work offline.
   - The app shows an update bar (`js/appupdate.js`).
 - **Views:** `js/views/*.js` export `mount(main, params, ctx)`, returning
@@ -425,10 +425,35 @@ the test's own thread and `time.sleep` would stall it).
    inserted while another is selected goes after it (it used to replace it,
    with Insert > Image too). `t6i`.
 
-Asked the same day, waiting for the owner to pick from a mockup: counts
-beside Today, Tasks (by region), Labels and Highlights in the menu; a
-contents page for long typed notes. (The typed-note Outline exists but only
-at >= 1180 px and never inside a notebook, so the owner hasn't seen it.)
+### 8 Nov 2026, later (`sb-v26`, mockup approved: "both")
+
+1. **Numbers in the menu** (`js/counts.js`, `views/shell.js`): "N due" on
+   Today and Tasks (the same number: open tasks due today or earlier; the
+   owner asked for "due", not "late"), tasks left, one line per region with
+   tasks under Tasks (links to `#/tasks?by=region&region=<id|none>`), labelled
+   spots and highlights. `menuCounts()` is memoised by `vault.rev` + day,
+   with each note's numbers in a `WeakMap` keyed by the note object (a saved
+   note is a new object), so only changed notes are recounted. Handwritten
+   highlights come from `n.hlCount` (worked out in `inkSummary`, fixed up when
+   Highlights opens), else `hlPages.length`. `.due-count` (not `.due-pill`,
+   which task rows use). `t6j`.
+2. **Tasks by region** (`views/tasks.js`): a third grouping, regions in
+   their order then "No region" (inbox and daily notes), each with "N to do"
+   and "N due"; `region` param shows one region with "Show all regions".
+3. **25 region colours** (`PALETTE`, `REGION_COLOUR_NAMES` in `model.js`):
+   13 added, text colours >= 5.9:1 in both themes. Settings shows a grid of
+   dots (popover) instead of a list of names; other regions' colours are
+   marked. `t6j`.
+4. **Contents and Pages for typed notes** (`views/contents.js`, button in
+   the note's top bar): headings with reading time (to the next heading at
+   the same level or above), the one you're in marked, jumps that land under
+   the sticky toolbar (instant for long jumps, smooth for short), Back to top,
+   To the end. Pages reuses the PDF export's layout (`typedPages(n, { px })`
+   in `export.js`; each canvas has `range` [from, to, total]); page i maps to
+   the note on screen by its share of the span from `#n-head` to the end of
+   `#n-rich`, so labels and jumps are close, not exact, on narrow screens.
+   Works in a notebook's pane (it finds the scrolling box). The old Outline
+   panel stays on very wide screens. `t6j`.
 
 ## Ideas noted, not requested
 

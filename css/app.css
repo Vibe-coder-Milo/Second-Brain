@@ -215,7 +215,11 @@ select { appearance: none; -webkit-appearance: none; padding-right: 36px; backgr
 .side-link .grow { flex: 1; }
 .side-section h2 { margin: 0 10px 6px; font-size: 13px; font-weight: 600; color: var(--muted); }
 .side-region { min-height: 38px; }
-.side-region .count { font-size: 13px; color: var(--muted); }
+.side-region .count, .side-nav .count { font-size: 13px; color: var(--muted); font-weight: 400; }
+.due-count { display: inline-block; height: 19px; padding: 0 8px; border-radius: 10px; background: var(--ink); color: var(--on-ink); font-size: 12px; font-weight: 700; line-height: 20px; white-space: nowrap; }
+.side-nav .due-count + .count { margin-left: -4px; }
+.side-sub { margin: 0 0 4px 30px; padding-left: 8px; border-left: 1px solid var(--line); display: flex; flex-direction: column; }
+.side-link.side-subl { min-height: 36px; gap: 10px; font-size: 14px; padding: 0 8px; }
 .side-foot { margin-top: auto; display: flex; flex-direction: column; gap: 12px; }
 .sync-line { margin: 0 4px; display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); background: none; border: 0; padding: 4px 0; cursor: pointer; text-align: left; }
 
@@ -385,7 +389,14 @@ select { appearance: none; -webkit-appearance: none; padding-right: 36px; backgr
 .settings ol.help { margin: 0; padding-left: 20px; font-size: 14px; color: var(--muted); display: flex; flex-direction: column; gap: 4px; }
 .status-line { display: flex; align-items: center; gap: 8px; font-size: 14px; }
 .status-line.error { color: var(--danger); }
-.region-edit { display: grid; grid-template-columns: 110px minmax(0, 1fr) auto; gap: 8px; align-items: center; }
+.region-edit { display: grid; grid-template-columns: 132px minmax(0, 1fr) auto; gap: 8px; align-items: center; }
+.region-colour { min-height: 44px; padding: 0 10px; display: flex; align-items: center; gap: 8px; border: 1px solid var(--field); border-radius: 10px; background: var(--surface); color: var(--ink); font: inherit; font-size: 14px; cursor: pointer; text-align: left; }
+.region-colour .rc-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rc-grid { display: grid; grid-template-columns: repeat(5, 44px); gap: 6px; justify-content: center; padding: 4px; }
+.rc-swatch { position: relative; width: 44px; height: 44px; border: 0; border-radius: 12px; background: none; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; padding: 0; }
+.rc-swatch .dot { width: 28px; height: 28px; }
+.rc-swatch[aria-checked='true'] { box-shadow: inset 0 0 0 2.5px var(--ink); }
+.rc-used { position: absolute; right: 7px; bottom: 7px; width: 9px; height: 9px; border-radius: 50%; background: var(--surface); border: 2px solid var(--muted); box-sizing: border-box; }
 .btn-row { display: flex; gap: 10px; flex-wrap: wrap; }
 
 /* ---------- Toast ---------- */

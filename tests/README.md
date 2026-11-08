@@ -59,9 +59,10 @@ python3 t5r.py phone         # one test directly (needs the server: python3 serv
 | t6g | Notebook lists newest first (sub-notes too); tap a typed note's title to change it, again and again, in the notebook pane and on its own; a text box dragged out on a handwritten page sits where drawn and wraps inside it (long words too); a tapped box stays on screen when zoomed in |
 | t6h | Emptying Recently deleted on one device (two devices, mock GitHub): it syncs by itself within seconds, at once if the app is put away, page files go too, and the other device's Recently deleted empties at its next sync |
 | t6i | Text boxes move with the text tool (drag; a tap still opens one) and by their grip while typing, saved and undoable; pictures pasted with Ctrl/Cmd+V or Paste a picture land in typed notes (cursor, or the end while reading), Today's note, handwritten pages and whiteboards, never opening Capture; nothing replaced |
+| t6j | Menu numbers ("N due" on Today and Tasks, tasks left, a line per region, labels, highlights; they follow a tick), Tasks by region (one region from the menu), 25 region colours in a grid, Contents (headings, reading times, you're here, jump, top, end) and Pages (printed pages, tap to go) in a long typed note, on its own and in a notebook |
 | t6d | Highlights: words under neat and sloppy highlights (PDF, handwriting, typed), colours, remove a slip, lasso "Add to highlights" |
 
-Helpers: `dbg.py` (`run(steps, vp, mob)` creates a vault and runs steps),
+Helpers: `dbg.py` (`run(steps, vp, mob)` creates a vault and runs steps; `SB_BASE` points it at another copy of the app),
 `mockgh.py` (in-memory GitHub Git Data API), `calib.py`, `hershey_ink.py`
 (handwriting-like strokes).
 

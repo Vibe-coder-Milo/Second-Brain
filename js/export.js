@@ -168,7 +168,9 @@ async function inkCanvases(n) {
   return out;
 }
 
-async function typedCanvases(n) {
+// px: the width of each page picture (smaller for the pages view of a long note).
+// Each canvas carries `range`: [from, to, total] in layout units, to jump to it.
+async function typedCanvases(n, { px = PX } = {}) {
   const { drawRichText, fileImageReady, setInkTone } = await import('./editor/inkdraw.js');
   const { noteDoc } = await import('./editor/rich.js');
   const doc = noteDoc(n);
@@ -213,14 +215,14 @@ async function typedCanvases(n) {
   };
   const probe = document.createElement('canvas').getContext('2d');
   const total = Math.max(A4_H, Math.ceil(layout(probe)));
-  const k = PX / PAGE_W;
+  const k = px / PAGE_W;
   const pageH = Math.round(A4_H * k);
   const pad = 50; // top and bottom margin on continuation pages, in page units
   // Draw only the slice [from, to) of the note, offset to `top` pixels.
   const paint = (ctx, from, to, top) => {
     ctx.save();
     ctx.beginPath();
-    ctx.rect(0, top, PX, (to - from) * k);
+    ctx.rect(0, top, px, (to - from) * k);
     ctx.clip();
     ctx.setTransform(k, 0, 0, k, 0, top - from * k);
     layout(ctx);
@@ -231,7 +233,7 @@ async function typedCanvases(n) {
     const span = Math.min(240, end - min);
     if (span <= 4) return end;
     const c = document.createElement('canvas');
-    c.width = PX;
+    c.width = px;
     c.height = Math.ceil(span * k);
     const ctx = c.getContext('2d', { willReadFrequently: true });
     ctx.fillStyle = '#FFFFFF';
@@ -256,12 +258,13 @@ async function typedCanvases(n) {
     let end = Math.min(total, y + room);
     if (end < total) end = blankAbove(end, y + room * 0.6);
     const c = document.createElement('canvas');
-    c.width = PX;
+    c.width = px;
     c.height = pageH;
     const ctx = c.getContext('2d');
     ctx.fillStyle = '#FFFFFF';
     ctx.fillRect(0, 0, c.width, c.height);
     paint(ctx, y, end, Math.round(top * k));
+    c.range = [y, end, total];
     out.push(c);
     y = end;
   }
@@ -274,6 +277,7 @@ async function boardCanvases(n) {
   return [await renderBoardCanvas(data, { widthPx: 2000 })];
 }
 
+export const typedPages = (n, opts) => typedCanvases(n, opts);
 export const noteCanvases = (n) => (n.kind === 'ink' ? inkCanvases(n) : n.kind === 'board' ? boardCanvases(n) : typedCanvases(n));
 
 async function coverCanvas(nb) {

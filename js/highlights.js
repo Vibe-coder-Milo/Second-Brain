@@ -288,8 +288,8 @@ export async function gather(notes, { onProgress } = {}) {
         if (gs.length) withHl.push(page.id);
         for (const g of gs) items.push({ kind: 'page', note: n, page, pageNo: n.pages.indexOf(page) + 1, data, ...g });
       }
-      // An older note: remember which pages have highlights, so next time only they open.
-      if (!known) { const cur = state.notes.get(n.id); if (cur) await V.saveNote({ ...cur, hlPages: withHl }, { touch: false }).catch(() => {}); }
+      // An older note: remember its highlighted pages and how many (the menu shows the count).
+      if (!known || n.hlCount !== items.length) { const cur = state.notes.get(n.id); if (cur) await V.saveNote({ ...cur, hlPages: withHl, hlCount: items.length }, { touch: false }).catch(() => {}); }
     } else if (n.doc) {
       for (const t of typedHighlights(n.doc)) items.push({ kind: 'typed', note: n, ...t });
     }

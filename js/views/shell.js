@@ -2,9 +2,9 @@
 
 import { html, fmtAgo } from '../util.js';
 import { state, sealedState, binItems } from '../vault.js';
-import { regionColors, noteTasks } from '../model.js';
-import { isoToday } from '../doc.js';
+import { regionColors } from '../model.js';
 import { icons } from '../icons.js';
+import { menuCounts } from '../counts.js';
 
 export function renderShell(root) {
   root.innerHTML = `${html`<div class="shell">
@@ -27,16 +27,9 @@ export function syncSummary() {
   }
 }
 
-let lateCache = { at: 0, n: 0 };
-function lateTasks() {
-  // Cheap enough to work out, but don't do it on every keystroke.
-  if (Date.now() - lateCache.at < 3000) return lateCache.n;
-  const today = isoToday();
-  let n = 0;
-  for (const note of state.notes.values()) for (const t of noteTasks(note)) if (!t.checked && t.due && t.due < today) n++;
-  lateCache = { at: Date.now(), n };
-  return n;
-}
+// "3 due": tasks due today or earlier and not ticked. Today and Tasks show the same.
+const duePill = (n) => (n ? html`<span class="due-count">${n} due</span>` : '');
+const countOf = (n) => (n ? html`<span class="count">${n}</span>` : '');
 
 // What Recently deleted lists (notes deleted with a notebook count with it).
 const binCount = () => binItems().length;
@@ -50,20 +43,25 @@ export function refreshChrome(route) {
   const sealed = sealedState();
   const sync = syncSummary();
   const badge = inboxCount ? html`<span class="badge">${inboxCount}</span>` : '';
-  const late = lateTasks();
+  const mc = menuCounts();
+  // Tasks to do in each region, in the order of the regions (then the rest).
+  const taskRegions = [...state.config.regions.map((r) => ({ id: r.id, name: r.name, dot: regionColors(r).dot })), { id: '', name: 'No region', dot: regionColors(null).dot }]
+    .map((r) => ({ ...r, ...(mc.byRegion.get(r.id) || { open: 0, due: 0 }) }))
+    .filter((r) => r.open);
 
   const side = document.getElementById('sidebar');
   if (side) {
     side.innerHTML = `${html`
       <p class="brand">Second brain</p>
       <nav class="side-nav" aria-label="Main">
-        <a class="side-link" href="#/today" aria-current="${at('today')}">${icons.today()}Today</a>
+        <a class="side-link" href="#/today" aria-current="${at('today')}">${icons.today()}<span class="grow">Today</span>${duePill(mc.due)}</a>
         <a class="side-link" href="#/map" aria-current="${at('map')}">${icons.map()}Map</a>
         <a class="side-link" href="#/inbox" aria-current="${at('inbox')}">${icons.inbox()}<span class="grow">Inbox</span>${badge}</a>
         <a class="side-link" href="#/notebooks" aria-current="${at('notebooks')}">${icons.notebooks()}Notebooks</a>
-        <a class="side-link" href="#/tasks" aria-current="${at('tasks')}">${icons.tasks()}<span class="grow">Tasks</span>${late ? html`<span class="late-count">${late} late</span>` : ''}</a>
-        <a class="side-link" href="#/labels" aria-current="${at('labels')}">${icons.tag()}Labels</a>
-        <a class="side-link" href="#/highlights" aria-current="${at('highlights')}">${icons.highlighter()}Highlights</a>
+        <a class="side-link" href="#/tasks" aria-current="${at('tasks')}">${icons.tasks()}<span class="grow">Tasks</span>${duePill(mc.due)}${countOf(mc.open)}</a>
+        ${taskRegions.length ? html`<div class="side-sub" role="group" aria-label="Tasks by region">${taskRegions.map((r) => html`<a class="side-link side-subl" href="#/tasks?by=region&amp;region=${r.id || 'none'}" aria-label="${r.name}: ${r.open} to do${r.due ? `, ${r.due} due` : ''}"><span class="dot" style="background:${r.dot}"></span><span class="grow">${r.name}</span><span class="count">${r.open}</span></a>`)}</div>` : ''}
+        <a class="side-link" href="#/labels" aria-current="${at('labels')}">${icons.tag()}<span class="grow">Labels</span>${countOf(mc.labels)}</a>
+        <a class="side-link" href="#/highlights" aria-current="${at('highlights')}">${icons.highlighter()}<span class="grow">Highlights</span>${countOf(mc.highlights)}</a>
         <a class="side-link" href="#/notes" aria-current="${at('notes')}">${icons.notes()}All notes</a>
         <a class="side-link" href="#/ask" aria-current="${at('ask')}">${icons.ask()}Ask Claude</a>
         <a class="side-link" href="#/settings" aria-current="${at('settings')}">${icons.settings()}Settings</a>
