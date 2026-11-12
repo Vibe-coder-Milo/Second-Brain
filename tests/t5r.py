@@ -93,10 +93,10 @@ def steps(page):
     page.screenshot(path=f'{OUT}/r-pill-{tag}.png')
     page.wait_for_timeout(600); here = info()['live']
     # Switch to one page at a time and back.
-    page.locator('[data-act=pages]').click(); page.wait_for_selector('[data-view=single]'); page.locator('[data-view=single]').click(); page.wait_for_timeout(700)
+    page.locator('[data-act=pages]').click(); page.wait_for_selector('[data-how=next]'); page.locator('[data-how=next]').click(); page.wait_for_timeout(700)
     single = J("({ stack: !!document.querySelector('.ink-stack'), next: !!document.querySelector('[data-pg=next]'), sub: document.querySelector('#iv-sub').textContent })")
     print('one at a time:', single); assert not single['stack'] and single['next']
-    page.locator('[data-act=pages]').click(); page.wait_for_selector('[data-view=continuous]'); page.locator('[data-view=continuous]').click(); page.wait_for_timeout(900)
+    page.locator('[data-act=pages]').click(); page.wait_for_selector('[data-how=down]'); page.locator('[data-how=down]').click(); page.wait_for_timeout(900)
     st = info(); print('one under another again:', st); assert st['n'] == 14 and st['live'] == here
     # Add page at the end.
     page.locator('.ink-pagenav [data-pg=add]').click(); page.wait_for_timeout(900)

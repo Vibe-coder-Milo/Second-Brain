@@ -33,7 +33,7 @@ def steps(page):
         scribble(pg['x'] + 150, pg['y'] + 300); page.wait_for_timeout(900)
         st = strokes(); print('after using saved pen', st[-1]); assert st[-1] == ['brush', 1, 3, '#B0413E']
     # endless scroll
-    page.locator('[data-act=pages]').click(); page.wait_for_selector('[data-layout=scroll]'); page.locator('[data-layout=scroll]').click(); page.wait_for_timeout(500)
+    page.locator('[data-act=pages]').click(); page.wait_for_selector('[data-how=endless]'); page.locator('[data-how=endless]').click(); page.wait_for_timeout(500)
     assert J(f"import('./js/vault.js').then(V => V.state.notes.get('{nid}').layout)") == 'scroll'
     h0 = J("document.querySelector('.ink-page').offsetHeight")
     J("(() => { const s = document.querySelector('.ink-scroll'); s.scrollTop = s.scrollHeight; })()"); page.wait_for_timeout(400)

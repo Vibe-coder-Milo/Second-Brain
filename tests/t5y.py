@@ -28,7 +28,7 @@ def steps(page):
     assert info['withPdf'] == 3 and info['files'] == 1 and info['ns'] == [1, 2, 3] and info['type'] == 'application/pdf' and info['head'] == '%PDF-'
     assert info['picW'] and info['picW'] <= 1300, 'the page picture is small'
     # Go to the first PDF page (one at a time keeps it simple), zoom to 3x.
-    page.locator('[data-act=pages]').click(); page.wait_for_selector('[data-view=single]'); page.locator('[data-view=single]').click(); page.wait_for_timeout(700)
+    page.locator('[data-act=pages]').click(); page.wait_for_selector('[data-how=next]'); page.locator('[data-how=next]').click(); page.wait_for_timeout(700)
     if page.locator('.sheet').count(): page.keyboard.press('Escape'); page.wait_for_timeout(300)
     first = J(f"import('./js/vault.js').then(V => V.state.notes.get('{nid}').pages.findIndex(p => p.pdf))")
     for _ in range(4):

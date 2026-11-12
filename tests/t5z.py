@@ -73,7 +73,7 @@ def steps(page):
 
     assert J("!!document.querySelector('.ink-stack')"), 'opens in the continuous view'
     check('continuous')
-    page.locator('[data-act=pages]').click(); page.wait_for_selector('[data-view=single]'); page.locator('[data-view=single]').click(); page.wait_for_timeout(700)
+    page.locator('[data-act=pages]').click(); page.wait_for_selector('[data-how=next]'); page.locator('[data-how=next]').click(); page.wait_for_timeout(700)
     if page.locator('.sheet').count(): page.keyboard.press('Escape'); page.wait_for_timeout(300)
     check('single')
     # Writing still works after zooming: a stroke lands where it's drawn.

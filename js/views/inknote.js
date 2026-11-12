@@ -45,7 +45,8 @@ export function mount(el, params, ctx) {
   // Continuous view: every page one under another (see pagestack.js).
   let stack = null;
   const fresh = new Map(); // pageId -> newest data of pages written on and left, until saved
-  const continuousOn = () => (state.device?.pageView || 'continuous') === 'continuous';
+  const continuousOn = () => (note()?.pageView || state.device?.pageView || 'continuous') === 'continuous';
+  const hasBacked = (n) => n.pages.some((p) => p.bg || p.pdf); // PDF or photo pages can't be endless
   const pageData = async (pid) => fresh.get(pid) || V.loadPage(pid);
   const cachedData = (pid) => fresh.get(pid) || V.peekPage(pid);
   // The last page open in each note, on this device.
@@ -136,7 +137,7 @@ export function mount(el, params, ctx) {
           <button type="button" class="icon-btn bare show-sm-flex" data-act="redo" aria-label="Redo">${icons.redo()}</button>
           <button type="button" class="icon-btn bare" data-act="replay" aria-label="Replay recordings" aria-pressed="false" ${n.recordings.length ? '' : raw('hidden')}>${icons.headphones()}</button>
           ${raw(focusButtonHtml())}
-          <button type="button" class="icon-btn bare" data-act="pages" aria-label="All pages">${icons.pages()}</button>
+          <button type="button" class="${isWide() ? 'btn btn-sm btn-ghost pages-btn' : 'icon-btn bare'}" data-act="pages" aria-label="All pages">${icons.pages()}${isWide() ? html`<span>Pages</span>` : ''}</button>
           <button type="button" class="icon-btn bare hide-sm" data-act="link" aria-label="Link to another note">${icons.link()}</button>
           <button type="button" class="icon-btn bare hide-sm" data-act="export" aria-label="Export as PDF">${icons.share()}</button>
           <button type="button" class="icon-btn bare" data-act="more" aria-label="More actions">${icons.more()}</button>
@@ -275,6 +276,24 @@ export function mount(el, params, ctx) {
     if (!page || h <= page.h) return;
     await V.saveNote({ ...n, pages: n.pages.map((p, k) => (k === i ? { ...p, h } : p)) });
     if (i === pageIdx) surface?.setPageHeight(h);
+    drawPageBar();
+  }
+  // The three ways pages show: scroll down, next page, endless.
+  const howNow = (n) => (n.layout === 'scroll' ? 'endless' : (n.pageView || state.device?.pageView || 'continuous') === 'single' ? 'next' : 'down');
+  const howOptions = (n) => [
+    { id: 'down', name: 'Scroll down', hint: 'A4 pages, one under another, like a PDF reader.' },
+    { id: 'next', name: 'Next page', hint: 'A4 pages, one at a time. Turn them with Previous and Next.' },
+    ...(hasBacked(n) && n.layout !== 'scroll' ? [] : [{ id: 'endless', name: 'Endless', hint: 'One long page that grows as you write. PDFs print it as A4 pieces.' }]),
+  ];
+  async function setHow(how) {
+    const n = note();
+    if (!n || how === howNow(n) || (how === 'endless' && hasBacked(n))) return;
+    if (how === 'endless') { await setLayout('scroll'); return; }
+    const pageView = how === 'next' ? 'single' : 'continuous';
+    if (n.layout === 'scroll') await V.saveNote({ ...n, layout: 'pages', pageView }, { touch: false });
+    else await V.saveNote({ ...n, pageView }, { touch: false });
+    syncStack();
+    await showPage(pageIdx);
     drawPageBar();
   }
   async function setLayout(layout) {
@@ -1030,19 +1049,16 @@ export function mount(el, params, ctx) {
     return out;
   }
 
-  function pagesSheet() {
+  function pagesSheet({ focusLayout = false } = {}) {
     const n = note();
     const here = n.pages[pageIdx] && !n.pages[pageIdx].bg ? n.pages[pageIdx] : n.pages.find((p) => !p.bg);
     const curPaper = { paper: here?.paper || state.device?.paper || 'dotted', color: here?.color || state.device?.paperColor || 'white' };
     const s = openSheet(`${html`<div class="sheet-head"><span class="side"></span><h2>${displayTitle(n)}, ${n.pages.length} page${n.pages.length === 1 ? '' : 's'}</h2><span class="side"><button type="button" class="btn btn-ghost btn-sm" data-close>Done</button></span></div>
       <ul class="page-grid" id="pg-grid">${n.pages.map((p, i) => html`<li><button type="button" class="page-thumb ${i === pageIdx ? 'current' : ''}" data-i="${i}" aria-label="Page ${i + 1}${i === pageIdx ? ', current page' : ''}${p.bookmark ? ', bookmarked' : ''}"><canvas data-thumb="${i}" width="10" height="14"></canvas>${p.bookmark ? html`<span class="bm">${icons.bookmark({ size: 16 })}</span>` : ''}</button><button type="button" class="pg-more" data-pm="${i}" aria-label="Page ${i + 1} options">${i + 1} ${icons.more({ size: 16 })}</button></li>`)}
         <li><button type="button" class="page-thumb add" data-add>${icons.plus({ size: 24 })}<span>Add page</span></button></li></ul>
-      <section class="paper-pick"><h3>Layout</h3>
-        <div class="chips" role="radiogroup" aria-label="Layout"><button type="button" class="chip" role="radio" aria-checked="${n.layout !== 'scroll' ? 'true' : 'false'}" aria-pressed="${n.layout !== 'scroll' ? 'true' : 'false'}" data-layout="pages">A4 pages</button><button type="button" class="chip" role="radio" aria-checked="${n.layout === 'scroll' ? 'true' : 'false'}" aria-pressed="${n.layout === 'scroll' ? 'true' : 'false'}" data-layout="scroll">Endless scroll</button></div>
-        <p class="hint">${n.layout === 'scroll' ? 'One long page that grows as you write. PDFs print it as A4 pieces.' : 'Fixed A4 pages. Endless scroll makes one long page that grows as you write.'}</p>
-        <h3>Showing pages</h3>
-        <div class="chips" role="radiogroup" aria-label="Showing pages"><button type="button" class="chip" role="radio" aria-checked="${continuousOn() ? 'true' : 'false'}" aria-pressed="${continuousOn() ? 'true' : 'false'}" data-view="continuous">One under another</button><button type="button" class="chip" role="radio" aria-checked="${continuousOn() ? 'false' : 'true'}" aria-pressed="${continuousOn() ? 'false' : 'true'}" data-view="single">One at a time</button></div>
-        <p class="hint">One under another: scroll through every page, like a PDF reader. One at a time: turn the pages. Applies to every note on this device.</p>
+      <section class="paper-pick"><h3 id="pg-how">How pages show</h3>
+        <div class="chips" role="radiogroup" aria-label="How pages show">${howOptions(n).map((o) => html`<button type="button" class="chip" role="radio" aria-checked="${o.id === howNow(n) ? 'true' : 'false'}" aria-pressed="${o.id === howNow(n) ? 'true' : 'false'}" data-how="${o.id}">${o.name}</button>`)}</div>
+        <p class="hint">${howOptions(n).find((o) => o.id === howNow(n))?.hint || ''} Just this note.</p>
         <h3>Paper</h3>
         <div class="paper-tiles" role="radiogroup" aria-label="Paper">${PAPERS.map((p) => html`<button type="button" class="paper-tile" role="radio" aria-checked="${p.id === curPaper.paper ? 'true' : 'false'}" data-paper="${p.id}"><canvas width="66" height="92" aria-hidden="true" data-pprev="${p.id}"></canvas><span>${p.name}</span></button>`)}</div>
         <div class="chips" role="radiogroup" aria-label="Paper colour">${PAPER_COLORS.map((c) => html`<button type="button" class="chip" role="radio" aria-pressed="${c.id === curPaper.color ? 'true' : 'false'}" data-pcol="${c.id}"><span class="dot lg" style="background:${c.bg};border:1px solid var(--field)"></span>${c.name}</button>`)}</div>
@@ -1084,16 +1100,8 @@ export function mount(el, params, ctx) {
       setInkTone(false);
     });
     paintPaperTiles();
-    s.el.querySelectorAll('[data-layout]').forEach((b) => { b.onclick = async () => { await setLayout(b.dataset.layout); s.close(); }; });
-    s.el.querySelectorAll('[data-view]').forEach((b) => {
-      b.onclick = async () => {
-        s.close();
-        if ((state.device?.pageView || 'continuous') === b.dataset.view) return;
-        await V.updateDevice({ pageView: b.dataset.view });
-        syncStack();
-        await showPage(pageIdx);
-      };
-    });
+    s.el.querySelectorAll('[data-how]').forEach((b) => { b.onclick = async () => { s.close(); await setHow(b.dataset.how); }; });
+    if (focusLayout) setTimeout(() => s.el.querySelector('#pg-how')?.scrollIntoView({ block: 'start' }), 60);
     s.el.querySelector('[data-pdf]').onchange = async (e) => { const f = e.target.files?.[0]; if (!f) return; s.close(); await importPdf(f); };
     s.el.querySelector('[data-scan]').onclick = async () => { s.close(); await scanPages(); };
     s.el.querySelectorAll('[data-pm]').forEach((b) => { b.onclick = () => pageMenu(Number(b.dataset.pm), s); });
@@ -1362,6 +1370,7 @@ export function mount(el, params, ctx) {
       { value: 'rename', label: 'Rename' },
       { value: 'connections', label: 'Connections and sub-notes' },
       { value: 'link', label: 'Link to another note' },
+      { value: 'pages', label: 'Pages and layout' },
       { value: 'finger', label: tool.fingerDraw ? 'Fingers scroll (Pencil writes)' : 'Draw with finger' },
       { value: 'notebook', label: n.notebook ? 'Move to another notebook' : 'Move into a notebook' },
       { value: 'highlights', label: 'Highlights in this note' },
@@ -1374,6 +1383,7 @@ export function mount(el, params, ctx) {
     if (act === 'rename') rename();
     if (act === 'connections') connectionsSheet();
     if (act === 'link') linkTo();
+    if (act === 'pages') pagesSheet({ focusLayout: true });
     if (act === 'finger') { tool.fingerDraw = !tool.fingerDraw; surface.penSeen = false; surface.updateTouchAction(); saveTool(); toast(tool.fingerDraw ? 'Your finger writes now. Two fingers or the page bar to move around.' : 'Fingers scroll. Apple Pencil writes.'); }
     if (act === 'notebook') {
       const dest = await notebookPicker({ title: 'Move to a notebook' });

@@ -152,6 +152,8 @@ export function normNote(n) {
     exportAllLayers: kind === 'ink' && !!n.exportAllLayers,
     hw: kind === 'ink' && n.hw && typeof n.hw === 'object' ? n.hw : {},
     layout: kind === 'ink' && n.layout === 'scroll' ? 'scroll' : 'pages',
+    // How this note's pages show: one under another, or one at a time (null: follow the device).
+    pageView: kind === 'ink' && (n.pageView === 'continuous' || n.pageView === 'single') ? n.pageView : null,
     // Pages with highlighter marks (null: not worked out yet; see highlights.js).
     hlPages: kind === 'ink' && Array.isArray(n.hlPages) ? n.hlPages : null,
     hlCount: kind === 'ink' && Number.isFinite(n.hlCount) ? n.hlCount : null, // highlights (grouped as on the Highlights screen)
