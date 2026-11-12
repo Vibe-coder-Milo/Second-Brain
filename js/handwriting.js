@@ -207,7 +207,7 @@ export function readNote(id, { pages = null } = {}) {
     const cur = state.notes.get(id);
     if (!cur || !touched) return false;
     const { refreshInkSummary } = await import('./notework.js');
-    await V.saveNote({ ...cur, hw }, { touch: false });
+    await V.saveNote((latest) => latest && { ...latest, hw }, { touch: false, id });
     if (changed) await refreshInkSummary(id, { touch: false });
     return changed;
   })();

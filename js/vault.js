@@ -247,14 +247,27 @@ export async function changePassphrase(oldPass, newPass) {
 
 // ---- Notes -----------------------------------------------------------------
 
-export async function saveNote(note, { touch = true } = {}) {
-  const n = normNote(note);
-  if (touch) { n.updatedAt = Date.now(); n.editedOn = deviceLabel(); }
-  await writeRecord(n.id, n, n.sealed ? 's' : 'm');
-  state.notes.set(n.id, n);
-  emit({ type: 'note', id: n.id });
-  changed();
-  return n;
+// Saves of one note go through one at a time, in the order they were asked.
+// Otherwise a slow save that started earlier (for example the page summary)
+// could finish after a newer one and bring back the older settings. A save
+// that only adds to the note can pass a function and `id`: it is handed the
+// newest version when its turn comes, so it never writes over a newer change.
+const saveQueue = new Map();
+export async function saveNote(note, { touch = true, id = null } = {}) {
+  const qid = id || note.id;
+  const run = (saveQueue.get(qid) || Promise.resolve()).catch(() => {}).then(async () => {
+    const next = typeof note === 'function' ? note(state.notes.get(qid)) : note;
+    if (!next) return null;
+    const n = normNote(next);
+    if (touch) { n.updatedAt = Date.now(); n.editedOn = deviceLabel(); }
+    await writeRecord(n.id, n, n.sealed ? 's' : 'm');
+    state.notes.set(n.id, n);
+    emit({ type: 'note', id: n.id });
+    changed();
+    return n;
+  });
+  saveQueue.set(qid, run);
+  try { return await run; } finally { if (saveQueue.get(qid) === run) saveQueue.delete(qid); }
 }
 
 export async function saveNotes(list) {

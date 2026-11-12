@@ -49,7 +49,7 @@ export async function refreshInkSummary(id, { pdfText = null, touch = true } = {
   const cur = state.notes.get(id);
   const same = cur.body === s.body && JSON.stringify(cur.labels) === JSON.stringify(s.labels) && JSON.stringify(cur.tasks) === JSON.stringify(s.tasks) && JSON.stringify(cur.hlPages) === JSON.stringify(s.hlPages) && cur.hlCount === s.hlCount;
   if (same && !touch) return cur;
-  return V.saveNote({ ...cur, ...s, ...(pdfText ? { pdfText } : {}) });
+  return V.saveNote((latest) => latest && { ...latest, ...s, ...(pdfText ? { pdfText } : {}) }, { id });
 }
 
 // ---- Tasks ------------------------------------------------------------------------
