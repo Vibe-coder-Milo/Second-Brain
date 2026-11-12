@@ -1,6 +1,8 @@
 // Finding your way in a long typed note: Contents (its headings, the one
 // you're reading marked; tap to jump) and Pages (the note as printed pages,
-// like a handwritten note's pages; tap one to go there).
+// like a handwritten note's pages; tap one to go there). A note shown as A4
+// pages (editor/pages.js) lists its own pages, exactly; an endless one the
+// pages it would print as, placed by their share of the note.
 
 import { html, raw } from '../util.js';
 import { displayTitle } from '../model.js';
@@ -29,8 +31,9 @@ const stickyBottom = (host) => {
   return s ? Math.max(0, s.getBoundingClientRect().bottom) : 0;
 };
 
-function jumpTo(host, target, block = 'start') {
+function jumpTo(host, target, block = 'start', pager = null) {
   if (!target) return;
+  pager?.reveal(target); // Next page: turn to the page it's on first
   const sc = scroller(target);
   const r = target.getBoundingClientRect();
   const top = sc === document.scrollingElement ? 0 : sc.getBoundingClientRect().top;
@@ -66,6 +69,13 @@ export function sections(editor) {
   return heads;
 }
 
+// Next page: the last heading on or before the page shown.
+function lastBefore(heads, pg) {
+  let cur = -1;
+  heads.forEach((h, k) => { if (h.dom && pg.sheetOf(h.dom) <= pg.page) cur = k; });
+  return cur;
+}
+
 // The heading you're reading: the last one above the top of the view.
 function currentIndex(host, heads) {
   const line = stickyBottom(host) + 40;
@@ -74,9 +84,13 @@ function currentIndex(host, heads) {
   return cur;
 }
 
-export function openContents(anchor, { host, editor, note, flush, wide }) {
+// The note's pages, if it shows as A4 pages (null while endless).
+const pagerOf = (pager) => { const p = typeof pager === 'function' ? pager() : pager; return p && p.mode !== 'endless' ? p : null; };
+
+export function openContents(anchor, { host, editor, note, flush, wide, pager }) {
+  const pg = pagerOf(pager);
   const heads = sections(editor);
-  const cur = currentIndex(host, heads);
+  const cur = pg?.mode === 'next' ? lastBefore(heads, pg) : currentIndex(host, heads);
   const minLevel = Math.min(...heads.map((h) => h.level), 3);
   const body = `${html`<div class="cts-head"><h2>Contents</h2><span class="muted">${heads.length ? `${heads.length} section${heads.length === 1 ? '' : 's'}` : ''}</span></div>
     ${heads.length ? html`<ul class="cts-list">${heads.map((h, k) => html`<li><button type="button" class="cts-item lv${Math.min(3, h.level - minLevel + 1)}" data-h="${k}" ${k === cur ? raw('aria-current="location"') : ''}><span class="cts-t">${h.text}</span>${k === cur ? html`<span class="cts-here">You’re here</span>` : h.mins >= 1 ? html`<span class="cts-min">${h.mins} min</span>` : ''}</button></li>`)}</ul>`
@@ -89,11 +103,11 @@ export function openContents(anchor, { host, editor, note, flush, wide }) {
   const box = wide ? popover(anchor, body, { label: 'Contents', width: 340, cls: 'cts-pop' }) : openSheet(body, { label: 'Contents' });
   const close = () => box.close();
   const root = box.el;
-  root.querySelectorAll('[data-h]').forEach((b) => { b.onclick = () => { close(); jumpTo(host, heads[Number(b.dataset.h)].dom); }; });
+  root.querySelectorAll('[data-h]').forEach((b) => { b.onclick = () => { close(); jumpTo(host, heads[Number(b.dataset.h)].dom, 'start', pg); }; });
   const bs = blocks(editor);
-  root.querySelector('[data-top]').onclick = () => { close(); jumpTo(host, host.querySelector('#n-head') || bs[0]?.dom); };
-  root.querySelector('[data-end]').onclick = () => { close(); jumpTo(host, bs[bs.length - 1]?.dom, 'end'); };
-  root.querySelector('[data-pages]').onclick = () => { close(); openPages({ host, editor, note, flush, wide }); };
+  root.querySelector('[data-top]').onclick = () => { close(); jumpTo(host, host.querySelector('#n-head') || bs[0]?.dom, 'start', pg); };
+  root.querySelector('[data-end]').onclick = () => { close(); jumpTo(host, bs[bs.length - 1]?.dom, 'end', pg); };
+  root.querySelector('[data-pages]').onclick = () => { close(); openPages({ host, editor, note, flush, wide, pager }); };
   return box;
 }
 
@@ -108,14 +122,15 @@ function domSpan(host) {
   return { top, height: Math.max(1, b.getBoundingClientRect().bottom - top) };
 }
 
-export async function openPages({ host, editor, note, flush, wide }) {
+export async function openPages({ host, editor, note, flush, wide, pager }) {
+  if (pagerOf(pager)) return openSheets({ host, editor, note, flush, wide, pager });
   const n = note();
   const s = openSheet(`${html`<div class="sheet-head"><span class="side"><button type="button" class="btn btn-ghost btn-sm" data-cts>${icons.lines({ size: 16 })}Contents</button></span><h2>${displayTitle(n)}</h2><span class="side"><button type="button" class="btn btn-ghost btn-sm" data-close>Done</button></span></div>
     <p class="hint" id="pv-sub" style="margin:0 0 12px">Laying out the pages…</p>
     <ul class="page-grid pv-grid" id="pv-grid"></ul>`}`, { label: 'Pages' });
   s.el.classList.add('pages-sheet');
   s.el.querySelector('[data-close]').onclick = () => s.close();
-  s.el.querySelector('[data-cts]').onclick = () => { s.close(); openContents(host.querySelector('[data-act=contents]') || host, { host, editor, note, flush, wide }); };
+  s.el.querySelector('[data-cts]').onclick = () => { s.close(); openContents(host.querySelector('[data-act=contents]') || host, { host, editor, note, flush, wide, pager }); };
   await flush?.();
   const { typedPages } = await import('../export.js');
   const pages = await typedPages(note() || n, { px: 360 });
@@ -150,4 +165,49 @@ export async function openPages({ host, editor, note, flush, wide }) {
     };
   });
   grid.querySelector('.current')?.scrollIntoView({ block: 'nearest' });
+}
+
+// A note shown as A4 pages: its own pages, page i = page i on screen. The
+// pictures come from the PDF layout when it has the same number of pages
+// (it nearly always does on an iPad or computer), else the words that start
+// each page.
+async function openSheets({ host, editor, note, flush, wide, pager }) {
+  const pg = pagerOf(pager);
+  const n = note();
+  const s = openSheet(`${html`<div class="sheet-head"><span class="side"><button type="button" class="btn btn-ghost btn-sm" data-cts>${icons.lines({ size: 16 })}Contents</button></span><h2>${displayTitle(n)}</h2><span class="side"><button type="button" class="btn btn-ghost btn-sm" data-close>Done</button></span></div>
+    <p class="hint" id="pv-sub" style="margin:0 0 12px"></p>
+    <ul class="page-grid pv-grid" id="pv-grid"></ul>`}`, { label: 'Pages' });
+  s.el.classList.add('pages-sheet');
+  s.el.querySelector('[data-close]').onclick = () => s.close();
+  s.el.querySelector('[data-cts]').onclick = () => { s.close(); openContents(host.querySelector('[data-act=contents]') || host, { host, editor, note, flush, wide, pager }); };
+  const count = pg.count;
+  const here = pg.current();
+  const heads = sections(editor).map((h) => ({ ...h, sheet: h.dom ? pg.sheetOf(h.dom) : 0 }));
+  const words = Array.from({ length: count }, () => '');
+  for (const b of blocks(editor)) {
+    if (!b.dom) continue;
+    const i = pg.sheetOf(b.dom);
+    if (i < count && words[i].length < 90) words[i] = `${words[i]} ${b.node.textContent}`.trim().slice(0, 90);
+  }
+  const info = Array.from({ length: count }, (_, i) => {
+    const on = heads.filter((h) => h.sheet === i);
+    const before = heads.filter((h) => h.sheet < i).pop();
+    return { i, label: (on[0] || before)?.text || (i === 0 ? displayTitle(n) : ''), here: i === here };
+  });
+  s.el.querySelector('#pv-sub').textContent = `${count} page${count === 1 ? '' : 's'}, as printed. Tap a page to go there.`;
+  const grid = s.el.querySelector('#pv-grid');
+  grid.innerHTML = info.map((p) => String(html`<li><button type="button" class="page-thumb ${p.here ? 'current' : ''}" data-pg="${p.i}" aria-label="Page ${p.i + 1}${p.label ? `, ${p.label}` : ''}${p.here ? ', you’re here' : ''}"><span class="pv-words">${words[p.i]}</span></button><span class="pv-label">${p.i + 1}${p.label ? ` · ${p.label}` : ''}</span></li>`)).join('');
+  grid.querySelectorAll('[data-pg]').forEach((b) => { b.onclick = () => { s.close(); pg.goTo(Number(b.dataset.pg)); }; });
+  grid.querySelector('.current')?.scrollIntoView({ block: 'nearest' });
+  // Pictures of the pages, when the printed layout matches.
+  await flush?.();
+  const { typedPages } = await import('../export.js');
+  const pics = await typedPages(note() || n, { px: 360 });
+  if (!s.el.isConnected || pics.length !== count) return;
+  grid.querySelectorAll('[data-pg]').forEach((b) => {
+    const c = pics[Number(b.dataset.pg)];
+    c.className = 'thumb-canvas';
+    b.querySelector('.pv-words')?.remove();
+    b.appendChild(c);
+  });
 }

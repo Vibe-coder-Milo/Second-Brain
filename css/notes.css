@@ -380,6 +380,7 @@ body.inking { overscroll-behavior: none; }
 .cts-foot .btn { flex: 1; }
 .cts-btn { gap: 6px; }
 .pv-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+.page-thumb .pv-words { align-self: flex-start; padding: 10px; font: 12px/1.4 var(--serif); color: #1B2A38; text-align: left; overflow: hidden; max-height: 100%; }
 .pv-label { font-size: 13px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pg-more { border: 0; background: none; color: var(--muted); font-size: 13px; display: flex; align-items: center; justify-content: center; gap: 4px; min-height: 32px; cursor: pointer; }
 .paper-pick { display: flex; flex-direction: column; gap: 10px; border-top: 1px solid var(--line); padding-top: 14px; }

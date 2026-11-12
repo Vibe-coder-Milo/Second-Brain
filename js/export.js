@@ -171,6 +171,8 @@ async function inkCanvases(n) {
 // px: the width of each page picture (smaller for the pages view of a long note).
 // Each canvas carries `range`: [from, to, total] in layout units, to jump to it.
 async function typedCanvases(n, { px = PX, heading = true } = {}) {
+  // A note shown as A4 pages prints the pages you see (pagedexport.js).
+  if ((n.pageMode === 'down' || n.pageMode === 'next') && !n.daily) return (await import('./pagedexport.js')).pagedCanvases(n, { px });
   const { drawRichText, fileImageReady, setInkTone } = await import('./editor/inkdraw.js');
   const { noteDoc } = await import('./editor/rich.js');
   const doc = noteDoc(n);

@@ -486,7 +486,9 @@ function wrapPlain(ctx, text, width) {
 // ---- Rich text on canvas (text boxes, typed notes in PDF export) ---------------------
 
 
-export function drawRichText(ctx, doc, x, y, width, { size = BOX_SIZE, font = BOX_FONT, color: color0 = '#1B2A38', redraw } = {}) {
+// lineH and gap (line height and the space after a paragraph, in text sizes)
+// can be set to lay text out like the typed-note screen (PDF export of pages).
+export function drawRichText(ctx, doc, x, y, width, { size = BOX_SIZE, font = BOX_FONT, color: color0 = '#1B2A38', redraw, lineH: lineH0 = 1.42, gap = 0.25 } = {}) {
   const color = tint(color0);
   const soft = dark ? '#3A4B5B' : '#CDD9D6';
   const base = fontCss(font, BOX_FONT);
@@ -520,7 +522,7 @@ export function drawRichText(ctx, doc, x, y, width, { size = BOX_SIZE, font = BO
   const fontOf = (r) => `${r.italic ? 'italic ' : ''}${r.bold ? '700' : '400'} ${r.size}px ${r.family || base}`;
 
   // Lay out runs into wrapped lines and draw them; returns height used.
-  const paragraph = (runs, px, pw, { lineH = 1.42 } = {}) => {
+  const paragraph = (runs, px, pw, { lineH = lineH0 } = {}) => {
     const words = [];
     for (const r of runs) {
       if (r.br) { words.push({ br: true }); continue; }
@@ -594,7 +596,7 @@ export function drawRichText(ctx, doc, x, y, width, { size = BOX_SIZE, font = BO
   const block = (b, px, pw, depth = 0) => {
     const st = { size, family: base, color };
     switch (b.type) {
-      case 'paragraph': cy += paragraph(runsOf(b, st), px, pw) + size * 0.25; break;
+      case 'paragraph': cy += paragraph(runsOf(b, st), px, pw) + size * gap; break;
       case 'heading': {
         const lv = b.attrs?.level || 1;
         const s2 = { ...st, size: size * [0, 1.7, 1.35, 1.12][lv], bold: true, color: lv === 3 ? tint('#51606C') : color };
