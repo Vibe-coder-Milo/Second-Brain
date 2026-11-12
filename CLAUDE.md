@@ -584,7 +584,11 @@ Opening a never-written handwritten note creates its page file, which bumps
 4. **Home screen icon**: the owner picked C2, a navy brain of coloured dots
    on white. Source in `icons/source/` (icon.svg, icon-maskable.svg with the
    picture shrunk for round masks); PNGs rendered from them. iOS only shows a
-   new icon after the app is removed from and added back to the Home Screen.
+   new icon after the app is removed from and added back to the Home Screen,
+   and **removing a Home Screen web app can delete its storage (the notes on
+   that device)**: tell the owner to Sync now first and set the device up
+   again with "Set up from another device" (repo, token, passphrase), never
+   that notes simply stay. Updates themselves never need a reinstall.
    The owner declined showing the logo inside the app.
 
 ## Ideas noted, not requested

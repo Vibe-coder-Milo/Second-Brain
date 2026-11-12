@@ -31,7 +31,7 @@ In this repo: **Settings → Pages → Build and deployment → Deploy from a br
 (GitHub Pages on a private repo needs a paid plan. The app code is safe to keep public, since it holds no notes.)
 
 ### 2. Install it on your iPhone
-Open the link in **Safari → Share → Add to Home Screen**. Use it from the Home Screen icon: that's what keeps its storage safe from Safari's automatic clean-up, and makes it work offline.
+Open the link in **Safari → Share → Add to Home Screen**. Use it from the Home Screen icon: that's what keeps its storage safe from Safari's automatic clean-up, and makes it work offline. The notes on a device live with that Home Screen icon: removing the icon can delete them from that device. Updates never need that (tap the update bar). If you do remove it (for example to get a new app icon), first **Settings → Sync now** until it says Synced, then add it again and choose **Set up from another device**.
 
 Then choose **Start a new second brain** and set a passphrase. Four or more random words is easy to type and hard to guess.
 
