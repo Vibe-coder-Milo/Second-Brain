@@ -347,7 +347,7 @@ Measured by `tests/perf/` (`scale.py 10000`, `perf.py`, `startup.py`); these are
 
 #### Quality
 
-- Every feature has a Playwright test; all tests pass before pushing. About 76 tests, about 25 minutes (`cd tests && ./runall.sh`).
+- Every feature has a Playwright test; all tests pass before pushing. 80 tests, about 30 minutes (`cd tests && ./runall.sh`).
 - Each source file opens with a plain-language comment.
 
 ### 2.15 Constraints and assumptions
