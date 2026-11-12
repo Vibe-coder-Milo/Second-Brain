@@ -84,7 +84,7 @@ through a private GitHub repo. Everything is encrypted on the device.
   - models: transformers and onnxruntime (`ort/`) with the model files;
   - OCR: tesseract.
 - **Service worker** (`sw.js`):
-  - Bump `VERSION` (`sb-vN`; currently `sb-v27`) on every release.
+  - Bump `VERSION` (`sb-vN`; currently `sb-v28`) on every release.
   - Add every new JS/CSS file to `SHELL`, or it won't work offline.
   - The app shows an update bar (`js/appupdate.js`).
 - **Views:** `js/views/*.js` export `mount(main, params, ctx)`, returning
@@ -213,6 +213,30 @@ through a private GitHub repo. Everything is encrypted on the device.
   - An older app version would treat a binned note as normal (its `normNote`
     drops `binnedAt`), so devices should update.
 
+- **Typed-note pages** (`js/editor/pages.js`, `js/pagedexport.js`, panel
+  `pagesPanel` in `views/note.js`): `n.pageMode` ('down' | 'next' | null =
+  Endless), saved with `touch:false`; daily notes and the map's compact panel
+  are always Endless (Endless notes never load pages.js). One editor; pages
+  are layout only: after each change (one rAF, never mid-composition) the
+  top-level blocks and top-level list items are measured and the shared
+  `flow()` moves a block that would cross a page's bottom margin to the next
+  page (a heading moves with the next block; `pageBreak` forces a page; a
+  block taller than a page stays and runs over the gap). Moved blocks get
+  decorations outside the document and undo history: `.tp-push` (a clear
+  top border, `--tp`) or `.tp-push-m` (top margin, for tables, callouts,
+  post-its, quotes). Sheets and "Page N of M" are drawn behind in
+  `#n-sheets` (`display: contents` in Endless); Next page clips it to one
+  page and turns the page when the cursor leaves it; `pager` (also
+  `#n-sheets.pager`) has `sheetOf`/`goTo`/`reveal`/`current`/`stats`. PDF
+  export of paged notes uses the same `flow()` at the page width last seen on
+  this device (`seenWidth`, else `REF_W` 688 px), so a PDF made on a phone
+  has the iPad's pages; `drawRichText` takes optional `lineH`/`gap`.
+  `pageBreak` is an atom node (`addPageBreak`; Backspace at the start of the
+  next line removes it); docread's Word page breaks use the same node.
+  Paragraphs never split across pages. **An older app version shows a note
+  with a `pageBreak` as empty (unknown node) and would save it empty: keep
+  devices updated.** Classes are `tp-` (`pg-label` belongs to handwritten
+  notes). `t6o`.
 - **Ink canvases are windowed:** only the part of a page near the screen has
   pixels (`MAX_PX`).
   - Placement uses `pageEl.offsetTop` relative to `.ink-scroll`, so wrappers
@@ -501,6 +525,46 @@ the owner's mockup canvas) awaits approval. v27 ships:
 
 Opening a never-written handwritten note creates its page file, which bumps
 `updatedAt` once; notes with writing keep their time when opened (checked).
+
+### 12 Nov 2026, later (`sb-v28`, mockups approved; built with helper agents)
+
+1. **Mark up a document** (`views/docsheet.js`, `js/docintake.js`,
+   `js/docpages.js`, `js/docsections.js`, `views/inkcontents.js`): the
+   notebook button and Capture say "Mark up a document" and open a sheet
+   (PDF / Word / PowerPoint / Pictures tiles, Choose files, the
+   close-not-exact hint). PDFs as before; Word, PowerPoint and pictures go
+   through `docintake.readFile` -> `documentPages(file, { sealed })`: Word
+   laid out as A4 pages with the typed-note engine (`typedCanvases(n, {
+   heading: false })`, split at page breaks, rendered 1654 px JPEG
+   backgrounds), slides drawn at 2000 px (placeholders inherit from layout
+   and master; text shrinks to at most 60% to fit), pictures via the photo
+   page path; Word pictures are stored only while drawing and deleted
+   afterwards. One file goes through `handoff.js` to `inknote.importFile`
+   (progress sheet with Cancel; cancel deletes what was stored); several or
+   a zip through `bulkimport.js`, a note each; dropping on a notebook or the
+   map routes the same way; old .doc/.ppt get a toast. Notes get `source:
+   'docx'|'pptx'`, `pdfText` = the document's text, and `docSections:
+   [{ title, level, pageId }]` from Word headings, PowerPoint sections and
+   slide titles, or PDF bookmarks (`docsections.pdfOutline`, pdf.js
+   `getOutline`); they point at page ids so adding, removing or reordering
+   pages keeps them right (`docsections.resolve`). The Contents button in a
+   handwritten note shows only when it has sections. The + menu inside a
+   note still imports PDFs only. `t6n`, `t6q`.
+2. **Pages in typed notes**: see "Typed-note pages" above. Pages button in
+   the top bar (phones: ⋯ -> Pages and layout), Add page here, Insert ->
+   New page (also in the `/` menu); adding a page to an Endless note
+   switches it to Scroll down. `t6o`.
+3. **15 fonts**: 8 more from Fontsource (OFL), bundled in `fonts/` and the
+   offline list: Lora, EB Garamond, Merriweather, Playfair Display, Inter,
+   Lexend, Patrick Hand, Kalam. `fontIdsIn`/`loadFonts` in fonts.js load
+   only the fonts a note uses before canvas drawing (PDF export, page
+   pictures). Whiteboard text keeps its serif/sans choice. The font menu
+   shows each name in its own font, so opening it loads all 15 once. `t6p`.
+4. **Home screen icon**: the owner picked C2, a navy brain of coloured dots
+   on white. Source in `icons/source/` (icon.svg, icon-maskable.svg with the
+   picture shrunk for round masks); PNGs rendered from them. iOS only shows a
+   new icon after the app is removed from and added back to the Home Screen.
+   The owner declined showing the logo inside the app.
 
 ## Ideas noted, not requested
 

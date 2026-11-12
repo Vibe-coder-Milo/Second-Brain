@@ -2,7 +2,7 @@
 // your notes live in encrypted on-device storage, not in this cache.
 // Bump VERSION whenever app files change.
 
-const VERSION = 'sb-v27';
+const VERSION = 'sb-v28';
 const SHELL = [
   './',
   './index.html',
@@ -27,6 +27,21 @@ const SHELL = [
   './fonts/spectral-latin-400-normal.woff2',
   './fonts/spectral-latin-500-italic.woff2',
   './fonts/spectral-latin-500-normal.woff2',
+  './fonts/eb-garamond-latin-400-normal.woff2',
+  './fonts/eb-garamond-latin-700-normal.woff2',
+  './fonts/inter-latin-400-normal.woff2',
+  './fonts/inter-latin-700-normal.woff2',
+  './fonts/kalam-latin-400-normal.woff2',
+  './fonts/kalam-latin-700-normal.woff2',
+  './fonts/lexend-latin-400-normal.woff2',
+  './fonts/lexend-latin-700-normal.woff2',
+  './fonts/lora-latin-400-normal.woff2',
+  './fonts/lora-latin-700-normal.woff2',
+  './fonts/merriweather-latin-400-normal.woff2',
+  './fonts/merriweather-latin-700-normal.woff2',
+  './fonts/patrick-hand-latin-400-normal.woff2',
+  './fonts/playfair-display-latin-400-normal.woff2',
+  './fonts/playfair-display-latin-700-normal.woff2',
   './icons/apple-touch-icon.png',
   './icons/icon-192.png',
   './js/ai-worker.js',
@@ -59,6 +74,11 @@ const SHELL = [
   './js/images.js',
   './js/clipimages.js',
   './js/docread.js',
+  './js/docpages.js',
+  './js/docintake.js',
+  './js/docsections.js',
+  './js/pagedexport.js',
+  './js/editor/pages.js',
   './js/counts.js',
   './js/markdown.js',
   './js/mapassist.js',
@@ -103,6 +123,8 @@ const SHELL = [
   './js/views/deleted.js',
   './js/views/highlights.js',
   './js/views/contents.js',
+  './js/views/docsheet.js',
+  './js/views/inkcontents.js',
   './js/views/split.js',
   './js/views/shell.js',
   './js/views/tableview.js',
