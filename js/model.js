@@ -100,6 +100,8 @@ export const SOURCE_LABEL = {
   link: 'Link',
   chat: 'From a Claude chat',
   pdf: 'Imported PDF',
+  docx: 'Imported Word file',
+  pptx: 'Imported PowerPoint',
   scan: 'Scan',
   daily: 'Daily note',
   claude: 'From Claude',
@@ -153,6 +155,8 @@ export function normNote(n) {
     hw: kind === 'ink' && n.hw && typeof n.hw === 'object' ? n.hw : {},
     layout: kind === 'ink' && n.layout === 'scroll' ? 'scroll' : 'pages',
     // How this note's pages show: one under another, or one at a time (null: follow the device).
+    // Sections of an imported document (see docsections.js): [{ title, level, pageId }].
+    docSections: kind === 'ink' && Array.isArray(n.docSections) ? n.docSections.filter((s) => s && s.title && s.pageId).map((s) => ({ title: String(s.title).slice(0, 200), level: Math.min(3, Math.max(1, Math.floor(Number(s.level)) || 1)), pageId: String(s.pageId) })) : [],
     pageView: kind === 'ink' && (n.pageView === 'continuous' || n.pageView === 'single') ? n.pageView : null,
     // Pages with highlighter marks (null: not worked out yet; see highlights.js).
     hlPages: kind === 'ink' && Array.isArray(n.hlPages) ? n.hlPages : null,

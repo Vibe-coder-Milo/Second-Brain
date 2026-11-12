@@ -320,9 +320,16 @@ function mountMap(main, params, ctx) {
     e.preventDefault();
     view.classList.remove('dropping');
     const all = [...(e.dataTransfer?.files || [])];
-    const pdf = all.find((f) => f.type === 'application/pdf' || /\.pdf$/i.test(f.name));
-    if (pdf) { import('../handoff.js').then((H) => { H.handOff(pdf); ctx.navigate('#/note/new?kind=ink'); }); return; }
+    // Documents (PDF, Word, PowerPoint) open as pages to mark up; pictures alone go to Capture.
     const files = all.filter((f) => f.type.startsWith('image/'));
+    const docs = all.filter((f) => !f.type.startsWith('image/'));
+    if (docs.length || (all.length && !files.length)) {
+      import('../docintake.js').then((D) => D.routeFiles(docs.length ? docs : all, {
+        single: (f) => import('../handoff.js').then((H) => { H.handOff(f); ctx.navigate('#/note/new?kind=ink'); }),
+        many: (list) => import('./importsheet.js').then((M) => M.importSheet({ files: list, ctx })),
+      }));
+      return;
+    }
     if (files.length) ctx.openCapture({ files });
   };
   view.addEventListener('dragover', onDragOver);

@@ -1,5 +1,6 @@
-// Handing a file from one screen to the next: a PDF chosen in a notebook or
-// in Capture opens as a new handwritten note with its pages to write on.
+// Handing a file from one screen to the next: a PDF, Word, PowerPoint or
+// picture file chosen in a notebook or Capture, or dropped on the map, opens
+// as a new handwritten note with its pages to write on.
 
 let pending = null;
 export const handOff = (file) => { pending = file; };

@@ -50,7 +50,8 @@ def steps(page):
     # Inside a notebook, picking several PDFs goes to the bulk import with that notebook already chosen.
     nbid = J("import('./js/vault.js').then(V => [...V.state.notebooks.values()].find(b => b.title === 'From Notability').id)")
     page.goto(BASE + f'#/notebook/{nbid}'); page.wait_for_selector('[data-pdf]'); page.wait_for_timeout(300)
-    with page.expect_file_chooser() as fc: page.locator('[data-pdf]').first.click()
+    page.locator('[data-pdf]').first.click(); page.wait_for_selector('.doc-choose')
+    with page.expect_file_chooser() as fc: page.locator('.doc-choose').click()
     fc.value.set_files(files[:2])
     page.wait_for_selector('[data-go]')
     dest = page.locator('.imp-dest-t').inner_text(); print('notebook already chosen:', dest); assert dest == 'From Notability'

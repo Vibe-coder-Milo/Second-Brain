@@ -91,7 +91,9 @@ export async function importPdfPages(file, { sealed = false, onProgress } = {}) 
     canvas.width = 0;
     canvas.height = 0;
   }
+  let outline = [];
+  try { outline = (await import('./docsections.js')).fromIndexes(await (await import('./docsections.js')).pdfOutline(doc), pages); } catch { /* no bookmarks */ }
   await (task.destroy ? task.destroy() : doc.destroy?.());
   const text = texts.map((t, i) => (t ? `Page ${i + 1}: ${t}` : '')).filter(Boolean).join('\n\n').slice(0, 200000);
-  return { pages, text, skipped: Math.max(0, count - total), created, pdfFile };
+  return { pages, text, docSections: outline, skipped: Math.max(0, count - total), created, pdfFile };
 }

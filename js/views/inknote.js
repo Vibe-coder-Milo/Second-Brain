@@ -21,6 +21,8 @@ import { linkedWith, mentions, related, subNotes } from '../connections.js';
 import { miniMapHtml } from '../minimap.js';
 import { notebookPicker, textSheet } from './notebooks.js';
 import { BOX_FONT, TEXT_SIZE } from '../fonts.js';
+import { resolve as docSectionsOf } from '../docsections.js';
+import { fileKind } from '../docintake.js';
 import { imagesIn, isTypingTarget, readClipboardImages } from '../clipimages.js';
 
 const activeLayers = new Map(); // note id -> the layer you're writing on (this session)
@@ -109,7 +111,7 @@ export function mount(el, params, ctx) {
     // A PDF handed over from a notebook or Capture: its pages to mark up.
     const { takeHandOff } = await import('../handoff.js');
     const pdf = takeHandOff();
-    if (pdf) await importPdf(pdf);
+    if (pdf) await importFile(pdf);
     // Catch up on reading pages written before (or on another device).
     if (handOn()) setTimeout(() => { if (note()) readNote(id).catch(() => {}); }, 2000);
   }
@@ -137,6 +139,7 @@ export function mount(el, params, ctx) {
           <button type="button" class="icon-btn bare show-sm-flex" data-act="redo" aria-label="Redo">${icons.redo()}</button>
           <button type="button" class="icon-btn bare" data-act="replay" aria-label="Replay recordings" aria-pressed="false" ${n.recordings.length ? '' : raw('hidden')}>${icons.headphones()}</button>
           ${raw(focusButtonHtml())}
+          ${docSectionsOf(n).length && isWide() ? html`<button type="button" class="btn btn-sm btn-ghost pages-btn" data-act="contents" aria-label="Contents">${icons.lines()}<span>Contents</span></button>` : ''}
           <button type="button" class="${isWide() ? 'btn btn-sm btn-ghost pages-btn' : 'icon-btn bare'}" data-act="pages" aria-label="All pages">${icons.pages()}${isWide() ? html`<span>Pages</span>` : ''}</button>
           <button type="button" class="icon-btn bare hide-sm" data-act="link" aria-label="Link to another note">${icons.link()}</button>
           <button type="button" class="icon-btn bare hide-sm" data-act="export" aria-label="Export as PDF">${icons.share()}</button>
@@ -151,6 +154,8 @@ export function mount(el, params, ctx) {
     el.querySelector('[data-act=back]').onclick = () => leave();
     el.querySelector('[data-act=rename]').onclick = () => rename();
     el.querySelector('[data-act=pages]').onclick = () => pagesSheet();
+    const ctn = el.querySelector('[data-act=contents]');
+    if (ctn) ctn.onclick = () => contents(ctn);
     el.querySelector('[data-act=focus]').onclick = () => toggleFocus();
     el.querySelector('[data-act=replay]').onclick = () => (replay ? exitReplay() : enterReplay());
     el.querySelector('[data-act=link]').onclick = () => linkTo();
@@ -594,7 +599,7 @@ export function mount(el, params, ctx) {
           return;
         }
         if (a === 'photo') { pickFile('image/*', async (f) => { try { await surface.insertImage(f); afterPlace(); } catch { toast('Couldn’t add that image.'); } }); p.close(); return; }
-        if (a === 'pdf') { pickFile('application/pdf', (f) => importPdf(f)); p.close(); return; }
+        if (a === 'pdf') { pickFile('application/pdf', (f) => importFile(f)); p.close(); return; }
         p.close();
         if (a === 'postit') { const v = await stickerDrawer({ tab: 'postits', title: 'Post-its' }); if (v) placeSticker(v); }
         if (a === 'sticker') { const v = await stickerDrawer({ tab: 'marks', title: 'Stickers' }); if (v) placeSticker(v); }
@@ -1102,7 +1107,7 @@ export function mount(el, params, ctx) {
     paintPaperTiles();
     s.el.querySelectorAll('[data-how]').forEach((b) => { b.onclick = async () => { s.close(); await setHow(b.dataset.how); }; });
     if (focusLayout) setTimeout(() => s.el.querySelector('#pg-how')?.scrollIntoView({ block: 'start' }), 60);
-    s.el.querySelector('[data-pdf]').onchange = async (e) => { const f = e.target.files?.[0]; if (!f) return; s.close(); await importPdf(f); };
+    s.el.querySelector('[data-pdf]').onchange = async (e) => { const f = e.target.files?.[0]; if (!f) return; s.close(); await importFile(f); };
     s.el.querySelector('[data-scan]').onclick = async () => { s.close(); await scanPages(); };
     s.el.querySelectorAll('[data-pm]').forEach((b) => { b.onclick = () => pageMenu(Number(b.dataset.pm), s); });
     // Thumbnails: drawn as they scroll into view, a couple at a time, small.
@@ -1212,19 +1217,43 @@ export function mount(el, params, ctx) {
     } catch { toast('Couldn’t use that photo.'); }
   }
 
-  async function importPdf(file) {
-    const { importPdfPages } = await import('../pdf.js');
+  // Contents of an imported document: its sections, tap to go to the page.
+  async function contents(anchor) {
+    const { openInkContents } = await import('./inkcontents.js');
     const n = note();
-    const prog = openSheet(`${html`<h2 class="page-title" style="font-size:24px">Importing ${file.name}</h2><p class="muted" id="pdf-prog" style="margin:0">Reading the PDF…</p>`}`, { label: 'Importing PDF' });
+    if (!n) return;
+    openInkContents(anchor || el.querySelector('[data-act=more]'), { note: n, pageIdx, wide: isWide() && !!anchor, goTo: (i) => showPage(i) });
+  }
+
+  // A PDF, Word, PowerPoint or picture file: its pages to write on, added
+  // after the current page (or in place of an empty first page).
+  async function importFile(file) {
+    const { readFile, whyNot } = await import('../docintake.js');
+    const n = note();
+    const kind = fileKind(file);
+    if (!kind || kind === 'zip') { toast(whyNot(file)); return; }
+    let cancelled = false;
+    const name = file.name.replace(/\.[^./\\]+$/, '');
+    const prog = openSheet(`${html`<h2 class="page-title" style="font-size:24px">Bringing in ${name}…</h2><p class="muted" id="pdf-prog" style="margin:0" aria-live="polite">Reading the file…</p><button type="button" class="btn btn-block" data-stop style="margin-top:14px">Cancel</button>`}`, { label: 'Bringing in a file', onClose: () => { cancelled = true; } });
+    prog.el.querySelector('[data-stop]').onclick = () => { cancelled = true; prog.el.querySelector('#pdf-prog').textContent = 'Stopping…'; };
+    window.dispatchEvent(new Event('sb-busy'));
     try {
-      const { pages, text } = await importPdfPages(file, { sealed: n.sealed, onProgress: (i, t) => { const p = $('#pdf-prog', prog.el); if (p) p.textContent = `Page ${i} of ${t}`; } });
+      const r = await readFile(file, { sealed: n.sealed, onProgress: (i, t) => { const p = $('#pdf-prog', prog.el); if (p) p.textContent = `page ${i} of ${t}`; } });
+      const { pages, text } = r;
+      if (cancelled) {
+        // Nothing is kept: take back the stored pictures (and the PDF).
+        for (const p of pages) if (p.bg) await V.deleteFile(p.bg).catch(() => {});
+        for (const f of new Set(pages.map((p) => p.pdf?.file).filter(Boolean))) await V.deleteFile(f).catch(() => {});
+        prog.close();
+        return;
+      }
       const cur = note();
       const all = [...cur.pages];
       const empty = all.length === 1 && !(await V.loadPage(all[0].id)).strokes.length && !(await V.loadPage(all[0].id)).objects.length && !all[0].bg;
       const at = empty ? 0 : pageIdx + 1;
       if (empty) all.splice(0, 1);
       all.splice(at, 0, ...pages);
-      await V.saveNote({ ...cur, pages: all, source: cur.source || 'pdf', pdfText: undefined, title: cur.title.startsWith('Notes, ') ? file.name.replace(/\.pdf$/i, '') : cur.title });
+      await V.saveNote({ ...cur, pages: all, source: cur.source || r.source, docSections: [...(cur.docSections || []), ...(r.docSections || [])], pdfText: undefined, title: cur.title.startsWith('Notes, ') ? (r.title || name) : cur.title });
       await summarise(text);
       prog.close();
       toast(`Imported ${pages.length} page${pages.length === 1 ? '' : 's'}`);
@@ -1233,7 +1262,7 @@ export function mount(el, params, ctx) {
     } catch (e) {
       console.error(e);
       prog.close();
-      toast(e.message || 'Couldn’t read that PDF.');
+      toast(e.message || 'Couldn’t read that file.');
     }
   }
 
@@ -1370,6 +1399,7 @@ export function mount(el, params, ctx) {
       { value: 'rename', label: 'Rename' },
       { value: 'connections', label: 'Connections and sub-notes' },
       { value: 'link', label: 'Link to another note' },
+      ...(docSectionsOf(n).length && !isWide() ? [{ value: 'contents', label: 'Contents' }] : []),
       { value: 'pages', label: 'Pages and layout' },
       { value: 'finger', label: tool.fingerDraw ? 'Fingers scroll (Pencil writes)' : 'Draw with finger' },
       { value: 'notebook', label: n.notebook ? 'Move to another notebook' : 'Move into a notebook' },
@@ -1383,6 +1413,7 @@ export function mount(el, params, ctx) {
     if (act === 'rename') rename();
     if (act === 'connections') connectionsSheet();
     if (act === 'link') linkTo();
+    if (act === 'contents') contents(null);
     if (act === 'pages') pagesSheet({ focusLayout: true });
     if (act === 'finger') { tool.fingerDraw = !tool.fingerDraw; surface.penSeen = false; surface.updateTouchAction(); saveTool(); toast(tool.fingerDraw ? 'Your finger writes now. Two fingers or the page bar to move around.' : 'Fingers scroll. Apple Pencil writes.'); }
     if (act === 'notebook') {

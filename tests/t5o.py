@@ -9,8 +9,9 @@ def steps(page):
     tag = 'ipad' if wide else 'phone'
     nbid = J("""(async () => { const V = await import('./js/vault.js'); const M = await import('./js/model.js'); return (await V.saveNotebook(M.newNotebook({ title: 'Investing', region: 'investing' }))).id; })()""")
     page.goto(BASE + f'#/notebook/{nbid}'); page.wait_for_selector('[data-pdf]'); page.wait_for_timeout(300)
+    page.locator('[data-pdf]').first.click(); page.wait_for_selector('.doc-choose')
     with page.expect_file_chooser() as fc:
-        page.locator('[data-pdf]').first.click()
+        page.locator('.doc-choose').click()
     fc.value.set_files(os.path.join(SP, 'sample.pdf'))
     page.wait_for_function("() => document.getElementById('toast').innerText.includes('Imported')", timeout=60000)
     page.wait_for_selector('.ink-page canvas.ink-main'); page.wait_for_timeout(800)

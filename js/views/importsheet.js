@@ -1,11 +1,13 @@
-// "Bring in notes from Notability": pick many PDFs (or a zip of them), pick a
-// notebook, and each PDF becomes a handwritten note there.
+// "Bring in notes": pick many files (PDFs, Word, PowerPoint, pictures, or a zip
+// of them, such as Notability's export), pick a notebook, and each file
+// becomes a handwritten note there.
 
 import { html, raw, toast } from '../util.js';
 import { state } from '../vault.js';
 import { openSheet } from '../ui.js';
 import { icons } from '../icons.js';
 import { coverSVG } from '../covers.js';
+import { DOC_ACCEPT } from '../docintake.js';
 
 const mb = (n) => (n > 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
 const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
@@ -30,7 +32,7 @@ export function importSheet({ files = null, notebook = null, section = null, ctx
       const inp = document.createElement('input');
       inp.type = 'file';
       inp.multiple = true;
-      inp.accept = 'application/pdf,.pdf,application/zip,.zip';
+      inp.accept = DOC_ACCEPT;
       inp.onchange = () => { if (inp.files?.length) read([...inp.files]); };
       inp.click();
     };
@@ -54,18 +56,18 @@ export function importSheet({ files = null, notebook = null, section = null, ctx
     const draw = () => {
       if (!items) {
         body.innerHTML = `${html`
-          <p class="muted" style="margin:0">Each PDF becomes a handwritten note in a notebook, looking just as it did, with room to keep writing on it.</p>
+          <p class="muted" style="margin:0">Each file becomes a handwritten note in a notebook, with room to keep writing on it. PDFs look just as they did; Word and PowerPoint look close to the original.</p>
           <ol class="imp-steps">
             <li><b>In Notability:</b> in your library tap ${raw('<span class="kbd">⋯</span>')} then <b>Select Notes</b>, pick the notes (a whole subject at once is fine), then <b>Export</b>, choose <b>PDF</b>, and <b>Save to Files</b>.</li>
-            <li><b>Here:</b> tap <b>Choose PDFs</b> and select them all in Files. A .zip of PDFs works too: its folders become sections.</li>
+            <li><b>Here:</b> tap <b>Choose files</b> and select them all in Files. PDFs, Word, PowerPoint and pictures work, and so does a .zip of them: its folders become sections.</li>
           </ol>
-          <button type="button" class="btn btn-primary btn-block" data-pick>${icons.pdf({ size: 18 })}Choose PDFs</button>
-          <p class="hint">Typed text in the PDFs is searchable. Handwriting comes over as a picture of the page: it shows exactly as it was, but isn't turned into ink you can edit. Notability’s own .note files can’t be read, so export as PDF.</p>`}`;
+          <button type="button" class="btn btn-primary btn-block" data-pick>${icons.pdf({ size: 18 })}Choose files</button>
+          <p class="hint">Typed text in the files is searchable. Handwriting comes over as a picture of the page: it shows exactly as it was, but isn't turned into ink you can edit. Notability’s own .note files can’t be read, so export as PDF.</p>`}`;
         body.querySelector('[data-pick]').onclick = pick;
         return;
       }
       if (!items.length) {
-        body.innerHTML = `${html`<p class="error" style="margin:0">No PDFs in those files.</p><button type="button" class="btn btn-primary btn-block" data-pick>${icons.pdf({ size: 18 })}Choose PDFs</button>`}`;
+        body.innerHTML = `${html`<p class="error" style="margin:0">Nothing here can be opened. Try PDFs, Word or PowerPoint files, pictures, or a zip of them.</p><button type="button" class="btn btn-primary btn-block" data-pick>${icons.pdf({ size: 18 })}Choose files</button>`}`;
         body.querySelector('[data-pick]').onclick = pick;
         return;
       }
@@ -73,13 +75,13 @@ export function importSheet({ files = null, notebook = null, section = null, ctx
       const folders = [...new Set(items.map((x) => x.folder).filter(Boolean))];
       body.innerHTML = `${html`
         <p class="imp-count"><b>${plural(items.length, 'note')}</b> ready to bring in <span class="muted">(${mb(size)})</span></p>
-        <ul class="imp-list">${items.slice(0, 8).map((x) => html`<li>${icons.pdf({ size: 16 })}<span>${x.name.replace(/\.pdf$/i, '').replace(/_+/g, ' ')}</span>${x.folder ? html`<span class="muted">${x.folder}</span>` : ''}</li>`)}${items.length > 8 ? html`<li class="muted">and ${items.length - 8} more</li>` : ''}</ul>
+        <ul class="imp-list">${items.slice(0, 8).map((x) => html`<li>${icons.pdf({ size: 16 })}<span>${x.name.replace(/\.(pdf|docx|pptx)$/i, '').replace(/_+/g, ' ')}</span>${x.folder ? html`<span class="muted">${x.folder}</span>` : ''}</li>`)}${items.length > 8 ? html`<li class="muted">and ${items.length - 8} more</li>` : ''}</ul>
         ${folders.length ? html`<p class="hint">${plural(folders.length, 'folder')} in the zip (${folders.slice(0, 4).join(', ')}${folders.length > 4 ? '…' : ''}) will become sections.</p>` : ''}
         <span class="label">Where they go</span>
         ${destHtml()}
         ${dest ? html`<button type="button" class="btn btn-primary btn-block" data-go>Bring in ${plural(items.length, 'note')}</button>` : ''}
         <button type="button" class="btn btn-ghost btn-block" data-pick>Choose different files</button>
-        <p class="hint">Keep the app open until it’s done. Large PDFs take a few seconds each.</p>`}`;
+        <p class="hint">Keep the app open until it’s done. Large files take a few seconds each.</p>`}`;
       body.querySelector('[data-pick]').onclick = pick;
       body.querySelectorAll('[data-dest]').forEach((b) => {
         b.onclick = async () => {
@@ -111,7 +113,7 @@ export function importSheet({ files = null, notebook = null, section = null, ctx
           onProgress: ({ i, total, name, page, pages }) => {
             const now = body.querySelector('#imp-now');
             if (!now) return;
-            now.textContent = `Bringing in ${i + 1} of ${total}: ${name.replace(/\.pdf$/i, '')}`;
+            now.textContent = `Bringing in ${i + 1} of ${total}: ${name.replace(/\.(pdf|docx|pptx)$/i, '')}`;
             body.querySelector('#imp-sub').textContent = `Page ${page} of ${pages}`;
             const bar = body.querySelector('.imp-bar');
             bar.setAttribute('aria-valuenow', String(i));

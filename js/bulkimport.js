@@ -1,36 +1,38 @@
-// Bring in many PDFs at once: notes exported from Notability (or GoodNotes and
-// the like). Each PDF becomes a handwritten note in the notebook you pick,
-// with its pages to write on; any typed text in the PDFs is searchable. A zip
-// of PDFs works too, and its folders become sections.
+// Bring in many files at once: notes exported from Notability (or GoodNotes
+// and the like), or Word, PowerPoint and picture files. Each file becomes a
+// handwritten note in the notebook you pick, with its pages to write on; the
+// text in them is searchable and their sections show in Contents. A zip of
+// files works too, and its folders become sections.
 
 import * as V from './vault.js';
 import { state } from './vault.js';
 import { newNote } from './model.js';
 import { uid } from './util.js';
 import { refreshInkSummary } from './notework.js';
+import { fileKind, readFile } from './docintake.js';
 
-const isPdf = (name, type = '') => type === 'application/pdf' || /\.pdf$/i.test(name);
-const isZip = (name, type = '') => /zip/.test(type) || /\.zip$/i.test(name);
+const isDoc = (name, type = '') => ['pdf', 'docx', 'pptx', 'image'].includes(fileKind({ name, type }));
+const isZip = (name, type = '') => fileKind({ name, type }) === 'zip';
 const base = (path) => path.split('/').pop();
-const titleOf = (name) => base(name).replace(/\.pdf$/i, '').replace(/[_]+/g, ' ').trim() || 'Imported note';
+const titleOf = (name) => base(name).replace(/\.(pdf|docx|pptx|png|jpe?g|gif|webp|heic|heif|bmp|tiff?)$/i, '').replace(/[_]+/g, ' ').trim() || 'Imported note';
 
-// The PDFs among the chosen files (opening zips): [{ name, folder, size, blob }].
+// The documents among the chosen files (opening zips): [{ name, folder, size, blob }].
 export async function collect(files) {
   const out = [];
   for (const f of files) {
-    if (isPdf(f.name, f.type)) out.push({ name: f.name, folder: null, size: f.size, blob: f });
+    if (isDoc(f.name, f.type)) out.push({ name: f.name, folder: null, size: f.size, blob: f });
     else if (isZip(f.name, f.type)) {
       const { unzipSync } = await import('../vendor/fflate.min.js');
       let entries;
-      try { entries = unzipSync(new Uint8Array(await f.arrayBuffer()), { filter: (e) => isPdf(e.name) && !/(^|\/)(__MACOSX|\.)/.test(e.name) }); } catch { throw new Error(`Couldn’t open ${f.name}.`); }
+      try { entries = unzipSync(new Uint8Array(await f.arrayBuffer()), { filter: (e) => isDoc(e.name) && !/(^|\/)(__MACOSX|\.)/.test(e.name) }); } catch { throw new Error(`Couldn’t open ${f.name}.`); }
       for (const [path, bytes] of Object.entries(entries)) {
         const parts = path.split('/').filter(Boolean);
-        // The folder a PDF sits in becomes its section (top folder of the zip skipped if everything is in one).
-        out.push({ name: base(path), path: parts, size: bytes.length, blob: new Blob([bytes], { type: 'application/pdf' }) });
+        // The folder a file sits in becomes its section (top folder of the zip skipped if everything is in one).
+        out.push({ name: base(path), path: parts, size: bytes.length, blob: new File([bytes], base(path), { type: '' }) });
       }
     }
   }
-  // Folders: if every PDF shares the same top folder, use the next one down.
+  // Folders: if every file shares the same top folder, use the next one down.
   const withPath = out.filter((x) => x.path);
   if (withPath.length) {
     const tops = new Set(withPath.map((x) => (x.path.length > 1 ? x.path[0] : '')));
@@ -43,7 +45,6 @@ export async function collect(files) {
 // Import them into a notebook. sectionId: where PDFs without a folder go.
 // onProgress({ i, total, name, page, pages }). Returns { notes, pages, failed: [{ name, why }] }.
 export async function importAll(items, { notebookId, sectionId, onProgress, stop = () => false } = {}) {
-  const { importPdfPages } = await import('./pdf.js');
   let nb = state.notebooks.get(notebookId);
   if (!nb) throw new Error('That notebook is gone.');
   // Sections for the zip's folders, made once.
@@ -65,20 +66,22 @@ export async function importAll(items, { notebookId, sectionId, onProgress, stop
     window.dispatchEvent(new Event('sb-busy')); // keep auto-lock away while importing
     try {
       const file = it.blob instanceof File ? it.blob : new File([it.blob], it.name, { type: 'application/pdf' });
-      const { pages, text, created } = await importPdfPages(file, { sealed: !!nb.sealed, onProgress: (p, n) => onProgress?.({ i, total: items.length, name: it.name, page: p, pages: n }) });
+      const r = await readFile(file, { sealed: !!nb.sealed, onProgress: (p, n) => onProgress?.({ i, total: items.length, name: it.name, page: p, pages: n }) });
+      const { pages, text, created } = r;
       if (!pages.length) throw new Error('No pages in it.');
       const when = created || null;
       const n = newNote({
         kind: 'ink',
-        title: titleOf(it.name),
+        title: r.title || titleOf(it.name),
         titleAuto: false,
         notebook: nb.id,
         section: (it.folder && secFor.get(it.folder)) || sectionId || nb.sections[0].id,
         region: nb.region || null,
         inbox: !nb.region,
         sealed: !!nb.sealed,
-        source: 'pdf',
+        source: r.source,
         pages,
+        docSections: r.docSections || [],
         ...(when ? { createdAt: when } : {}),
       });
       const saved = await V.saveNote(n);
