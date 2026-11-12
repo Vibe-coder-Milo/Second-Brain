@@ -35,7 +35,10 @@ const EXTRA = [
   { id: 'image', name: 'Image', icon: 'image', keys: 'image photo picture' },
   { id: 'paste-image', name: 'Paste a picture', icon: 'image', keys: 'paste picture screenshot clipboard image' },
   { id: 'link', name: 'Link to a note', icon: 'link', keys: 'link note wiki [[' },
+  { id: 'page', name: 'New page', icon: 'pages', keys: 'new page break add page' },
 ];
+// "New page" only where the host can make pages (typed notes, not Today or text boxes).
+const extras = (opts) => EXTRA.filter((x) => x.id !== 'page' || opts?.addPage);
 
 function styleMenuHtml(editor, items, activeIdx = -1) {
   return html`<ul class="style-menu" role="listbox">${items.map((s, i) => html`<li role="option" aria-selected="${i === activeIdx ? 'true' : 'false'}"><button type="button" data-style="${s.id}" class="${s.active?.(editor) ? 'on' : ''}">
@@ -96,6 +99,7 @@ export async function runAction(editor, id, anchor, opts = {}) {
     return;
   }
   if (id === 'link') editor.chain().focus().insertContent('[[').run();
+  if (id === 'page') opts.addPage?.();
 }
 
 function tableMenu(editor, anchor) {
@@ -215,7 +219,7 @@ export function mountFormatBar(bar, editor, opts = {}) {
         break;
       }
       case 'insert': {
-        const items = EXTRA.map((x) => (x.id === 'table' && editor.isActive('table') ? { ...x, name: 'Table options' } : x));
+        const items = extras(opts).map((x) => (x.id === 'table' && editor.isActive('table') ? { ...x, name: 'Table options' } : x));
         const p = popover(b, `${html`<div class="pop-head">Insert</div>${items.map((x) => html`<button type="button" class="pop-item" data-ins="${x.id}">${raw(icons[x.icon]({ size: 20 }))}${x.name}</button>`)}`}`, { label: 'Insert', width: 260 });
         p.el.querySelectorAll('[data-ins]').forEach((x) => { x.onclick = () => { p.close(); runAction(editor, x.dataset.ins, b, opts); }; });
         break;
@@ -333,7 +337,7 @@ export function mountNoteBars(tools, props, editor, opts = {}) {
         break;
       }
       case 'insert': {
-        const items = EXTRA.filter((x) => x.id !== 'label').map((x) => (x.id === 'table' && editor.isActive('table') ? { ...x, name: 'Table options' } : x));
+        const items = extras(opts).filter((x) => x.id !== 'label').map((x) => (x.id === 'table' && editor.isActive('table') ? { ...x, name: 'Table options' } : x));
         const rec = !wide && opts.onRecord;
         const p = popover(b, `${html`<div class="pop-head">Insert</div>${items.map((x) => html`<button type="button" class="pop-item" data-ins="${x.id}">${raw(icons[x.icon]({ size: 20 }))}${x.name}</button>`)}${rec ? html`<div class="pop-head">More</div><button type="button" class="pop-item" data-ins="record">${raw(icons.mic({ size: 20 }))}Record audio</button>` : ''}`}`, { label: 'Insert', width: 260 });
         p.el.querySelectorAll('[data-ins]').forEach((x) => { x.onclick = () => { p.close(); if (x.dataset.ins === 'record') opts.onRecord?.(); else runAction(editor, x.dataset.ins, b, opts); }; });
@@ -445,7 +449,7 @@ export function attachSuggest(editor, opts = {}) {
       // Names that start with what you typed come first, then other name
       // matches, then matches on other words.
       const rank = (s) => (s.name.toLowerCase().startsWith(q) ? 0 : s.name.toLowerCase().includes(q) ? 1 : 2);
-      items = [...STYLES, ...EXTRA].filter((s) => !q || s.name.toLowerCase().includes(q) || s.keys.includes(q)).map((s, i) => ({ s, i })).sort((a, b) => rank(a.s) - rank(b.s) || a.i - b.i).map((x) => x.s);
+      items = [...STYLES, ...extras(opts)].filter((s) => !q || s.name.toLowerCase().includes(q) || s.keys.includes(q)).map((s, i) => ({ s, i })).sort((a, b) => rank(a.s) - rank(b.s) || a.i - b.i).map((x) => x.s);
     } else {
       const q = cur.query.trim();
       const pool = [...state.notes.values()].filter((n) => n.id !== opts.noteId?.());

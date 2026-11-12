@@ -1,5 +1,6 @@
 // A single note. Typed notes and captures open here with the rich editor;
-// handwritten notes hand over to the handwriting screen.
+// handwritten notes hand over to the handwriting screen. A typed note can show
+// as one endless page or as A4 pages (editor/pages.js), chosen per note.
 
 import { html, raw, $, fmtDate, fmtTime, toast, debounce, isWide, downloadText } from '../util.js';
 import * as V from '../vault.js';
@@ -8,7 +9,7 @@ import { newNote, displayTitle, kindName, regionColors, typeName, NOTE_TYPES, TE
 import { docOutline, docLabels, docPlainText } from '../doc.js';
 import { compressImage } from '../images.js';
 import { rerunOcr } from '../ocr.js';
-import { confirmSheet, menuSheet, notePicker, regionPicker, passphraseSheet, datePicker, labelPicker, labelChipHtml } from '../ui.js';
+import { openSheet, popover, confirmSheet, menuSheet, notePicker, regionPicker, passphraseSheet, datePicker, labelPicker, labelChipHtml } from '../ui.js';
 import { icons } from '../icons.js';
 import { focusButtonHtml, toggleFocus, enterNote, leaveNote } from '../focus.js';
 import { imagesIn, isTypingTarget } from '../clipimages.js';
@@ -66,6 +67,7 @@ function mountTyped(el, params, ctx) {
   let saveState = '';
   let vvHandler = null;
   let focusWhenReady = false;
+  let pager = null; // A4 pages (Scroll down or Next page); null while Endless
 
   const note = () => (id === 'new' ? draft : state.notes.get(id));
 
@@ -118,6 +120,7 @@ function mountTyped(el, params, ctx) {
           ${wideBar ? '' : html`<button type="button" class="icon-btn bare" data-act="h-undo" aria-label="Undo">${icons.undo()}</button><button type="button" class="icon-btn bare" data-act="h-redo" aria-label="Redo">${icons.redo()}</button>`}
           ${compact ? '' : raw(focusButtonHtml())}
           ${compact ? '' : html`<button type="button" class="btn btn-sm btn-ghost cts-btn" data-act="contents" aria-label="Contents and pages">${icons.lines({ size: 18 })}<span class="hide-sm">Contents</span></button>`}
+          ${compact || n.daily || !wideBar ? '' : html`<button type="button" class="btn btn-sm btn-ghost pages-btn" data-act="pages" aria-label="Pages and layout">${icons.pages({ size: 18 })}<span>Pages</span></button>`}
           <button type="button" class="icon-btn bare" data-act="link" aria-label="Link to another note">${icons.link()}</button>
           ${compact ? html`<a class="icon-btn bare" href="#/note/${n.id}" aria-label="Open full note">${icons.external()}</a>` : ''}
           <button type="button" class="icon-btn bare" data-act="more" aria-label="More actions">${icons.more()}</button>
@@ -127,9 +130,11 @@ function mountTyped(el, params, ctx) {
       <div class="ink-bars note-bars"><div class="ink-tools" role="toolbar" aria-label="Writing tools" id="n-tools"></div><div class="ink-props" role="toolbar" aria-label="Text settings" id="n-fprops" hidden></div></div>
       </div>
       <article class="note">
+        <div id="n-sheets" class="sheets">
         <div id="n-head"></div>
         <div id="n-figs" class="note-figs"></div>
         <div class="rich-host" id="n-rich"></div>
+        </div>
         <section id="n-recs" class="note-recs" aria-label="Recordings" hidden></section>
         <div id="n-extra"></div>
         <div id="n-props" hidden></div>
@@ -158,8 +163,9 @@ function mountTyped(el, params, ctx) {
       if (!editor) return;
       const C = await import('./contents.js');
       const btn = $('[data-act=contents]', el);
-      C.openContents(btn, { host: el, editor, note, flush: () => flush(), wide: isWide() || window.innerWidth >= 700 });
+      C.openContents(btn, { host: el, editor, note, flush: () => flush(), wide: isWide() || window.innerWidth >= 700, pager: () => pager });
     });
+    on('[data-act=pages]', (b) => pagesPanel(b));
     on('[data-act=link]', () => linkTo());
     on('[data-act=focus]', () => toggleFocus());
     on('[data-act=h-undo]', () => { if (!editing) startEditing(); editor?.chain().focus().undo().run(); });
@@ -486,6 +492,73 @@ function mountTyped(el, params, ctx) {
       if (focusWhenReady) { focusWhenReady = false; editor.commands.focus('start'); } else if (id === 'new' && !n.title) setTimeout(() => $('#n-title', el)?.focus(), 50);
     }
     drawOutline();
+    applyPageMode();
+  }
+
+  // ---------- Pages ----------
+  // Endless (one long page, as always), or A4 pages: Scroll down or Next
+  // page. Just this note. Not in the map's panel or for daily notes.
+  const canPage = () => !compact && !note()?.daily;
+  const pageModeOf = (n) => (canPage() && n?.kind === 'note' && (n.pageMode === 'down' || n.pageMode === 'next') ? n.pageMode : 'endless');
+
+  async function applyPageMode() {
+    const n = note();
+    const wrap = $('#n-sheets', el);
+    const ed = editor;
+    if (!ed || !wrap || !n) return;
+    const m = pageModeOf(n);
+    if (m === 'endless') { pager?.destroy(); pager = null; return; }
+    if (pager) { pager.setMode(m); return; }
+    const P = await import('../editor/pages.js');
+    if (editor !== ed || $('#n-sheets', el) !== wrap) return;
+    if (pager) { pager.setMode(pageModeOf(note())); return; }
+    if (pageModeOf(note()) === 'endless') return;
+    pager = P.mountPager(ed, wrap, { mode: pageModeOf(note()), host: el });
+    wrap.pager = pager;
+  }
+
+  async function setPageMode(m) {
+    const pageMode = m === 'endless' ? null : m;
+    if (id === 'new') {
+      await persist(true);
+      if (id === 'new') { draft = { ...draft, pageMode }; applyPageMode(); return; }
+    }
+    await flush();
+    const cur = state.notes.get(id);
+    if (!cur || (cur.pageMode || null) === pageMode) return;
+    // A view choice: the note keeps its place in lists (they sort by when it was last changed).
+    await V.saveNote({ ...cur, pageMode }, { touch: false });
+    applyPageMode();
+  }
+
+  // A new page at the cursor (while reading: at the end). An endless note
+  // starts showing as pages, so you can see the new page.
+  async function addPageHere() {
+    if (!editor || !canPage()) return;
+    if (!editing) startEditing();
+    editor.chain().focus().addPageBreak().run();
+    if (pageModeOf(note()) === 'endless') {
+      await setPageMode('down');
+      toast('New page added. This note now shows as pages; change it in Pages.');
+    }
+  }
+
+  async function pagesPanel(anchor) {
+    const n = note();
+    if (!n || !canPage()) return;
+    const P = await import('../editor/pages.js');
+    const now = pageModeOf(n);
+    const wide = !!anchor && (isWide() || window.innerWidth >= 700);
+    const body = `${html`<div class="pp-head"><h2>Pages</h2></div>
+      <h3 class="pp-sub" id="pp-how">How pages show</h3>
+      <div class="chips" role="radiogroup" aria-labelledby="pp-how">${P.PAGE_MODES.map((o) => html`<button type="button" class="chip" role="radio" aria-checked="${o.id === now ? 'true' : 'false'}" aria-pressed="${o.id === now ? 'true' : 'false'}" data-how="${o.id}">${o.name}</button>`)}</div>
+      <p class="hint pp-mode">${P.PAGE_MODES.find((o) => o.id === now)?.hint || ''}</p>
+      <button type="button" class="btn btn-sm pp-add" data-addpage>${icons.plus({ size: 16 })}Add page here</button>
+      <p class="hint">Just this note. Text flows onto the next page by itself; Add page starts a new page at the cursor. Printing and PDF export use the same pages.</p>`}`;
+    const box = wide ? popover(anchor, body, { label: 'Pages', width: 340, cls: 'pp-pop' }) : openSheet(body, { label: 'Pages' });
+    box.el.classList.add('pp-panel');
+    box.el.querySelectorAll('[data-how]').forEach((b) => { b.onclick = async () => { box.close(); await setPageMode(b.dataset.how); }; });
+    box.el.querySelector('[data-addpage]').onclick = () => { box.close(); addPageHere(); };
   }
 
   // The toolbar is always there (reading or editing), so nothing jumps when
@@ -511,8 +584,9 @@ function mountTyped(el, params, ctx) {
         sealed: () => !!note()?.sealed,
         noteFont: () => note()?.font || state.config.text?.font,
         setNoteFont: (f) => { patch({ font: f }); $('#n-rich', el)?.style.setProperty('--note-font', rich.fontCss(f)); },
+        addPage: canPage() ? () => addPageHere() : null,
       });
-      suggest = T.attachSuggest(editor, { noteId: () => id, sealed: () => !!note()?.sealed });
+      suggest = T.attachSuggest(editor, { noteId: () => id, sealed: () => !!note()?.sealed, addPage: canPage() ? () => addPageHere() : null });
       const sticky = $('#n-sticky', el);
       if (sticky) vvHandler = T.pinTop(sticky);
     });
@@ -550,6 +624,8 @@ function mountTyped(el, params, ctx) {
   function destroyEditor() {
     player?.destroy();
     player = null;
+    pager?.destroy();
+    pager = null;
     teardownBar();
     editor?.destroy();
     editor = null;
@@ -576,7 +652,9 @@ function mountTyped(el, params, ctx) {
     box.querySelectorAll('[data-h]').forEach((b) => {
       b.onclick = () => {
         const hs = editor.view.dom.querySelectorAll('h1, h2, h3');
-        hs[Number(b.dataset.h)]?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        const h = hs[Number(b.dataset.h)];
+        pager?.reveal(h);
+        h?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       };
     });
   }
@@ -719,6 +797,7 @@ function mountTyped(el, params, ctx) {
       { value: 'link', label: 'Link to another note' },
       { value: 'sub', label: 'Add a sub-note' },
       { value: 'notebook', label: n.notebook ? 'Move to another notebook' : 'Move into a notebook' },
+      ...(canPage() ? [{ value: 'pages', label: 'Pages and layout' }] : []),
       { value: 'highlights', label: 'Highlights in this note' },
       { value: 'history', label: 'Version history' },
       { value: 'md', label: 'Export as Markdown' },
@@ -733,6 +812,7 @@ function mountTyped(el, params, ctx) {
     if (act === 'link') linkTo();
     if (act === 'sub') { await persist(true); if (id !== 'new') ctx.navigate(`#/note/new?parent=${id}`); }
     if (act === 'notebook') moveToNotebook();
+    if (act === 'pages') pagesPanel(null);
     if (act === 'highlights') { await persist(true); ctx.navigate(`#/highlights?note=${id}`); }
     if (act === 'history') { const { openHistory } = await import('./history.js'); openHistory(state.notes.get(id) || n, ctx); }
     if (act === 'md') {
@@ -785,6 +865,7 @@ function mountTyped(el, params, ctx) {
         if (recSig(note()) !== shownSig) drawRecordings();
         drawProps();
         drawConnections();
+        applyPageMode();
       }
     },
     destroy() {
