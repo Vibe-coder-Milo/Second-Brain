@@ -6,7 +6,7 @@
 
 | Version | Date | What changed in this document |
 |---|---|---|
-| v27 | 12 Nov 2026 | First spec. Written from the app as of `sb-v26`, plus the work planned or in progress for `sb-v27`. |
+| v27 | 12 Nov 2026 | First spec, written from `sb-v26`. In v27: typed notes no longer pushed right inside notebooks on wide iPads; per-note page view (Scroll down, Next page, Endless) for handwritten and PDF notes; Word and PowerPoint reader (import screens to follow); this spec. |
 
 *(Later versions add a row here. See "How to update this document" at the end.)*
 
@@ -74,11 +74,11 @@ Dates and release numbers come from `CLAUDE.md` "Requests from the owner". The g
 
 | ID | Problem (in the owner's terms) | Who it affects | Why it matters | Status |
 |---|---|---|---|---|
-| N-01 | **Mark up a document.** I get Word (.docx) and PowerPoint (.pptx) files, PDFs and pictures, and want to open any of them and write on them, not only PDFs. | Owner, iPad | Work and study documents arrive in many formats. Converting each by hand before writing is a chore. | Planned. See the rules below. |
-| N-02 | **Sections from imported documents.** Headings in Word, slide titles and sections in PowerPoint, and PDF bookmarks should appear in Contents by themselves. | Owner | A 60-slide deck is unusable without a way to jump around it. | Planned |
+| N-01 | **Mark up a document.** I get Word (.docx) and PowerPoint (.pptx) files, PDFs and pictures, and want to open any of them and write on them, not only PDFs. | Owner, iPad | Work and study documents arrive in many formats. Converting each by hand before writing is a chore. | In progress (reader done in v27; import screens next). See the rules below. |
+| N-02 | **Sections from imported documents.** Headings in Word, slide titles and sections in PowerPoint, and PDF bookmarks should appear in Contents by themselves. | Owner | A 60-slide deck is unusable without a way to jump around it. | In progress (reader done in v27; import screens next) |
 | N-03 | **Pages in typed notes.** I want to add a page, choose per note whether it is Scroll down, Next page or Endless, and have text flow onto the next page by itself. | Owner | Typed notes should be able to behave like printed pages when that suits the work. | Planned |
-| N-04 | **Next page or scroll, per note, for handwritten and PDF notes, and page options that are easy to find.** Today "Showing pages" is one setting for every note on the device and sits inside All pages. | Owner, iPad | Some notes (slides) suit turning pages, others (a long PDF) suit scrolling. The choice should be per note and visible. | In progress for v27 |
-| N-05 | **A typed note is pushed to the right inside a notebook on a wide iPad.** | Owner, iPad | The note is cramped and looks broken in the owner's usual layout. | Fixed in v27 |
+| N-04 | **Next page or scroll, per note, for handwritten and PDF notes, and page options that are easy to find.** Today "Showing pages" is one setting for every note on the device and sits inside All pages. | Owner, iPad | Some notes (slides) suit turning pages, others (a long PDF) suit scrolling. The choice should be per note and visible. | Done v27 |
+| N-05 | **A typed note is pushed to the right inside a notebook on a wide iPad.** | Owner, iPad | The note is cramped and looks broken in the owner's usual layout. | Done v27 |
 
 **Rules for N-01 and N-02** (agreed so far):
 
@@ -106,58 +106,58 @@ From `docs/research/2026-11-06-feature-ideas.md`; items 1 to 4 are built. Not re
 
 | ID | Requirement | Status | Test |
 |---|---|---|---|
-| CA-01 | The app shall let the owner save a thought, screenshots or photos, and/or a link in seconds from a Capture sheet (the + button). | Done v1 | test1-3, smoke4 |
-| CA-02 | Captures shall land in the Inbox until filed. | Done v1 | test1-3 |
-| CA-03 | From Capture the owner shall be able to scan paper, or start a typed note, a handwritten note or a whiteboard. | Done v1 | t5d, test1-3 |
-| CA-04 | Photos and screenshots shall be shrunk before encryption, keeping screenshot text readable. | Done v1 | t4a-t4e |
+| CA-01 | The app shall let the owner save a thought, screenshots or photos, and/or a link in seconds from a Capture sheet (the + button). | Done v1 | test1 |
+| CA-02 | Captures shall land in the Inbox until filed. | Done v1 | test1 |
+| CA-03 | From Capture the owner shall be able to scan paper, or start a typed note, a handwritten note or a whiteboard. | Done v1 | t5c |
+| CA-04 | Photos and screenshots shall be shrunk before encryption, keeping screenshot text readable. | Done v1 | test1 |
 | CA-05 | Pasting a picture (Ctrl/Cmd+V or "Paste a picture") shall go into the open note and never open Capture. | Done v25 | t6i |
-| CA-06 | Dragging screenshots onto the map (iPad, computer) shall capture them. | Done v1 | t5n |
-| CA-07 | Text in screenshots shall be read on the device (OCR) so it is searchable. | Done v1 | t5d |
-| CA-08 | Scanning shall find page edges, allow corner adjustment and offer colour, greyscale or black and white. | Done v1 | t5d |
+| CA-06 | Dragging screenshots onto the map (iPad, computer) shall capture them. | Done v1 | - |
+| CA-07 | Text in screenshots shall be read on the device (OCR) so it is searchable. | Done v1 | test1, t5c |
+| CA-08 | Scanning shall find page edges, allow corner adjustment and offer colour, greyscale or black and white. | Done v1 | t5c |
 | CA-09 | The organiser shall file new notes into regions when sure, with an undo list in the Inbox. | Done v1 | t5m |
 
 ### 2.2 Typed notes
 
 | ID | Requirement | Status | Test |
 |---|---|---|---|
-| TN-01 | The app shall provide a rich editor with title, headings, lists, checklists, quote, callout, post-it, divider, tables, images, stickers, due dates and note links. | Done v1 | t5g-t5l |
-| TN-02 | Typing `/` or markdown shortcuts (`#`, `-`, `1.`, `[ ]`, `>`, `!`, `---`) shall apply styles. | Done v1 | t5g-t5l |
-| TN-03 | The toolbar shall be the same two rows as handwritten notes and shall be present while reading, so nothing jumps. | Done v1 | t5g-t5l |
-| TN-04 | The app shall offer seven fonts, sizes, alignment and 30 text colours, shown brightened in dark mode. | Done v1 | t5g-t5l |
+| TN-01 | The app shall provide a rich editor with title, headings, lists, checklists, quote, callout, post-it, divider, tables, images, stickers, due dates and note links. | Done v1 | t4a, t5j, t5l |
+| TN-02 | Typing `/` or markdown shortcuts (`#`, `-`, `1.`, `[ ]`, `>`, `!`, `---`) shall apply styles. | Done v1 | t5j (the `/` menu only) |
+| TN-03 | The toolbar shall be the same two rows as handwritten notes and shall be present while reading, so nothing jumps. | Done v1 | t5k, t5l |
+| TN-04 | The app shall offer seven fonts, sizes, alignment and 30 text colours, shown brightened in dark mode. | Done v1 | t6a |
 | TN-05 | Tapping a note's title shall start editing the title, every time. | Done v23 | t6g |
 | TN-06 | A default text font, size and colour (Settings) shall apply to typed notes (including existing ones), Today, PDF export, and start new text boxes and whiteboard text, which then keep their own values. | Done v17, extended v18 | t6a |
-| TN-07 | `[[` shall link to another note; links shall show bold and blue. | Done v1 | t5n |
-| TN-08 | Pictures shall be insertable by paste, drag and Insert menu, going where the cursor is (or the end while reading). | Done v25 | t6i |
+| TN-07 | `[[` shall link to another note; links shall show bold and blue. | Done v1 | t4a, t5n |
+| TN-08 | Pictures shall be insertable by paste, drag and Insert menu, going where the cursor is (or the end while reading). | Done v25 | t5j, t6i |
 | TN-09 | **Contents** shall list headings with reading time, mark the current one, jump under the sticky toolbar, and offer Back to top and To the end. | Done v26 | t6j |
 | TN-10 | **Pages** shall show the note as printed pages and jump to the tapped page. | Done v26 | t6j |
 | TN-11 | Contents shall also list sections found in imported Word/PowerPoint files and PDF bookmarks (see DI-05). | Planned | - |
 | TN-12 | The owner shall be able to add a page to a typed note. | Planned | - |
 | TN-13 | Each typed note shall have a page mode: Scroll down, Next page or Endless. | Planned | - |
 | TN-14 | In Next page mode, text shall flow onto the next page by itself. | Planned | - |
-| TN-15 | A typed note shall sit in the correct place (not pushed right) inside a notebook on a wide iPad. | Done v27 | - (not covered by a named test in `tests/README.md`) |
+| TN-15 | A typed note shall sit in the correct place (not pushed right) inside a notebook on a wide iPad. The Outline panel shows only outside notebooks. | Done v27 | t6k |
 | TN-16 | A note shall have connections: links both ways, unlinked mentions, related notes by meaning, sub-notes. | Done v1 | t5n, t5p, t5w |
-| TN-17 | Fields from a section's table view shall be folded below the text and shown on tap. | Done v1 | t5f (table views) |
+| TN-17 | Fields from a section's table view shall be folded below the text and shown on tap. | Done v1 | t5l |
 
 ### 2.3 Handwritten notes and PDFs
 
 | ID | Requirement | Status | Test |
 |---|---|---|---|
-| HW-01 | The Pencil shall write; fingers shall scroll and pinch; the Pencil shall never be cancelled by a pinch. | Done v1 | t5b, t5r, t5z |
-| HW-02 | The app shall offer pens (fountain, ballpoint, brush, pencil, marker, calligraphy) with colour, thickness, smoothing and pressure, plus favourites, highlighter, eraser, lasso, snapping shapes and text boxes. | Done v1 | t5b, t5g-t5l |
-| HW-03 | Pages shall be A4, or an endless page that grows as the owner writes. | Done v1 | t5b |
-| HW-04 | Paper shall be selectable: dot grid, lined, narrow lined, squared, Cornell, blank; in white, ivory or dark. | Done v1 | t5m |
-| HW-05 | The owner shall be able to add, reorder and bookmark pages. | Done v1 | t5b |
+| HW-01 | The Pencil shall write; fingers shall scroll and pinch; the Pencil shall never be cancelled by a pinch. | Done v1 | t5z |
+| HW-02 | The app shall offer pens (fountain, ballpoint, brush, pencil, marker, calligraphy) with colour, thickness, smoothing and pressure, plus favourites, highlighter, eraser, lasso, snapping shapes and text boxes. | Done v1 | t4b, t5i |
+| HW-03 | Pages shall be A4, or an endless page that grows as the owner writes. | Done v1 | t5i |
+| HW-04 | Paper shall be selectable: dot grid, lined, narrow lined, squared, Cornell, blank; in white, ivory or dark. | Done v1 | t5l |
+| HW-05 | The owner shall be able to add, reorder and bookmark pages. | Done v1 | t4b |
 | HW-06 | The continuous view (pages one under another) shall be the default; the one-at-a-time view shall be available. | Done v1 | t5r |
 | HW-07 | A note shall reopen at the page last viewed. | Done v1 | t5q |
-| HW-08 | The page view mode (Scroll or Next page) shall be chosen per note and be easy to find on the note's own toolbar, for handwritten and PDF notes. | In progress v27 | - |
+| HW-08 | The page view mode (Scroll down, Next page or Endless) shall be chosen per note and be easy to find on the note's own toolbar, for handwritten and PDF notes. Endless is not offered on PDF or photo pages. Adding a page shall work in both views. | Done v27 | t6l |
 | HW-09 | Zoom shall run from 1x to 6x, follow the fingers (pinch) or the pointer (Ctrl/Cmd+wheel), show a label, and fit the page when the label is tapped. | Done v17 | t5z |
 | HW-10 | Zoomed in, the owner shall be able to scroll and drag to every edge of the page, in both views. | Done v16 | t5x |
 | HW-11 | Handwriting shall be read on the device a few seconds after writing stops, so it is searchable and usable in links and search by meaning. | Done v1 | t5h |
 | HW-12 | Lasso + Convert to text shall show the reading for correction, then copy it or replace the ink with typed text. | Done v1 | t5h |
 | HW-13 | A text box dragged out shall sit where drawn and wrap inside; a tapped box shall stay on screen when zoomed. | Done v23 | t6g |
 | HW-14 | A text box or post-it shall move with the text tool (drag), or by its grip while typing, with undo. | Done v25 | t6i |
-| HW-15 | The writing window (Zoom) shall let the owner write large and land small on the page. | Done v1 | t5b |
-| HW-16 | Layers (Ink, Highlights, custom) shall be hideable and lockable; export shall include only visible layers. | Done v1 | t5g-t5l |
+| HW-15 | The writing window (Zoom) shall let the owner write large and land small on the page. | Done v1 | t5g |
+| HW-16 | Layers (Ink, Highlights, custom) shall be hideable and lockable; export shall include only visible layers. | Done v1 | t5g |
 | HW-17 | A PDF shall open as a handwritten note whose pages can be drawn on; its text shall be searchable. | Done v1 | t5o |
 | HW-18 | The original PDF (up to 40 MB) shall be kept, drawn sharp at any zoom, and embedded in exports with the writing on top. Bigger PDFs shall be kept as 2400 px page pictures. | Done v16 | t5y |
 | HW-19 | Long PDFs (up to 300 pages) shall keep memory flat: only pages near the screen are drawn. | Done v1 | t5q |
@@ -165,17 +165,17 @@ From `docs/research/2026-11-06-feature-ideas.md`; items 1 to 4 are built. Not re
 | HW-21 | A laser pointer shall draw a fading line and save nothing. | Done v1 | t5o |
 | HW-22 | Highlighted words shall be gathered on a Highlights screen: from the PDF's text, else handwriting, else OCR; a word counts when at least half is covered. | Done v20 | t6d |
 | HW-23 | Pictures pasted shall land on the visible part of a handwritten page. | Done v25 | t6i |
-| HW-24 | Recordings shall play back with writing that fades in by time, and tapping a word shall jump to that moment. | Done v1 | t5c |
+| HW-24 | Recordings shall play back with writing that fades in by time, and tapping a word shall jump to that moment. | Done v1 | t5b |
 
 ### 2.4 Documents import (Mark up a document)
 
 | ID | Requirement | Status | Test |
 |---|---|---|---|
-| DI-01 | The owner shall be able to open a Word (.docx) file and write on its pages. | Planned | - |
-| DI-02 | The owner shall be able to open a PowerPoint (.pptx) file and write on its slides. | Planned | - |
+| DI-01 | The owner shall be able to open a Word (.docx) file and write on its pages. | In progress (reader done in v27; import screens next) | t6m |
+| DI-02 | The owner shall be able to open a PowerPoint (.pptx) file and write on its slides. | In progress (reader done in v27; import screens next) | t6m |
 | DI-03 | The owner shall be able to open a picture (photo, screenshot) as a page to write on. | Planned | - |
 | DI-04 | All conversion shall run on the device. No file shall be sent to any service. | Planned | - |
-| DI-05 | Headings (Word), slide titles and sections (PowerPoint) and PDF bookmarks shall appear in Contents without any action. | Planned | - |
+| DI-05 | Headings (Word), slide titles and sections (PowerPoint) and PDF bookmarks shall appear in Contents without any action. | In progress (reader done in v27; import screens next) | t6m |
 | DI-06 | The app shall tell the owner that imported Word and PowerPoint files look close to the original, not exact, and that an exact look comes from exporting to PDF first. | Planned | - |
 | DI-07 | Opening a PDF shall keep working as in HW-17 to HW-20. | Done v1 | t5o, t5u, t5y |
 
@@ -184,7 +184,7 @@ From `docs/research/2026-11-06-feature-ideas.md`; items 1 to 4 are built. Not re
 | ID | Requirement | Status | Test |
 |---|---|---|---|
 | WB-01 | A board shall hold cards for notes (existing or new), sticky notes, text, shapes, frames that carry their contents, photos, arrows that stay attached, and a pen. | Done v1 | t5e |
-| WB-02 | The board shall pan and zoom (finger, trackpad, pinch) with an overview to jump around. | Done v1 | t5e |
+| WB-02 | The board shall pan and zoom (finger, trackpad, pinch) with an overview to jump around. | Done v1 | t5e, t5e_touch |
 | WB-03 | Notes on a board shall show it among their connections. | Done v1 | t5e |
 | WB-04 | A board shall export as PDF or image. | Done v1 | t5e |
 | WB-05 | New board text shall start with the default text colour and nearest size. | Done v18 | t6a |
@@ -194,12 +194,12 @@ From `docs/research/2026-11-06-feature-ideas.md`; items 1 to 4 are built. Not re
 
 | ID | Requirement | Status | Test |
 |---|---|---|---|
-| NB-01 | A shelf of notebooks, each in a region, with sections, notes and sub-notes. | Done v1 | t5a |
+| NB-01 | A shelf of notebooks, each in a region, with sections, notes and sub-notes. | Done v1 | t4c, t5u |
 | NB-02 | Covers shall come from a library of 66 in 11 collections, the owner's photo, or a plain colour. | Done v17 | t5s |
 | NB-03 | Long names shall fit on the cover on two lines (three if needed); "…" only when nothing fits. | Done v16 | t5s |
 | NB-04 | Notes and sub-notes shall list newest first by last change. | Done v23 | t6g |
 | NB-05 | On a wide iPad the open note shall sit beside the notebook, and the side panel shall be hideable for more room (focus). | Done v1 | t5n |
-| NB-06 | A section shall open as table, cards, timeline or board, with presets and filter, sort and group. | Done v1 | t5f |
+| NB-06 | A section shall open as table, cards, timeline or board, with presets and filter, sort and group. | Done v1 | t5d |
 | NB-07 | Two notes shall be openable side by side on wide screens (900 px or more), with a draggable divider, shared pens, swap, close and a remembered pair. | Done v20 | t6e |
 | NB-08 | Side by side shall work for a note opened inside a notebook. | Done v21 | t6e |
 
@@ -207,12 +207,12 @@ From `docs/research/2026-11-06-feature-ideas.md`; items 1 to 4 are built. Not re
 
 | ID | Requirement | Status | Test |
 |---|---|---|---|
-| TD-01 | Today shall show the week, what is due (late flagged), a quick "add a task", today's note and the day's captures; other days can be browsed. | Done v1 | test1-3 |
+| TD-01 | Today shall show the week, what is due (late flagged), a quick "add a task", today's note and the day's captures; other days can be browsed. | Done v1 | smoke4, t5p |
 | TD-02 | "From your notes" shall show notes from this day in earlier years and one older note worth another look; sealed notes never show. | Done v19 | t6c |
 | TD-03 | "Your map this week" shall summarise new notes, regions, links and assistant actions, and be hideable. | Done v1 | t5p |
-| TK-01 | Tasks shall gather checklists from every note, typed or handwritten, grouped by date, note or region; ticking updates the note. | Done v1, region v26 | t5g-t5l, t6j |
+| TK-01 | Tasks shall gather checklists from every note, typed or handwritten, grouped by date, note or region; ticking updates the note. | Done v1, region v26 | t4a, t6j |
 | TK-02 | The menu shall show "N due" on Today and Tasks, tasks left, a line per region, labels and highlights, kept up to date. | Done v26 | t6j |
-| LB-01 | Labels stuck on pages shall be collected on a Labels screen with a preview of the spot; names and colours editable. | Done v1 | t5g-t5l |
+| LB-01 | Labels stuck on pages shall be collected on a Labels screen with a preview of the spot; names and colours editable. | Done v1 | t4a, t5j |
 | HL-01 | A Highlights screen shall list highlights with a picture, the words and a colour filter, with Copy as text and Remove; also per note and per notebook. | Done v20 | t6d |
 | RG-01 | Regions shall have 25 colours, chosen from a grid that marks colours other regions use. | Done v26 | t6j |
 
@@ -226,16 +226,16 @@ From `docs/research/2026-11-06-feature-ideas.md`; items 1 to 4 are built. Not re
 | MP-04 | The map library shall load only when the map opens; the map shall rest when still. | Done v1 | t5q |
 | MP-05 | The map assistant shall draw related lines, point out patterns under Noticed, and optionally auto-link very close notes, listing each in the Inbox with Undo. | Done v1 | t5p |
 | MP-06 | The organiser shall classify by exemplar phrases and show a plan the owner can untick before filing; it shall add regions when needed. | Done v1 | t5m |
-| AI-01 | Search by meaning (MiniLM) shall run on the device; lists of near notes shall be kept encrypted, sealed notes left out. | Done v1 | t5w |
-| AI-02 | Handwriting reading, transcription (Whisper-tiny) and OCR (Tesseract) shall run on the device in a worker. | Done v1 | t5c, t5h, t5d |
-| AI-03 | Model files shall be bundled in the app and cached for offline use. | Done v1 | t5c |
-| AI-04 | "Ask Claude" shall build a prompt to paste into a Claude chat, import the reply, and show every change for review. Sealed notes shall be excluded. | Done v1 | - |
+| AI-01 | Search by meaning (MiniLM) shall run on the device; lists of near notes shall be kept encrypted, sealed notes left out. | Done v1 | t5a, t5w |
+| AI-02 | Handwriting reading, transcription (Whisper-tiny) and OCR (Tesseract) shall run on the device in a worker. | Done v1 | t5b, t5c, t5h |
+| AI-03 | Model files shall be bundled in the app and cached for offline use. | Done v1 | - |
+| AI-04 | "Ask Claude" shall build a prompt to paste into a Claude chat, import the reply, and show every change for review. Sealed notes shall be excluded. | Done v1 | test2, test3 |
 
 ### 2.9 Search
 
 | ID | Requirement | Status | Test |
 |---|---|---|---|
-| SE-01 | All notes shall search titles, typed text, handwriting readings, PDF text, OCR and transcripts. | Done v1 | test1-3 |
+| SE-01 | All notes shall search titles, typed text, handwriting readings, PDF text, OCR and transcripts. | Done v1 | t5a, t5b, t5h |
 | SE-02 | Results shall include notes "close in meaning". | Done v1 | t5w |
 | SE-03 | Search shall stay quick at 10,000 notes (about 0.1 s). | Done v1 | perf/scale.py |
 
@@ -246,10 +246,10 @@ From `docs/research/2026-11-06-feature-ideas.md`; items 1 to 4 are built. Not re
 | SY-01 | Notes shall sync to a private GitHub repo, one commit per sync, as ciphertext. | Done v1 | t4c |
 | SY-02 | Sync shall run 4 s after a change, at once when the app is put away with a change waiting, on return, and every 3 minutes while visible. | Done v1, put-away v24 | t4c, t6h |
 | SY-03 | Uploads shall go in batches within GitHub's limits (70 a minute, 440 an hour); a note's files before the note; rate-limit answers shall retry, not error. | Done v1 | t5v |
-| SY-04 | Conflicts: typed notes keep the newer version and a "conflict copy" in the Inbox; ink pages merge strokes; notebooks merge. | Done v1 | t4c |
-| SY-05 | A second device shall join with the repo, token and passphrase. | Done v1 | t4c |
+| SY-04 | Conflicts: typed notes keep the newer version and a "conflict copy" in the Inbox; ink pages merge strokes; notebooks merge. | Done v1 | test2, t4c |
+| SY-05 | A second device shall join with the repo, token and passphrase. | Done v1 | test2 |
 | SY-06 | Every sync commit shall double as version history; each note and ink page can be compared and restored. | Done v1 | t4c |
-| SY-07 | Settings shall offer "Sync now" and show the sync state. | Done v1 | t4c |
+| SY-07 | Settings shall offer "Sync now" and show the sync state. | Done v1 | test2 |
 | SY-08 | The app shall show an update bar when a new version is ready and a "Check for updates" button. | Done v1 | t5m |
 
 ### 2.11 Recently deleted
@@ -260,27 +260,27 @@ From `docs/research/2026-11-06-feature-ideas.md`; items 1 to 4 are built. Not re
 | RD-02 | "Put back" shall restore it with pages, images and links; a notebook comes back with notes deleted with it. | Done v19 | t6b |
 | RD-03 | "Delete now" and "Empty" shall remove for good, including files; after 30 days items go by themselves. | Done v19 | t6b |
 | RD-04 | Emptying on one device shall reach the other at its next sync, and be sent at once when the app is put away. | Done v24 | t6h |
-| RD-05 | Sealed binned notes shall leave the list when sealed notes lock. | Done v19 | t6b |
+| RD-05 | Sealed binned notes shall leave the list when sealed notes lock. | Done v19 | - |
 
 ### 2.12 Export and backup
 
 | ID | Requirement | Status | Test |
 |---|---|---|---|
-| EX-01 | A note or notebook shall export as PDF or Markdown; everything as a Markdown zip. | Done v1 | t5g-t5l, t5y |
+| EX-01 | A note or notebook shall export as PDF or Markdown; everything as a Markdown zip. | Done v1 | t5y |
 | EX-02 | PDF export shall match the default text and embed original PDF pages with writing on top; turned pages become pictures. | Done v18 | t5y, t6a |
 | EX-03 | Endless handwritten pages shall export as A4 pieces. | Done v1 | - |
 | EX-04 | An encrypted backup shall be available in Settings. | Done v1 | - |
-| EX-05 | Exports shall always use light paper. | Done v1 | t5g-t5l |
+| EX-05 | Exports shall always use light paper. | Done v1 | - |
 
 ### 2.13 Settings
 
 | ID | Requirement | Status | Test |
 |---|---|---|---|
-| ST-01 | Appearance: match device, light or dark; dark mode shall darken pages and boards, with an option to keep pages light. | Done v1 | t5g-t5l |
-| ST-02 | Auto-lock after a chosen time. | Done v1 | test1-3 |
+| ST-01 | Appearance: match device, light or dark; dark mode shall darken pages and boards, with an option to keep pages light. | Done v1 | t5l, t6a |
+| ST-02 | Auto-lock after a chosen time. | Done v1 | - |
 | ST-03 | Touch ID / Face ID unlock per device (see NF-S5). | Done v1 | t5t |
-| ST-04 | Change passphrase; sealed notes with their own passphrase. | Done v1 | test1-3 |
-| ST-05 | Regions, labels and stickers shall be editable and synced. | Done v1 | t5m |
+| ST-04 | Change passphrase; sealed notes with their own passphrase. | Done v1 | test2 |
+| ST-05 | Regions, labels and stickers shall be editable and synced. | Done v1 | t6j |
 | ST-06 | On-device intelligence: turn meaning search, organiser and auto-link on or off; rebuild the index. | Done v1 | t5m, t5w |
 | ST-07 | "This device" shall show storage used, the app version and Check for updates; the app shall ask the browser to keep storage. | Done v1 | t5m |
 | ST-08 | Default text (font, size, colour). | Done v17 | t6a |
@@ -291,9 +291,9 @@ From `docs/research/2026-11-06-feature-ideas.md`; items 1 to 4 are built. Not re
 
 | ID | Requirement | Test |
 |---|---|---|
-| NF-S1 | Everything stored or synced shall be AES-256-GCM encrypted (`js/crypto.js`). A random data key is wrapped by the passphrase (PBKDF2-SHA256, 600,000 rounds). The data key is created non-extractable. There is no reset. | test1-3, t4c |
-| NF-S2 | Each record shall be bound to its id (AES-GCM additional data). | test1-3 |
-| NF-S3 | Sealed notes shall use a second key and passphrase, stay hidden until opened, never be indexed while locked, never be sent anywhere, and be excluded from Ask Claude. | test1-3 |
+| NF-S1 | Everything stored or synced shall be AES-256-GCM encrypted (`js/crypto.js`). A random data key is wrapped by the passphrase (PBKDF2-SHA256, 600,000 rounds). The data key is created non-extractable. There is no reset. | test1, test2, t4c |
+| NF-S2 | Each record shall be bound to its id (AES-GCM additional data). | - |
+| NF-S3 | Sealed notes shall use a second key and passphrase, stay hidden until opened, never be indexed while locked, never be sent anywhere, and be excluded from Ask Claude. | test2 |
 | NF-S4 | The Content-Security-Policy in `index.html` shall allow only `'self'` plus `https://api.github.com` for connections (scripts: `'self' 'wasm-unsafe-eval'`). Fonts, libraries and AI models are bundled in `vendor/` and `fonts/`. No third-party requests, analytics or CDNs. | - (checked by reading `index.html`) |
 | NF-S5 | Touch ID / Face ID unlock shall be optional and per device. A WebAuthn passkey's PRF secret (HKDF, then AES-GCM) wraps a copy of the data key kept only in that device's `meta` store: never synced, never in backups. The passphrase is required every 30 days and always for sealed notes. The device passcode can stand in for biometrics (a WebAuthn limit). | t5t |
 | NF-S6 | The GitHub token shall be pasted only into the app and stored encrypted. No one else (including Claude) shall ask for, read or handle it. | - |
