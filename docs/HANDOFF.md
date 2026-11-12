@@ -18,8 +18,8 @@ ask for it by name.
 ## Where things stand (6 Nov 2026)
 
 - Live app: https://vibe-coder-milo.github.io/Second-Brain/
-- Version: service worker `sb-v26` on `main`.
-- Tests: 76 of 76 passing (`cd tests && ./runall.sh`, about 25 minutes).
+- Version: service worker `sb-v27` on `main`.
+- Tests: 81 of 81 passing (`cd tests && ./runall.sh`, about 25 minutes).
 - Everything the owner asked for so far is built. The list, by date, is in
   `CLAUDE.md` under "Requests from the owner".
 

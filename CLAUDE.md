@@ -28,6 +28,14 @@ through a private GitHub repo. Everything is encrypted on the device.
 - Expects changes to go live: after tests pass, commit, push to `main`, bump
   the service worker version, and say so ("tap the update bar when it
   appears").
+- **Docs to keep up to date (owner's standing request, 12 Nov 2026):** the
+  product spec (requirements, problem statements, architecture diagrams) lives
+  in `docs/spec/Second Brain - Spec vN.md` with SVG diagrams. On every release:
+  copy it to the new version's name, add a version-history row, update
+  statuses and tests, build the PDF (`python3 docs/spec/build_pdf.py
+  "<md>"`), and upload the .md and .pdf to the owner's Google Drive folder
+  **Personal / AI / Second Brain** (Google Drive connector), named by version.
+  The repo is public: no personal details in the spec.
 - Security rule, in their words: "security is key, what i upload should only
   be available to myself".
   - Never ask for, read or handle their GitHub token. It's pasted only into the
@@ -76,7 +84,7 @@ through a private GitHub repo. Everything is encrypted on the device.
   - models: transformers and onnxruntime (`ort/`) with the model files;
   - OCR: tesseract.
 - **Service worker** (`sw.js`):
-  - Bump `VERSION` (`sb-vN`; currently `sb-v26`) on every release.
+  - Bump `VERSION` (`sb-vN`; currently `sb-v27`) on every release.
   - Add every new JS/CSS file to `SHELL`, or it won't work offline.
   - The app shows an update bar (`js/appupdate.js`).
 - **Views:** `js/views/*.js` export `mount(main, params, ctx)`, returning
@@ -454,6 +462,45 @@ the test's own thread and `time.sleep` would stall it).
    `#n-rich`, so labels and jumps are close, not exact, on narrow screens.
    Works in a notebook's pane (it finds the scrolling box). The old Outline
    panel stays on very wide screens. `t6j`.
+
+### 12 Nov 2026 (`sb-v27`, plan approved; built with helper agents)
+
+The owner asked for: "Mark up a document" (Word, PowerPoint, PDF, pictures,
+not only PDFs), sections from imported files shown automatically, pages in
+typed notes (add page; endless or next page, per note; text flowing onto the
+next page), a layout fix, and the spec docs (above). Decided with the owner:
+Word/PowerPoint look close to the original, not exact (on-device only);
+typed-note text flows to the next page; page view is per note; docs go to
+Google Drive. A mockup of the import screens and typed-note pages (row 3 of
+the owner's mockup canvas) awaits approval. v27 ships:
+
+1. **Typed note pushed right inside a notebook** (wide iPad, e.g. 1376 px):
+   the Outline panel is hidden in `.nb-pane`/`.split-pane` but `with-outline`
+   kept its 264 px margin. `drawOutline()` now treats those panes as narrow,
+   plus a CSS safety rule. `t6k`.
+2. **How pages show, per note** (handwritten notes and PDF markups):
+   `n.pageView` ('continuous'|'single'|null, ink only) read by
+   `continuousOn()`, falling back to `state.device.pageView`; saved with
+   `touch:false`. One "How pages show" group in the Pages sheet: Scroll down
+   / Next page / Endless (= `layout: 'scroll'`, hidden for notes with
+   `bg`/`pdf` pages). Labelled Pages button on wide screens; "Pages and
+   layout" in the ⋯ menu. Old selectors `data-view`/`data-layout` are now
+   `data-how=down|next|endless` (t5i, t5r, t5x, t5y, t5z updated). `t6l`.
+3. **Word/PowerPoint reader** (`js/docread.js`, not wired to the UI yet):
+   `readDocx` gives a typed-note doc (headings: Word Title and Heading 1 -> 1,
+   Heading 2 -> 2, 3+ -> 3; lists from numbering.xml; tables with the first
+   row as header; `imageFile` placeholders + `images`; explicit page breaks as
+   `{type:'pageBreak'}` blocks that the editor doesn't know: lay pages out on
+   them or strip them before saving) plus `sections`. `readPptx` gives slides
+   with shapes at fractions of the slide (placeholders inherit position and
+   text style from layout/master), pictures, tables, titles, background, notes
+   and `p14:sectionLst` sections. Not read: charts, SmartArt, EMF/WMF, crops,
+   fills, Word fonts. Fixtures and their expected structure:
+   `tests/fixtures/` (regenerate with `make_fixtures.py`). `t6m`.
+4. **Spec v27** in `docs/spec/` (see "Docs to keep up to date").
+
+Opening a never-written handwritten note creates its page file, which bumps
+`updatedAt` once; notes with writing keep their time when opened (checked).
 
 ## Ideas noted, not requested
 

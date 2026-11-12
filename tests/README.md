@@ -60,6 +60,9 @@ python3 t5r.py phone         # one test directly (needs the server: python3 serv
 | t6h | Emptying Recently deleted on one device (two devices, mock GitHub): it syncs by itself within seconds, at once if the app is put away, page files go too, and the other device's Recently deleted empties at its next sync |
 | t6i | Text boxes move with the text tool (drag; a tap still opens one) and by their grip while typing, saved and undoable; pictures pasted with Ctrl/Cmd+V or Paste a picture land in typed notes (cursor, or the end while reading), Today's note, handwritten pages and whiteboards, never opening Capture; nothing replaced |
 | t6j | Menu numbers ("N due" on Today and Tasks, tasks left, a line per region, labels, highlights; they follow a tick), Tasks by region (one region from the menu), 25 region colours in a grid, Contents (headings, reading times, you're here, jump, top, end) and Pages (printed pages, tap to go) in a long typed note, on its own and in a notebook |
+| t6k | A typed note inside a notebook on a wide iPad (1376 px) stays centred; the Outline shows only outside notebooks |
+| t6l | How pages show, per handwritten note or PDF markup: Scroll down / Next page / Endless (not for PDF or photo pages), labelled Pages button on iPad, Pages and layout in the ⋯ menu, Add page in both views, view choice doesn't change when the note was edited |
+| t6m | Word and PowerPoint reader on the device (`js/docread.js`): headings, lists, tables, pictures, page breaks; slides, titles, picture positions, tables, PowerPoint sections; a read Word file opens as a typed note and lays out as pages |
 | t6d | Highlights: words under neat and sloppy highlights (PDF, handwriting, typed), colours, remove a slip, lasso "Add to highlights" |
 
 Helpers: `dbg.py` (`run(steps, vp, mob)` creates a vault and runs steps; `SB_BASE` points it at another copy of the app),
