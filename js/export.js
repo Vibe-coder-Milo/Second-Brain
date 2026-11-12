@@ -170,7 +170,7 @@ async function inkCanvases(n) {
 
 // px: the width of each page picture (smaller for the pages view of a long note).
 // Each canvas carries `range`: [from, to, total] in layout units, to jump to it.
-async function typedCanvases(n, { px = PX } = {}) {
+async function typedCanvases(n, { px = PX, heading = true } = {}) {
   const { drawRichText, fileImageReady, setInkTone } = await import('./editor/inkdraw.js');
   const { noteDoc } = await import('./editor/rich.js');
   const doc = noteDoc(n);
@@ -191,16 +191,18 @@ async function typedCanvases(n, { px = PX } = {}) {
     ctx.fillStyle = '#1B2A38';
     ctx.font = "500 40px 'Spectral', Georgia, serif";
     ctx.textBaseline = 'alphabetic';
-    const title = displayTitle(n);
-    const words = title.split(/\s+/);
-    let line = '';
-    for (const w of words) {
-      const t = line ? `${line} ${w}` : w;
-      if (ctx.measureText(t).width > width && line) { y += 48; ctx.fillText(line, M, y); line = w; } else line = t;
+    if (heading) {
+      const title = displayTitle(n);
+      const words = title.split(/\s+/);
+      let line = '';
+      for (const w of words) {
+        const t = line ? `${line} ${w}` : w;
+        if (ctx.measureText(t).width > width && line) { y += 48; ctx.fillText(line, M, y); line = w; } else line = t;
+      }
+      y += 48;
+      ctx.fillText(line, M, y);
+      y += 30;
     }
-    y += 48;
-    ctx.fillText(line, M, y);
-    y += 30;
     for (const { f, img } of imgs) {
       if (!img) continue;
       const iw = img.naturalWidth || img.width;
