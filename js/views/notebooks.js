@@ -108,13 +108,15 @@ export function mountNotebook(el, params, ctx) {
 
   const nb = () => state.notebooks.get(id);
   // Drop documents (PDF, Word, PowerPoint, pictures, a zip) on the notebook to mark them up.
-  el.addEventListener('dragover', (e) => { if ([...(e.dataTransfer?.items || [])].some((i) => i.kind === 'file')) e.preventDefault(); });
-  el.addEventListener('drop', async (e) => {
+  const onDragOver = (e) => { if ([...(e.dataTransfer?.items || [])].some((i) => i.kind === 'file')) e.preventDefault(); };
+  const onDrop = async (e) => {
     const fs = [...(e.dataTransfer?.files || [])];
-    if (!fs.length) return;
+    if (!fs.length || e.defaultPrevented) return;
     e.preventDefault();
     takeFiles(fs);
-  });
+  };
+  el.addEventListener('dragover', onDragOver);
+  el.addEventListener('drop', onDrop);
 
   // The note beside the notebook uses its own navigation, so links to notes in
   // this notebook open in the pane instead of taking over the screen.
@@ -437,6 +439,8 @@ export function mountNotebook(el, params, ctx) {
       gone = true;
       tv?.destroy();
       window.removeEventListener('resize', onResize);
+      el.removeEventListener('dragover', onDragOver);
+      el.removeEventListener('drop', onDrop);
       closePane();
       document.body.classList.remove('nb-open');
     },

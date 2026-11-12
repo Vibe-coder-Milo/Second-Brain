@@ -317,14 +317,16 @@ function mountMap(main, params, ctx) {
   };
   const onDragLeave = (e) => { if (e.target === view || !view.contains(e.relatedTarget)) view.classList.remove('dropping'); };
   const onDrop = (e) => {
+    if (e.defaultPrevented) return; // another copy of this screen already took the drop
     e.preventDefault();
     view.classList.remove('dropping');
     const all = [...(e.dataTransfer?.files || [])];
-    // Documents (PDF, Word, PowerPoint) open as pages to mark up; pictures alone go to Capture.
+    // Documents (PDF, Word, PowerPoint) open as pages to mark up, and pictures dropped with them
+    // come along (one note, a page each); pictures alone go to Capture.
     const files = all.filter((f) => f.type.startsWith('image/'));
     const docs = all.filter((f) => !f.type.startsWith('image/'));
     if (docs.length || (all.length && !files.length)) {
-      import('../docintake.js').then((D) => D.routeFiles(docs.length ? docs : all, {
+      import('../docintake.js').then((D) => D.routeFiles(all, {
         single: (f) => import('../handoff.js').then((H) => { H.handOff(f); ctx.navigate('#/note/new?kind=ink'); }),
         many: (list) => import('./importsheet.js').then((M) => M.importSheet({ files: list, ctx })),
       }));

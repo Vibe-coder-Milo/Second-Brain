@@ -7,7 +7,7 @@ import { state } from '../vault.js';
 import { openSheet } from '../ui.js';
 import { icons } from '../icons.js';
 import { coverSVG } from '../covers.js';
-import { DOC_ACCEPT } from '../docintake.js';
+import { DOC_ACCEPT, fileTitle, warningText } from '../docintake.js';
 
 const mb = (n) => (n > 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
 const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
@@ -56,7 +56,7 @@ export function importSheet({ files = null, notebook = null, section = null, ctx
     const draw = () => {
       if (!items) {
         body.innerHTML = `${html`
-          <p class="muted" style="margin:0">Each file becomes a handwritten note in a notebook, with room to keep writing on it. PDFs look just as they did; Word and PowerPoint look close to the original.</p>
+          <p class="muted" style="margin:0">Each file becomes a handwritten note in a notebook, with room to keep writing on it. Several pictures together become one note, a page each. PDFs look just as they did; Word and PowerPoint look close to the original.</p>
           <ol class="imp-steps">
             <li><b>In Notability:</b> in your library tap ${raw('<span class="kbd">⋯</span>')} then <b>Select Notes</b>, pick the notes (a whole subject at once is fine), then <b>Export</b>, choose <b>PDF</b>, and <b>Save to Files</b>.</li>
             <li><b>Here:</b> tap <b>Choose files</b> and select them all in Files. PDFs, Word, PowerPoint and pictures work, and so does a .zip of them: its folders become sections.</li>
@@ -75,7 +75,7 @@ export function importSheet({ files = null, notebook = null, section = null, ctx
       const folders = [...new Set(items.map((x) => x.folder).filter(Boolean))];
       body.innerHTML = `${html`
         <p class="imp-count"><b>${plural(items.length, 'note')}</b> ready to bring in <span class="muted">(${mb(size)})</span></p>
-        <ul class="imp-list">${items.slice(0, 8).map((x) => html`<li>${icons.pdf({ size: 16 })}<span>${x.name.replace(/\.(pdf|docx|pptx)$/i, '').replace(/_+/g, ' ')}</span>${x.folder ? html`<span class="muted">${x.folder}</span>` : ''}</li>`)}${items.length > 8 ? html`<li class="muted">and ${items.length - 8} more</li>` : ''}</ul>
+        <ul class="imp-list">${items.slice(0, 8).map((x) => html`<li>${icons.pdf({ size: 16 })}<span>${x.parts ? x.name : fileTitle(x.name)}</span>${x.folder ? html`<span class="muted">${x.folder}</span>` : ''}</li>`)}${items.length > 8 ? html`<li class="muted">and ${items.length - 8} more</li>` : ''}</ul>
         ${folders.length ? html`<p class="hint">${plural(folders.length, 'folder')} in the zip (${folders.slice(0, 4).join(', ')}${folders.length > 4 ? '…' : ''}) will become sections.</p>` : ''}
         <span class="label">Where they go</span>
         ${destHtml()}
@@ -113,7 +113,7 @@ export function importSheet({ files = null, notebook = null, section = null, ctx
           onProgress: ({ i, total, name, page, pages }) => {
             const now = body.querySelector('#imp-now');
             if (!now) return;
-            now.textContent = `Bringing in ${i + 1} of ${total}: ${name.replace(/\.(pdf|docx|pptx)$/i, '')}`;
+            now.textContent = `Bringing in ${i + 1} of ${total}: ${fileTitle(name) || name}`;
             body.querySelector('#imp-sub').textContent = `Page ${page} of ${pages}`;
             const bar = body.querySelector('.imp-bar');
             bar.setAttribute('aria-valuenow', String(i));
@@ -128,6 +128,7 @@ export function importSheet({ files = null, notebook = null, section = null, ctx
       const nb = state.notebooks.get(dest.notebook);
       body.innerHTML = `${html`<div class="imp-done">${icons.check({ size: 22 })}<p class="serif" style="font-size:22px;margin:0">Brought in ${plural(res.notes, 'note')}</p></div>
         <p class="muted" style="margin:0">${res.pages} page${res.pages === 1 ? '' : 's'}, in ${nb?.title || 'your notebook'}.${stopped && res.notes < items.length ? ' Stopped early: the rest weren’t brought in.' : ''}</p>
+        ${warningText(res.warnings) ? html`<p class="hint" style="margin:0">${warningText(res.warnings)}</p>` : ''}
         ${res.failed.length ? html`<p class="error" style="margin:0">${plural(res.failed.length, 'file')} couldn’t be read:</p><ul class="imp-list">${res.failed.slice(0, 8).map((f) => html`<li><span>${f.name}</span><span class="muted">${f.why}</span></li>`)}</ul>` : ''}
         ${nb ? html`<a class="btn btn-primary btn-block" href="#/notebook/${nb.id}" data-open>Open ${nb.title}</a>` : ''}`}`;
       body.querySelector('[data-open]')?.addEventListener('click', () => s.close());

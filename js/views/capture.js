@@ -6,7 +6,6 @@ import { newNote } from '../model.js';
 import { compressImage, looksLikeScreenshot } from '../images.js';
 import { openSheet } from '../ui.js';
 import { icons } from '../icons.js';
-import { DOC_ACCEPT } from '../docintake.js';
 
 export function openCapture({ files = [], text = '' } = {}, ctx) {
   const picked = []; // { file, url }
@@ -108,21 +107,16 @@ export function openCapture({ files = [], text = '' } = {}, ctx) {
       const r = dest ? `region=${dest}` : '';
       const k = b.dataset.kind;
       if (k === 'pdf') {
-        const inp = document.createElement('input');
-        inp.type = 'file';
-        inp.accept = DOC_ACCEPT;
-        inp.multiple = true;
-        inp.onchange = async () => {
-          const fs = [...(inp.files || [])];
-          if (!fs.length) return;
-          s.close();
-          const { routeFiles } = await import('../docintake.js');
-          routeFiles(fs, {
-            single: async (f) => { (await import('../handoff.js')).handOff(f); ctx.navigate(`#/note/new?kind=ink${r ? `&${r}` : ''}`); },
-            many: async (list) => { (await import('./importsheet.js')).importSheet({ files: list, ctx }); },
-          });
-        };
-        inp.click();
+        s.close();
+        import('./docsheet.js').then(({ markupSheet }) => markupSheet({
+          onFiles: async (fs) => {
+            const { routeFiles } = await import('../docintake.js');
+            routeFiles(fs, {
+              single: async (f) => { (await import('../handoff.js')).handOff(f); ctx.navigate(`#/note/new?kind=ink${r ? `&${r}` : ''}`); },
+              many: async (list) => { (await import('./importsheet.js')).importSheet({ files: list, ctx }); },
+            });
+          },
+        }));
         return;
       }
       s.close();

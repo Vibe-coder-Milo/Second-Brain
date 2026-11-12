@@ -5,4 +5,3 @@
 let pending = null;
 export const handOff = (file) => { pending = file; };
 export const takeHandOff = () => { const f = pending; pending = null; return f; };
-export const isPdf = (f) => !!f && (f.type === 'application/pdf' || /\.pdf$/i.test(f.name || ''));

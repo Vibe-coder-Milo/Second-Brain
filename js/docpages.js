@@ -23,6 +23,7 @@ import * as V from './vault.js';
 import { state } from './vault.js';
 import { newPage, PAGE_W, A4_H } from './model.js';
 import { documentKind, readDocx, readPptx } from './docread.js';
+import { fileTitle } from './docintake.js';
 import { fontCss, NOTE_FONT, TEXT_SIZE, boxSize } from './fonts.js';
 
 const WORD_PX = 1654; // Word page picture width (about 200 dpi on A4)
@@ -33,7 +34,6 @@ const PAGE_GROUP = 8; // lay out at most about this many pages at once
 const UNITS_PER_PX = PAGE_W / (8.27 * 96); // a Word picture's CSS pixels -> page units
 const INK = '#1B2A38';
 
-const baseName = (name) => String(name || '').replace(/\.[^./\\]+$/, '').trim();
 
 const toJpeg = async (canvas) => {
   const blob = await new Promise((r) => canvas.toBlob(r, 'image/jpeg', QUALITY));
@@ -62,7 +62,7 @@ async function imagePages(file, { sealed, onProgress }) {
   const bg = await V.addFile(img.bytes, { sealed, type: 'image/jpeg' });
   onProgress?.(1, 1);
   return {
-    kind: 'image', title: baseName(file.name) || 'Picture', sections: [], text: '', warnings: [],
+    kind: 'image', title: fileTitle(file.name) || 'Picture', sections: [], text: '', warnings: [],
     pages: [newPage({ paper: 'blank', bg, h: Math.round((1000 * img.h) / img.w) })],
   };
 }
@@ -171,7 +171,7 @@ async function wordPages(file, r, { sealed, onProgress }) {
       const p = where.get(s.block);
       if (!s.isTitle && p != null) sections.push({ title: s.title, level: s.level, page: p });
     }
-    return { kind: 'docx', title: r.title || baseName(file.name) || 'Word document', pages, sections, text: docText({ content }).slice(0, 200000), warnings };
+    return { kind: 'docx', title: r.title || fileTitle(file.name) || 'Word document', pages, sections, text: docText({ content }).slice(0, 200000), warnings };
   } finally {
     for (const id of temp) { try { await V.deleteFile(id); } catch { /* already gone */ } }
   }
@@ -249,7 +249,7 @@ async function slidePages(file, r, { sealed, onProgress }) {
       sections.push({ title: slideTitle(s, i), level: 2, page: i });
     });
   } else r.slides.forEach((s, i) => sections.push({ title: slideTitle(s, i), level: 1, page: i }));
-  return { kind: 'pptx', title: r.title || baseName(file.name) || 'Presentation', pages, sections, text: texts.join('\n\n').slice(0, 200000), warnings };
+  return { kind: 'pptx', title: r.title || fileTitle(file.name) || 'Presentation', pages, sections, text: texts.join('\n\n').slice(0, 200000), warnings };
 }
 
 // Words of a paragraph with their fonts, wrapped to a width. Returns lines of

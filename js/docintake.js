@@ -8,6 +8,30 @@ import { toast } from './util.js';
 
 export const DOC_ACCEPT = 'application/pdf,.pdf,.docx,.pptx,image/*,.zip,application/zip';
 
+// Same list without the zip, for adding pages inside a note.
+export const PAGE_ACCEPT = 'application/pdf,.pdf,.docx,.pptx,image/*';
+
+// A file's name as a note title: no folder, no extension (a real one: 1 to 5
+// letters or digits, so "Plan v1.2" keeps its ".2"), underscores as spaces.
+export function fileTitle(name) {
+  return String(name || '').split(/[\\/]/).pop().replace(/\.(?=[a-z0-9]*[a-z])[a-z0-9]{1,5}$/i, '').replace(/_+/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+// The reader's notes about things it couldn't show, in a few plain words
+// ('' when there is nothing to say).
+export function warningText(warnings) {
+  const w = (warnings || []).filter(Boolean);
+  if (!w.length) return '';
+  const charts = w.filter((x) => /chart|diagram/i.test(x)).length;
+  const pics = w.filter((x) => !/chart|diagram/i.test(x) && /picture/i.test(x)).length;
+  const other = w.length - charts - pics;
+  const bits = [];
+  if (charts) bits.push(`${charts} chart${charts === 1 ? '' : 's'}`);
+  if (pics) bits.push(`${pics} picture${pics === 1 ? '' : 's'}`);
+  if (other) bits.push(`${other} other part${other === 1 ? '' : 's'}`);
+  return `Some parts couldn’t be shown: ${bits.join(', ')}.`;
+}
+
 const ext = (f) => ((String(f?.name || '').toLowerCase().match(/\.([a-z0-9]+)$/) || [])[1] || '');
 
 // 'pdf' | 'docx' | 'pptx' | 'image' | 'zip' | null (can't be opened)

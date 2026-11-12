@@ -22,7 +22,7 @@ import { miniMapHtml } from '../minimap.js';
 import { notebookPicker, textSheet } from './notebooks.js';
 import { BOX_FONT, TEXT_SIZE } from '../fonts.js';
 import { resolve as docSectionsOf } from '../docsections.js';
-import { fileKind } from '../docintake.js';
+import { fileKind, fileTitle, warningText, PAGE_ACCEPT } from '../docintake.js';
 import { imagesIn, isTypingTarget, readClipboardImages } from '../clipimages.js';
 
 const activeLayers = new Map(); // note id -> the layer you're writing on (this session)
@@ -566,11 +566,12 @@ export function mount(el, params, ctx) {
     if (l) placeSticker({ type: 'label', label: l });
   }
 
-  function pickFile(accept, fn) {
+  function pickFile(accept, fn, { multiple = false } = {}) {
     const inp = document.createElement('input');
     inp.type = 'file';
     inp.accept = accept;
-    inp.onchange = () => { const f = inp.files?.[0]; if (f) fn(f); };
+    inp.multiple = multiple;
+    inp.onchange = () => { const fs = [...(inp.files || [])]; if (fs.length) fn(multiple ? fs : fs[0]); };
     inp.click();
   }
 
@@ -583,7 +584,7 @@ export function mount(el, params, ctx) {
       ${I('photo', 'image', 'Photo')}
       ${I('paste-image', 'image', 'Paste a picture', 'A screenshot or picture you copied')}
       ${I('scan', 'scan', 'Scan paper', 'Adds pages after this one')}
-      ${I('pdf', 'pdf', 'PDF', 'Adds its pages to write on')}
+      ${I('pdf', 'pdf', 'Add a document', 'PDF, Word, PowerPoint or a picture')}
       ${wide ? '' : html`<div class="pop-head">More tools</div>
       ${I('shapes', 'shapes', 'Shapes', 'Lines and boxes come out straight')}
       ${I('laser', 'laser', 'Laser pointer', 'Point things out; it fades away')}
@@ -599,7 +600,7 @@ export function mount(el, params, ctx) {
           return;
         }
         if (a === 'photo') { pickFile('image/*', async (f) => { try { await surface.insertImage(f); afterPlace(); } catch { toast('Couldn’t add that image.'); } }); p.close(); return; }
-        if (a === 'pdf') { pickFile('application/pdf', (f) => importFile(f)); p.close(); return; }
+        if (a === 'pdf') { pickFile(PAGE_ACCEPT, (fs) => importFiles(fs), { multiple: true }); p.close(); return; }
         p.close();
         if (a === 'postit') { const v = await stickerDrawer({ tab: 'postits', title: 'Post-its' }); if (v) placeSticker(v); }
         if (a === 'sticker') { const v = await stickerDrawer({ tab: 'marks', title: 'Stickers' }); if (v) placeSticker(v); }
@@ -1069,7 +1070,7 @@ export function mount(el, params, ctx) {
         <div class="chips" role="radiogroup" aria-label="Paper colour">${PAPER_COLORS.map((c) => html`<button type="button" class="chip" role="radio" aria-pressed="${c.id === curPaper.color ? 'true' : 'false'}" data-pcol="${c.id}"><span class="dot lg" style="background:${c.bg};border:1px solid var(--field)"></span>${c.name}</button>`)}</div>
         <p class="hint">Changes every page of this note (except PDF and photo pages) and becomes the paper for new notes.${isDarkUI() && state.device?.darkPaper !== false ? ' In dark mode, pages show dark automatically.' : ''}</p>
         <div class="btn-row"><button type="button" class="btn btn-sm" data-add2>${icons.plus({ size: 16 })}Add after page ${pageIdx + 1}</button>
-          <label class="btn btn-sm">${icons.pdf({ size: 16 })}Import PDF<input type="file" accept="application/pdf" class="sr-only" data-pdf></label>
+          <label class="btn btn-sm">${icons.pdf({ size: 16 })}Add a document<input type="file" accept="${PAGE_ACCEPT}" multiple class="sr-only" data-pdf></label>
           <button type="button" class="btn btn-sm" data-scan>${icons.scan({ size: 16 })}Scan paper</button></div>
       </section>`}`, { label: 'Pages' });
     s.el.classList.add('wide-sheet');
@@ -1107,7 +1108,7 @@ export function mount(el, params, ctx) {
     paintPaperTiles();
     s.el.querySelectorAll('[data-how]').forEach((b) => { b.onclick = async () => { s.close(); await setHow(b.dataset.how); }; });
     if (focusLayout) setTimeout(() => s.el.querySelector('#pg-how')?.scrollIntoView({ block: 'start' }), 60);
-    s.el.querySelector('[data-pdf]').onchange = async (e) => { const f = e.target.files?.[0]; if (!f) return; s.close(); await importFile(f); };
+    s.el.querySelector('[data-pdf]').onchange = async (e) => { const fs = [...(e.target.files || [])]; if (!fs.length) return; s.close(); await importFiles(fs); };
     s.el.querySelector('[data-scan]').onclick = async () => { s.close(); await scanPages(); };
     s.el.querySelectorAll('[data-pm]').forEach((b) => { b.onclick = () => pageMenu(Number(b.dataset.pm), s); });
     // Thumbnails: drawn as they scroll into view, a couple at a time, small.
@@ -1227,42 +1228,56 @@ export function mount(el, params, ctx) {
 
   // A PDF, Word, PowerPoint or picture file: its pages to write on, added
   // after the current page (or in place of an empty first page).
-  async function importFile(file) {
+  // Several files: added one after another, in the order chosen.
+  async function importFiles(files) {
+    let at = null;
+    for (const f of files) {
+      at = await importFile(f, { at });
+      if (at == null) break;
+    }
+  }
+
+  // `at`: the page number to add them at (after the files before it). Gives back
+  // the number after the last new page, or null if nothing was added.
+  async function importFile(file, { at: atGiven = null } = {}) {
     const { readFile, whyNot } = await import('../docintake.js');
     const n = note();
     const kind = fileKind(file);
-    if (!kind || kind === 'zip') { toast(whyNot(file)); return; }
+    if (!kind || kind === 'zip') { toast(whyNot(file)); return null; }
     let cancelled = false;
-    const name = file.name.replace(/\.[^./\\]+$/, '');
+    const name = fileTitle(file.name) || 'file';
     const prog = openSheet(`${html`<h2 class="page-title" style="font-size:24px">Bringing in ${name}…</h2><p class="muted" id="pdf-prog" style="margin:0" aria-live="polite">Reading the file…</p><button type="button" class="btn btn-block" data-stop style="margin-top:14px">Cancel</button>`}`, { label: 'Bringing in a file', onClose: () => { cancelled = true; } });
     prog.el.querySelector('[data-stop]').onclick = () => { cancelled = true; prog.el.querySelector('#pdf-prog').textContent = 'Stopping…'; };
     window.dispatchEvent(new Event('sb-busy'));
     try {
-      const r = await readFile(file, { sealed: n.sealed, onProgress: (i, t) => { const p = $('#pdf-prog', prog.el); if (p) p.textContent = `page ${i} of ${t}`; } });
+      const r = await readFile(file, { sealed: n.sealed, onProgress: (i, t) => { const p = $('#pdf-prog', prog.el); if (p && i > 0) p.textContent = `Page ${i} of ${t}`; } });
       const { pages, text } = r;
       if (cancelled) {
         // Nothing is kept: take back the stored pictures (and the PDF).
         for (const p of pages) if (p.bg) await V.deleteFile(p.bg).catch(() => {});
         for (const f of new Set(pages.map((p) => p.pdf?.file).filter(Boolean))) await V.deleteFile(f).catch(() => {});
         prog.close();
-        return;
+        return null;
       }
       const cur = note();
       const all = [...cur.pages];
-      const empty = all.length === 1 && !(await V.loadPage(all[0].id)).strokes.length && !(await V.loadPage(all[0].id)).objects.length && !all[0].bg;
-      const at = empty ? 0 : pageIdx + 1;
+      const empty = atGiven == null && all.length === 1 && !(await V.loadPage(all[0].id)).strokes.length && !(await V.loadPage(all[0].id)).objects.length && !all[0].bg;
+      const at = atGiven ?? (empty ? 0 : pageIdx + 1);
       if (empty) all.splice(0, 1);
       all.splice(at, 0, ...pages);
       await V.saveNote({ ...cur, pages: all, source: cur.source || r.source, docSections: [...(cur.docSections || []), ...(r.docSections || [])], pdfText: undefined, title: cur.title.startsWith('Notes, ') ? (r.title || name) : cur.title });
       await summarise(text);
       prog.close();
-      toast(`Imported ${pages.length} page${pages.length === 1 ? '' : 's'}`);
+      const warn = warningText(r.warnings);
+      toast(`Imported ${pages.length} page${pages.length === 1 ? '' : 's'}.${warn ? ` ${warn}` : ''}`, { ms: warn ? 6000 : 2600 });
       await showPage(at);
       draw();
+      return at + pages.length;
     } catch (e) {
       console.error(e);
       prog.close();
       toast(e.message || 'Couldn’t read that file.');
+      return null;
     }
   }
 
