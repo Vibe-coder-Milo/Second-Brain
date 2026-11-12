@@ -213,6 +213,15 @@ through a private GitHub repo. Everything is encrypted on the device.
   - An older app version would treat a binned note as normal (its `normNote`
     drops `binnedAt`), so devices should update.
 
+- **Saving a note** (`vault.saveNote`): saves of one note run one at a time
+  in the order asked (`saveQueue`, per id). Background jobs that only add
+  to a note (handwriting reading `handwriting.js`, page summaries
+  `refreshInkSummary`) pass a function and `{ id }`: it gets the NEWEST note
+  when its turn comes (return null to skip), so they never write an old copy
+  over a newer change. Before v28 the handwriting reader could save a stale
+  copy after the owner switched how pages show, flipping the setting back
+  (t5r failed 3 to 10% of runs). Never await a save of the same note from
+  inside a save of it (it would wait for itself).
 - **Typed-note pages** (`js/editor/pages.js`, `js/pagedexport.js`, panel
   `pagesPanel` in `views/note.js`): `n.pageMode` ('down' | 'next' | null =
   Endless), saved with `touch:false`; daily notes and the map's compact panel
