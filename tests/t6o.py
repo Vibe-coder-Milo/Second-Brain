@@ -174,7 +174,10 @@ def steps(page):
     page.locator('.pp-panel [data-how=next]').click(); page.wait_for_timeout(900)
     nx = J(f"(() => {{ const w = document.querySelector('#n-sheets'); const p = {PG}; return {{ mode: p.mode, h: w.getBoundingClientRect().height, H: p.geometry().H, page: p.page, count: p.count, nav: !document.querySelector('.pg-nav').hidden, of: document.querySelector('.pg-of').textContent }}; }})()")
     print('next page:', nx)
-    assert nx['mode'] == 'next' and abs(nx['h'] - nx['H']) < 2 and nx['nav'] and nx['of'] == f"Page 1 of {nx['count']}", 'one page shows, with Previous and Next'
+    assert nx['mode'] == 'next' and abs(nx['h'] - nx['H']) < 2 and nx['nav'] and nx['of'] == f"Page {nx['page'] + 1} of {nx['count']}", 'one page shows (the one you were reading), with Previous and Next'
+    wt = J("document.querySelector('#n-sheets').getBoundingClientRect().top")
+    assert 0 <= wt < 400, 'and it is in view'
+    J(f"{PG}.goTo(0)"); page.wait_for_timeout(300)
     assert J(f"import('./js/vault.js').then(V => V.state.notes.get('{ids['a']}').updatedAt)") == upd2, 'the view choice does not change when the note was changed'
     page.screenshot(path=f'{OUT}/o-next-{tag}.png')
     page.locator('.pg-nav [data-pg=next]').click(); page.wait_for_timeout(300)
