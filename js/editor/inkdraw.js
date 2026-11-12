@@ -10,7 +10,7 @@ import { stickerDef, stickerSVG, svgImage, labelDef, tapePattern, postitColor } 
 import { labelMap } from '../model.js';
 import { isDarkUI, darkInk, darkHighlight } from '../theme.js';
 import { pdfAreaReady } from '../pdfview.js';
-import { fontCss, BOX_FONT, BOX_SIZE, TEXT_SIZE } from '../fonts.js';
+import { fontCss, fontIdsIn, loadFonts, BOX_FONT, BOX_SIZE, TEXT_SIZE } from '../fonts.js';
 
 export { darkInk };
 
@@ -736,6 +736,7 @@ export async function renderPageCanvas(page, data, widthPx, { crop = null, visib
   // From the original PDF at this size when there is one (not for small thumbnails).
   const sharp = page.pdf && !thumb && !noPaper ? await pdfAreaReady(page.pdf, scale, area) : null;
   const bg = page.bg && !sharp && !noPaper ? (thumb ? await thumbImage(page.bg, widthPx * 2) : await fileImageReady(page.bg)) : null;
+  await loadFonts([...fontIdsIn(data), BOX_FONT, state.config?.text?.font].filter(Boolean));
   for (const o of data.objects || []) {
     if (o.type === 'image') await fileImageReady(o.fileId);
     if (o.type === 'mine') await fileImageReady((state.config?.myStickers || []).find((m) => m.id === o.mine)?.fileId);

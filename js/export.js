@@ -6,7 +6,7 @@ import { state, notesIn } from './vault.js';
 import * as V from './vault.js';
 import { displayTitle, PAGE_W, A4_H } from './model.js';
 import { downloadBlob, toast } from './util.js';
-import { NOTE_FONT, TEXT_SIZE, boxSize } from './fonts.js';
+import { NOTE_FONT, TEXT_SIZE, boxSize, fontIdsIn, loadFonts } from './fonts.js';
 
 export const safeName = (s) => String(s || 'note').replace(/[\\/:*?"<>|#^[\]\n\r]+/g, '-').replace(/\s+/g, ' ').trim().slice(0, 80) || 'note';
 const isoDate = (ts) => new Date(ts).toISOString().slice(0, 10);
@@ -181,7 +181,8 @@ async function typedCanvases(n, { px = PX } = {}) {
   for (const f of n.files) imgs.push({ f, img: await fileImageReady(f.id) });
   const walkImgs = async (node) => { if (node?.type === 'imageFile') await fileImageReady(node.attrs?.fileId); for (const c of node?.content || []) await walkImgs(c); };
   await walkImgs(doc);
-  await document.fonts?.ready;
+  // Load the fonts the note and its marks use (canvas text needs them loaded).
+  await loadFonts([...fontIdsIn(doc), n.font, state.config?.text?.font, NOTE_FONT].filter(Boolean));
   // The note's own font, else the default text from Settings (as on screen).
   const dt = state.config?.text || {};
   const fontId = n.font || dt.font || NOTE_FONT;
