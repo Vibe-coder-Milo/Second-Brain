@@ -1,0 +1,107 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 820" font-family="system-ui, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <title>Second brain: components and data flow (v27)</title>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#44546a"/></marker>
+    <marker id="g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#2e7d5b"/></marker>
+  </defs>
+  <rect width="1200" height="820" fill="#f7f9f8"/>
+  <text x="40" y="44" font-size="26" font-weight="700" fill="#1d2b3a">Second brain: components and data flow</text>
+  <text x="40" y="70" font-size="15" fill="#5b6b7b">Everything runs in the browser on the device. The only network call is to api.github.com, and only carries ciphertext.</text>
+
+  <rect x="30" y="90" width="860" height="700" rx="14" fill="#ffffff" stroke="#9fb0bf" stroke-width="2" stroke-dasharray="8 6"/>
+  <text x="50" y="118" font-size="16" font-weight="700" fill="#44546a">ON THE DEVICE (iPad, iPhone or computer; installed from GitHub Pages)</text>
+
+  <rect x="55" y="136" width="810" height="150" rx="10" fill="#e8f1ec" stroke="#2e7d5b" stroke-width="1.5"/>
+  <text x="75" y="162" font-size="16" font-weight="700" fill="#1f5a40">Screens (js/views, js/editor) and app.js (routing, auto-lock, background jobs)</text>
+  <rect x="75" y="176" width="150" height="46" rx="6" fill="#fff" stroke="#2e7d5b"/><text x="150" y="204" font-size="14" text-anchor="middle" fill="#1d2b3a">Typed notes (Tiptap)</text>
+  <rect x="235" y="176" width="170" height="46" rx="6" fill="#fff" stroke="#2e7d5b"/><text x="320" y="204" font-size="14" text-anchor="middle" fill="#1d2b3a">Handwriting and PDFs</text>
+  <rect x="415" y="176" width="120" height="46" rx="6" fill="#fff" stroke="#2e7d5b"/><text x="475" y="204" font-size="14" text-anchor="middle" fill="#1d2b3a">Whiteboards</text>
+  <rect x="545" y="176" width="150" height="46" rx="6" fill="#fff" stroke="#2e7d5b"/><text x="620" y="204" font-size="14" text-anchor="middle" fill="#1d2b3a">Notebooks, covers</text>
+  <rect x="705" y="176" width="140" height="46" rx="6" fill="#fff" stroke="#2e7d5b"/><text x="775" y="204" font-size="14" text-anchor="middle" fill="#1d2b3a">Map</text>
+  <rect x="75" y="232" width="190" height="42" rx="6" fill="#fff" stroke="#2e7d5b"/><text x="170" y="258" font-size="14" text-anchor="middle" fill="#1d2b3a">Today, Tasks, Labels, Inbox</text>
+  <rect x="275" y="232" width="190" height="42" rx="6" fill="#fff" stroke="#2e7d5b"/><text x="370" y="258" font-size="14" text-anchor="middle" fill="#1d2b3a">Highlights, Search, Ask</text>
+  <rect x="475" y="232" width="190" height="42" rx="6" fill="#fff" stroke="#2e7d5b"/><text x="570" y="258" font-size="14" text-anchor="middle" fill="#1d2b3a">Settings, Recently deleted</text>
+  <rect x="675" y="232" width="170" height="42" rx="6" fill="#fff" stroke="#2e7d5b"/><text x="760" y="258" font-size="14" text-anchor="middle" fill="#1d2b3a">Export, import, scan</text>
+
+  <rect x="55" y="300" width="810" height="24" rx="5" fill="#eef0f2" stroke="#9fb0bf"/>
+  <text x="460" y="317" font-size="13" text-anchor="middle" fill="#44546a">Service worker (sw.js): caches the app shell, vendor/ and fonts/ so everything works offline</text>
+
+  <rect x="55" y="344" width="400" height="182" rx="10" fill="#e9eef7" stroke="#3b5b94" stroke-width="1.5"/>
+  <text x="75" y="370" font-size="16" font-weight="700" fill="#27406b">Vault (vault.js)</text>
+  <text x="75" y="392" font-size="14" fill="#1d2b3a">Notes held in memory while unlocked</text>
+  <text x="75" y="412" font-size="14" fill="#1d2b3a">Saves, deletes, events, vault.rev</text>
+  <rect x="75" y="428" width="165" height="76" rx="6" fill="#fff" stroke="#3b5b94"/>
+  <text x="157" y="454" font-size="14" font-weight="700" text-anchor="middle" fill="#27406b">crypto.js</text>
+  <text x="157" y="476" font-size="13" text-anchor="middle" fill="#1d2b3a">AES-256-GCM,</text>
+  <text x="157" y="494" font-size="13" text-anchor="middle" fill="#1d2b3a">PBKDF2 key wrap</text>
+  <rect x="255" y="428" width="180" height="76" rx="6" fill="#fff" stroke="#3b5b94"/>
+  <text x="345" y="454" font-size="14" font-weight="700" text-anchor="middle" fill="#27406b">deviceunlock.js</text>
+  <text x="345" y="476" font-size="13" text-anchor="middle" fill="#1d2b3a">Touch ID / Face ID</text>
+  <text x="345" y="494" font-size="13" text-anchor="middle" fill="#1d2b3a">(optional, per device)</text>
+
+  <rect x="55" y="590" width="400" height="170" rx="10" fill="#f4ecdd" stroke="#a0732a" stroke-width="1.5"/>
+  <text x="75" y="616" font-size="16" font-weight="700" fill="#6e4d14">IndexedDB "second-brain" (db.js)</text>
+  <text x="75" y="640" font-size="14" fill="#1d2b3a">Only encrypted data is written here.</text>
+  <rect x="75" y="656" width="82" height="44" rx="6" fill="#fff" stroke="#a0732a"/><text x="116" y="683" font-size="14" text-anchor="middle">meta</text>
+  <rect x="165" y="656" width="92" height="44" rx="6" fill="#fff" stroke="#a0732a"/><text x="211" y="683" font-size="14" text-anchor="middle">records</text>
+  <rect x="265" y="656" width="72" height="44" rx="6" fill="#fff" stroke="#a0732a"/><text x="301" y="683" font-size="14" text-anchor="middle">files</text>
+  <rect x="345" y="656" width="90" height="44" rx="6" fill="#fff" stroke="#a0732a"/><text x="390" y="683" font-size="14" text-anchor="middle">local</text>
+  <text x="75" y="728" font-size="13" fill="#5b6b7b">meta: wrapped keys, device settings. records: notes.</text>
+  <text x="75" y="746" font-size="13" fill="#5b6b7b">files: images, PDFs, ink pages. local: caches.</text>
+
+  <rect x="500" y="344" width="365" height="120" rx="10" fill="#e9eef7" stroke="#3b5b94" stroke-width="1.5"/>
+  <text x="520" y="370" font-size="16" font-weight="700" fill="#27406b">Sync (sync.js)</text>
+  <text x="520" y="394" font-size="14" fill="#1d2b3a">Git Data API, one commit per sync</text>
+  <text x="520" y="416" font-size="14" fill="#1d2b3a">Batches within GitHub's rate limits</text>
+  <text x="520" y="438" font-size="14" fill="#1d2b3a">Merges conflicts, pulls other devices</text>
+
+  <rect x="500" y="500" width="365" height="260" rx="10" fill="#f1e9f6" stroke="#7a4a9a" stroke-width="1.5"/>
+  <text x="520" y="526" font-size="16" font-weight="700" fill="#58307a">On-device AI worker (ai-worker.js)</text>
+  <text x="520" y="548" font-size="14" fill="#1d2b3a">Separate thread, models bundled in vendor/</text>
+  <rect x="520" y="562" width="160" height="40" rx="6" fill="#fff" stroke="#7a4a9a"/><text x="600" y="587" font-size="13" text-anchor="middle">MiniLM: meaning</text>
+  <rect x="690" y="562" width="160" height="40" rx="6" fill="#fff" stroke="#7a4a9a"/><text x="770" y="587" font-size="13" text-anchor="middle">Handwriting reading</text>
+  <rect x="520" y="610" width="160" height="40" rx="6" fill="#fff" stroke="#7a4a9a"/><text x="600" y="635" font-size="13" text-anchor="middle">Whisper-tiny</text>
+  <rect x="690" y="610" width="160" height="40" rx="6" fill="#fff" stroke="#7a4a9a"/><text x="770" y="635" font-size="13" text-anchor="middle">Tesseract OCR</text>
+  <text x="520" y="682" font-size="13" fill="#1d2b3a">Used by semantic.js (related notes), organiser.js,</text>
+  <text x="520" y="702" font-size="13" fill="#1d2b3a">mapassist.js, handwriting.js, recorder.js, ocr.js</text>
+  <text x="520" y="730" font-size="13" fill="#5b6b7b">Sealed notes are indexed only while open.</text>
+
+  <rect x="930" y="170" width="240" height="140" rx="10" fill="#fdf3e3" stroke="#a0732a" stroke-width="1.5"/>
+  <text x="1050" y="198" font-size="16" font-weight="700" text-anchor="middle" fill="#6e4d14">GitHub Pages</text>
+  <text x="1050" y="222" font-size="14" text-anchor="middle" fill="#1d2b3a">Public repo: app code only.</text>
+  <text x="1050" y="244" font-size="14" text-anchor="middle" fill="#1d2b3a">Serves the files; never</text>
+  <text x="1050" y="266" font-size="14" text-anchor="middle" fill="#1d2b3a">sees notes or keys.</text>
+
+  <rect x="930" y="380" width="240" height="170" rx="10" fill="#fdf3e3" stroke="#a0732a" stroke-width="1.5"/>
+  <text x="1050" y="408" font-size="16" font-weight="700" text-anchor="middle" fill="#6e4d14">Private data repo</text>
+  <text x="1050" y="432" font-size="14" text-anchor="middle" fill="#1d2b3a">on api.github.com</text>
+  <text x="1050" y="458" font-size="13" text-anchor="middle" fill="#1d2b3a">notes/&lt;id&gt;.json</text>
+  <text x="1050" y="478" font-size="13" text-anchor="middle" fill="#1d2b3a">files/&lt;id&gt;.bin</text>
+  <text x="1050" y="498" font-size="13" text-anchor="middle" fill="#1d2b3a">keyring.json</text>
+  <text x="1050" y="528" font-size="13" text-anchor="middle" fill="#5b6b7b">All ciphertext</text>
+
+  <rect x="930" y="600" width="240" height="150" rx="10" fill="#f4f4f4" stroke="#9fb0bf" stroke-width="1.5"/>
+  <text x="1050" y="628" font-size="16" font-weight="700" text-anchor="middle" fill="#44546a">Claude chat (outside)</text>
+  <text x="1050" y="652" font-size="14" text-anchor="middle" fill="#1d2b3a">Ask Claude is copy and paste.</text>
+  <text x="1050" y="674" font-size="14" text-anchor="middle" fill="#1d2b3a">No key, no connection.</text>
+  <text x="1050" y="696" font-size="14" text-anchor="middle" fill="#1d2b3a">Sealed notes never included.</text>
+  <text x="1050" y="726" font-size="13" text-anchor="middle" fill="#5b6b7b">You review every change</text>
+
+  <path d="M255 286 L255 300" stroke="#44546a" stroke-width="2" fill="none"/>
+  <path d="M255 324 L255 344" stroke="#44546a" stroke-width="2" fill="none" marker-end="url(#a)"/>
+  <path d="M255 526 L255 590" stroke="#44546a" stroke-width="2" fill="none" marker-start="url(#a)" marker-end="url(#a)"/>
+  <text x="268" y="563" font-size="12" fill="#44546a">encrypted records</text>
+  <path d="M455 410 L500 410" stroke="#44546a" stroke-width="2" fill="none" marker-start="url(#a)" marker-end="url(#a)"/>
+  <path d="M690 324 L690 344" stroke="#44546a" stroke-width="2" fill="none" marker-end="url(#a)"/>
+  <path d="M865 400 L930 450" stroke="#2e7d5b" stroke-width="2.5" fill="none" marker-start="url(#g)" marker-end="url(#g)"/>
+  <text x="868" y="430" font-size="12" fill="#2e7d5b">HTTPS, ciphertext</text>
+  <path d="M865 220 L930 220" stroke="#2e7d5b" stroke-width="2" fill="none" marker-start="url(#g)"/>
+  <text x="868" y="212" font-size="12" fill="#2e7d5b">app files</text>
+  <path d="M690 464 L690 500" stroke="#44546a" stroke-width="2" fill="none"/>
+  <path d="M455 495 L500 540" stroke="#44546a" stroke-width="2" fill="none" marker-start="url(#a)" marker-end="url(#a)"/>
+  <text x="372" y="540" font-size="12" fill="#44546a">text in, results out</text>
+  <path d="M865 680 L930 680" stroke="#44546a" stroke-width="2" stroke-dasharray="6 4" fill="none" marker-start="url(#a)" marker-end="url(#a)"/>
+  <text x="872" y="670" font-size="12" fill="#44546a">paste</text>
+
+  <text x="40" y="808" font-size="12" fill="#5b6b7b">Diagram for spec v27. Green arrows are the only traffic that leaves the device.</text>
+</svg>

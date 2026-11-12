@@ -1,0 +1,82 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 960" font-family="system-ui, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <title>Second brain: keys, unlock and sync flow (v27)</title>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#44546a"/></marker>
+  </defs>
+  <rect width="1200" height="960" fill="#f7f9f8"/>
+  <text x="40" y="44" font-size="26" font-weight="700" fill="#1d2b3a">Keys, unlock and sync</text>
+  <text x="40" y="70" font-size="15" fill="#5b6b7b">Three flows: how the key is protected, how a device unlocks, and how a written note reaches your other devices.</text>
+
+  <text x="40" y="112" font-size="18" font-weight="700" fill="#27406b">1. Encryption and keys</text>
+  <rect x="40" y="128" width="200" height="80" rx="8" fill="#fff" stroke="#3b5b94" stroke-width="1.5"/>
+  <text x="140" y="160" font-size="15" font-weight="700" text-anchor="middle">Passphrase</text><text x="140" y="182" font-size="13" text-anchor="middle" fill="#5b6b7b">typed by you, never stored</text>
+  <rect x="300" y="128" width="220" height="80" rx="8" fill="#fff" stroke="#3b5b94" stroke-width="1.5"/>
+  <text x="410" y="160" font-size="15" font-weight="700" text-anchor="middle">PBKDF2-SHA256</text><text x="410" y="182" font-size="13" text-anchor="middle" fill="#5b6b7b">600,000 rounds, wrapping key</text>
+  <rect x="580" y="128" width="230" height="80" rx="8" fill="#e9eef7" stroke="#3b5b94" stroke-width="1.5"/>
+  <text x="695" y="160" font-size="15" font-weight="700" text-anchor="middle">Wrapped data key</text><text x="695" y="182" font-size="13" text-anchor="middle" fill="#5b6b7b">in keyring.json and on each device</text>
+  <rect x="870" y="128" width="290" height="80" rx="8" fill="#e8f1ec" stroke="#2e7d5b" stroke-width="1.5"/>
+  <text x="1015" y="160" font-size="15" font-weight="700" text-anchor="middle">Data key (AES-256, non-extractable)</text><text x="1015" y="182" font-size="13" text-anchor="middle" fill="#5b6b7b">lives in memory while unlocked</text>
+  <path d="M240 168 L298 168" stroke="#44546a" stroke-width="2" marker-end="url(#a)"/>
+  <path d="M520 168 L578 168" stroke="#44546a" stroke-width="2" marker-end="url(#a)"/>
+  <path d="M810 168 L868 168" stroke="#44546a" stroke-width="2" marker-end="url(#a)"/>
+  <text x="818" y="158" font-size="12" fill="#44546a">unwrap</text>
+  <text x="40" y="240" font-size="14" fill="#1d2b3a">Every note, image and ink page is encrypted with AES-256-GCM, bound to its own id (additional data), so a record cannot be swapped for another.</text>
+  <text x="40" y="262" font-size="14" fill="#1d2b3a">Sealed notes use a second key and a second passphrase. There is no reset: lose the passphrase and the notes cannot be opened.</text>
+
+  <text x="40" y="312" font-size="18" font-weight="700" fill="#27406b">2. Unlock</text>
+  <rect x="40" y="328" width="190" height="70" rx="8" fill="#fff" stroke="#3b5b94" stroke-width="1.5"/>
+  <text x="135" y="358" font-size="15" font-weight="700" text-anchor="middle">Open the app</text><text x="135" y="380" font-size="13" text-anchor="middle" fill="#5b6b7b">gate screen</text>
+  <rect x="300" y="318" width="280" height="40" rx="8" fill="#fff" stroke="#3b5b94" stroke-width="1.5"/>
+  <text x="440" y="344" font-size="14" text-anchor="middle">Passphrase: unwrap data key</text>
+  <rect x="300" y="372" width="280" height="40" rx="8" fill="#fff" stroke="#3b5b94" stroke-width="1.5"/>
+  <text x="440" y="398" font-size="14" text-anchor="middle">Touch ID / Face ID: passkey secret</text>
+  <rect x="650" y="372" width="250" height="40" rx="8" fill="#fff" stroke="#3b5b94" stroke-width="1.5"/>
+  <text x="775" y="398" font-size="14" text-anchor="middle">Unwraps this device's copy</text>
+  <rect x="970" y="328" width="190" height="70" rx="8" fill="#e8f1ec" stroke="#2e7d5b" stroke-width="1.5"/>
+  <text x="1065" y="358" font-size="15" font-weight="700" text-anchor="middle">Unlocked</text><text x="1065" y="380" font-size="13" text-anchor="middle" fill="#5b6b7b">notes read into memory</text>
+  <path d="M230 352 L298 338" stroke="#44546a" stroke-width="2" marker-end="url(#a)"/>
+  <path d="M230 376 L298 392" stroke="#44546a" stroke-width="2" marker-end="url(#a)"/>
+  <path d="M580 392 L648 392" stroke="#44546a" stroke-width="2" marker-end="url(#a)"/>
+  <path d="M580 338 L968 348" stroke="#44546a" stroke-width="2" marker-end="url(#a)"/>
+  <path d="M900 392 L1010 399" stroke="#44546a" stroke-width="2" marker-end="url(#a)"/>
+  <text x="40" y="436" font-size="13" fill="#1d2b3a">The Touch ID copy is kept only in that device's meta store: never synced, never in backups. The passphrase is asked again every 30 days,</text>
+  <text x="40" y="456" font-size="13" fill="#1d2b3a">and always for sealed notes. The device passcode can stand in for biometrics (a WebAuthn limit).</text>
+
+  <text x="40" y="506" font-size="18" font-weight="700" fill="#27406b">3. Write a note and sync it</text>
+  <rect x="40" y="526" width="180" height="90" rx="8" fill="#e8f1ec" stroke="#2e7d5b" stroke-width="1.5"/>
+  <text x="130" y="556" font-size="15" font-weight="700" text-anchor="middle">You write</text><text x="130" y="578" font-size="13" text-anchor="middle" fill="#5b6b7b">typing or Pencil</text><text x="130" y="596" font-size="13" text-anchor="middle" fill="#5b6b7b">saved after a short pause</text>
+  <rect x="270" y="526" width="180" height="90" rx="8" fill="#e9eef7" stroke="#3b5b94" stroke-width="1.5"/>
+  <text x="360" y="556" font-size="15" font-weight="700" text-anchor="middle">Vault</text><text x="360" y="578" font-size="13" text-anchor="middle" fill="#5b6b7b">updates memory,</text><text x="360" y="596" font-size="13" text-anchor="middle" fill="#5b6b7b">emits an event</text>
+  <rect x="500" y="526" width="180" height="90" rx="8" fill="#f4ecdd" stroke="#a0732a" stroke-width="1.5"/>
+  <text x="590" y="556" font-size="15" font-weight="700" text-anchor="middle">Encrypt, then</text><text x="590" y="578" font-size="15" font-weight="700" text-anchor="middle">IndexedDB</text><text x="590" y="598" font-size="13" text-anchor="middle" fill="#5b6b7b">works offline</text>
+  <rect x="730" y="526" width="190" height="90" rx="8" fill="#e9eef7" stroke="#3b5b94" stroke-width="1.5"/>
+  <text x="825" y="556" font-size="15" font-weight="700" text-anchor="middle">Sync</text><text x="825" y="578" font-size="13" text-anchor="middle" fill="#5b6b7b">4 s after a change, when put</text><text x="825" y="596" font-size="13" text-anchor="middle" fill="#5b6b7b">away, on return, every 3 min</text>
+  <rect x="970" y="526" width="190" height="90" rx="8" fill="#fdf3e3" stroke="#a0732a" stroke-width="1.5"/>
+  <text x="1065" y="556" font-size="15" font-weight="700" text-anchor="middle">Private data repo</text><text x="1065" y="578" font-size="13" text-anchor="middle" fill="#5b6b7b">one commit per sync,</text><text x="1065" y="596" font-size="13" text-anchor="middle" fill="#5b6b7b">ciphertext only</text>
+  <path d="M220 571 L268 571" stroke="#44546a" stroke-width="2" marker-end="url(#a)"/>
+  <path d="M450 571 L498 571" stroke="#44546a" stroke-width="2" marker-end="url(#a)"/>
+  <path d="M680 571 L728 571" stroke="#44546a" stroke-width="2" marker-end="url(#a)"/>
+  <path d="M920 571 L968 571" stroke="#2e7d5b" stroke-width="3" marker-end="url(#a)"/>
+
+  <rect x="970" y="700" width="190" height="90" rx="8" fill="#e8f1ec" stroke="#2e7d5b" stroke-width="1.5"/>
+  <text x="1065" y="730" font-size="15" font-weight="700" text-anchor="middle">Your other device</text><text x="1065" y="752" font-size="13" text-anchor="middle" fill="#5b6b7b">same repo, token</text><text x="1065" y="770" font-size="13" text-anchor="middle" fill="#5b6b7b">and passphrase</text>
+  <rect x="730" y="700" width="190" height="90" rx="8" fill="#e9eef7" stroke="#3b5b94" stroke-width="1.5"/>
+  <text x="825" y="730" font-size="15" font-weight="700" text-anchor="middle">Pull and merge</text><text x="825" y="752" font-size="13" text-anchor="middle" fill="#5b6b7b">typed: newer wins + copy</text><text x="825" y="770" font-size="13" text-anchor="middle" fill="#5b6b7b">ink pages: strokes merge</text>
+  <rect x="500" y="700" width="180" height="90" rx="8" fill="#f4ecdd" stroke="#a0732a" stroke-width="1.5"/>
+  <text x="590" y="730" font-size="15" font-weight="700" text-anchor="middle">Decrypt and save</text><text x="590" y="752" font-size="13" text-anchor="middle" fill="#5b6b7b">into IndexedDB,</text><text x="590" y="770" font-size="13" text-anchor="middle" fill="#5b6b7b">screens update</text>
+  <path d="M1065 616 L1065 698" stroke="#2e7d5b" stroke-width="3" marker-end="url(#a)"/>
+  <text x="1075" y="662" font-size="12" fill="#2e7d5b">at its next sync</text>
+  <path d="M970 745 L922 745" stroke="#44546a" stroke-width="2" marker-end="url(#a)"/>
+  <path d="M730 745 L682 745" stroke="#44546a" stroke-width="2" marker-end="url(#a)"/>
+
+  <rect x="40" y="700" width="420" height="190" rx="8" fill="#fff" stroke="#9fb0bf" stroke-width="1.5"/>
+  <text x="60" y="728" font-size="15" font-weight="700" fill="#44546a">Sync rules</text>
+  <text x="60" y="754" font-size="13" fill="#1d2b3a">Files go up before the note that uses them.</text>
+  <text x="60" y="776" font-size="13" fill="#1d2b3a">Budget: 70 requests a minute, 440 an hour.</text>
+  <text x="60" y="798" font-size="13" fill="#1d2b3a">Rate-limit answer = "uploading", retry; not an error.</text>
+  <text x="60" y="820" font-size="13" fill="#1d2b3a">Deleted for good = removed from the repo tree.</text>
+  <text x="60" y="842" font-size="13" fill="#1d2b3a">Token is pasted in the app only, stored encrypted.</text>
+  <text x="60" y="864" font-size="13" fill="#1d2b3a">Sealed notes sync only as ciphertext.</text>
+
+  <text x="40" y="936" font-size="12" fill="#5b6b7b">Diagram for spec v27.</text>
+</svg>
