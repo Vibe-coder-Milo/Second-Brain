@@ -243,6 +243,8 @@
   body.editing .outline-panel:not([hidden]) { padding-top: 124px; }
   .with-outline.page { margin-left: 264px; margin-right: 24px; max-width: min(720px, calc(100vw - var(--sidebar-w) - 288px)); }
 }
+/* Inside a notebook or side-by-side pane there is no Outline panel, so the page keeps its normal centred width. */
+.nb-pane .with-outline.page, .split-pane .with-outline.page { margin-left: auto; margin-right: auto; max-width: 720px; }
 .outline-panel h2 { margin: 0 0 6px; font-size: 13px; font-weight: 700; color: var(--muted); }
 .outline-list, .outline-labels { list-style: none; margin: 0 0 22px; padding: 0; }
 .outline-list button { width: 100%; text-align: left; border: 0; background: none; color: var(--ink); min-height: 34px; padding: 4px 8px; border-radius: 8px; cursor: pointer; font-family: var(--serif); font-size: 15px; }

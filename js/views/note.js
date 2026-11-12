@@ -561,7 +561,10 @@ function mountTyped(el, params, ctx) {
     const doc = editor.getJSON();
     const heads = docOutline(doc);
     const labs = docLabels(doc);
-    const wide = window.matchMedia('(min-width: 1180px)').matches;
+    // Inside a notebook or side-by-side pane the Outline panel is hidden, so
+    // the page must not make room for it.
+    const inPane = !!el.closest('.nb-pane, .split-pane');
+    const wide = window.matchMedia('(min-width: 1180px)').matches && !inPane;
     if (!wide || (heads.length < 2 && !labs.length)) { box.hidden = true; el.querySelector('#np')?.classList.remove('with-outline'); return; }
     box.hidden = false;
     el.querySelector('#np')?.classList.add('with-outline');
