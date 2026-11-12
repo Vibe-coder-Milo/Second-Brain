@@ -17,6 +17,9 @@ export const GAP = 40; // space between pages in Scroll down (holds "Page 2 of 3
 // The note column on an iPad or computer. PDF export draws pages in the same
 // proportions, so a printed page holds what a page on that screen holds.
 export const REF_W = 688;
+// The page width each note last had on this device's screen (iPad sizes
+// only): PDF export uses it, so the PDF has exactly the pages you saw.
+export const seenWidth = new Map();
 
 export const PAGE_MODES = [
   { id: 'down', name: 'Scroll down', hint: 'A4 pages, one under another. Text flows onto the next page by itself.' },
@@ -114,7 +117,7 @@ function scroller(el) {
 
 // editor: the Tiptap editor; wrap: the box around the title, pictures and
 // text (#n-sheets). Returns the controls the note screen and Contents use.
-export function mountPager(editor, wrap, { mode = 'down', host = null } = {}) {
+export function mountPager(editor, wrap, { mode = 'down', host = null, noteId = null } = {}) {
   const view = editor.view;
   let alive = true;
   let raf = 0;
@@ -189,6 +192,8 @@ export function mountPager(editor, wrap, { mode = 'down', host = null } = {}) {
     const t0 = performance.now();
     g = geometry();
     if (g.W < 50) return;
+    const nid = noteId?.();
+    if (nid && nid !== 'new') seenWidth.set(nid, g.W);
     wrap.style.setProperty('--pg-p', `${g.P}px`);
     wrap.style.setProperty('--pg-h', `${g.H}px`);
     const oy = wrap.getBoundingClientRect().top - wrap.scrollTop;

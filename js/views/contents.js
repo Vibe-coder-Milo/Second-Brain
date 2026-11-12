@@ -35,7 +35,10 @@ function jumpTo(host, target, block = 'start', pager = null) {
   if (!target) return;
   pager?.reveal(target); // Next page: turn to the page it's on first
   const sc = scroller(target);
-  const r = target.getBoundingClientRect();
+  const r0 = target.getBoundingClientRect();
+  // A block moved to the top of a page sits below a see-through border: aim at its text.
+  const pushed = block === 'start' ? parseFloat(target.style?.getPropertyValue('--pg')) || 0 : 0;
+  const r = { top: r0.top + pushed, bottom: r0.bottom };
   const top = sc === document.scrollingElement ? 0 : sc.getBoundingClientRect().top;
   const by = block === 'end' ? r.bottom - (sc === document.scrollingElement ? window.innerHeight : sc.getBoundingClientRect().bottom) + 24 : r.top - Math.max(top, stickyBottom(host)) - 12;
   // A long way: go straight there (a long smooth scroll takes seconds). A short way: glide.

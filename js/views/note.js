@@ -513,7 +513,7 @@ function mountTyped(el, params, ctx) {
     if (editor !== ed || $('#n-sheets', el) !== wrap) return;
     if (pager) { pager.setMode(pageModeOf(note())); return; }
     if (pageModeOf(note()) === 'endless') return;
-    pager = P.mountPager(ed, wrap, { mode: pageModeOf(note()), host: el });
+    pager = P.mountPager(ed, wrap, { mode: pageModeOf(note()), host: el, noteId: () => id });
     wrap.pager = pager;
   }
 

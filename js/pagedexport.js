@@ -1,6 +1,7 @@
 // PDF pictures of a typed note shown as A4 pages (Scroll down or Next page).
 // The pages are laid out like the note on an iPad or computer screen: the
-// same proportions (the screen's page scaled to A4), the same rule for what
+// same proportions (the page as last seen on this iPad or computer, scaled
+// to A4; a phone's narrow page would make the print huge, so it's ignored), the same rule for what
 // goes on the next page (`flow` in editor/pages.js) and a new page at each
 // page break, so the PDF has the pages you see. Endless notes don't come
 // here (export.js lays them out as before).
@@ -8,7 +9,7 @@
 import { state } from './vault.js';
 import { displayTitle, PAGE_W, A4_H } from './model.js';
 import { NOTE_FONT, TEXT_SIZE } from './fonts.js';
-import { flow, unitsOfJson, REF_W, MARGIN } from './editor/pages.js';
+import { flow, unitsOfJson, REF_W, MARGIN, seenWidth } from './editor/pages.js';
 
 // Space above a block on screen (CSS), in text sizes: between blocks, before
 // headings (their own size times their margin), between list items.
@@ -20,8 +21,10 @@ export async function pagedCanvases(n, { px = 1240 } = {}) {
   const { drawRichText, fileImageReady, setInkTone } = await import('./editor/inkdraw.js');
   const { noteDoc } = await import('./editor/rich.js');
   const doc = noteDoc(n);
-  const u = PAGE_W / REF_W; // page units per screen pixel
-  const M = Math.max(16, Math.round(REF_W * MARGIN)) * u;
+  const seen = seenWidth.get(n.id);
+  const W = seen >= 560 && seen <= 1000 ? seen : REF_W;
+  const u = PAGE_W / W; // page units per screen pixel
+  const M = Math.max(16, Math.round(W * MARGIN)) * u;
   const width = PAGE_W - 2 * M;
   const dt = state.config?.text || {};
   const sizePx = dt.size || TEXT_SIZE;
