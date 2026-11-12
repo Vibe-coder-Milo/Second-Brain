@@ -158,6 +158,9 @@ export function normNote(n) {
     // Sections of an imported document (see docsections.js): [{ title, level, pageId }].
     docSections: kind === 'ink' && Array.isArray(n.docSections) ? n.docSections.filter((s) => s && s.title && s.pageId).map((s) => ({ title: String(s.title).slice(0, 200), level: Math.min(3, Math.max(1, Math.floor(Number(s.level)) || 1)), pageId: String(s.pageId) })) : [],
     pageView: kind === 'ink' && (n.pageView === 'continuous' || n.pageView === 'single') ? n.pageView : null,
+    // Typed notes: one endless page (null), or A4 pages shown one under another
+    // ('down') or one at a time ('next'). Just this note; syncs with it.
+    pageMode: kind === 'note' && (n.pageMode === 'down' || n.pageMode === 'next') ? n.pageMode : null,
     // Pages with highlighter marks (null: not worked out yet; see highlights.js).
     hlPages: kind === 'ink' && Array.isArray(n.hlPages) ? n.hlPages : null,
     hlCount: kind === 'ink' && Number.isFinite(n.hlCount) ? n.hlCount : null, // highlights (grouped as on the Highlights screen)

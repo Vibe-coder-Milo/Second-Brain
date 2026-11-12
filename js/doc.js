@@ -78,6 +78,7 @@ function blockMd(b, indent, labels) {
     case 'taskList': return listMd(b, indent, labels);
     case 'table': return tableMd(b, labels);
     case 'imageFile': return '![image]()';
+    case 'pageBreak': return null; // where a new page starts: only for pages and printing
     default: return b.content ? (b.content || []).map((c) => blockMd(c, indent, labels)).join('\n\n') : null;
   }
 }

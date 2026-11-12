@@ -1,11 +1,12 @@
 // Typed notes: a rich text editor (Tiptap) with headings, bullets, checklists,
-// tables, callouts with labels, post-its, stickers, due dates and [[links]].
+// tables, callouts with labels, post-its, stickers, due dates, [[links]] and
+// page breaks.
 
 import {
   Editor, Node, Extension, mergeAttributes, wrappingInputRule, nodeInputRule, generateJSON,
   StarterKit, TaskList, TaskItem, Table, TableRow, TableCell, TableHeader,
   TextStyle, Color, FontFamily, FontSize, Highlight, TextAlign, Placeholder,
-  Plugin, PluginKey, Decoration, DecorationSet,
+  Plugin, PluginKey, Decoration, DecorationSet, TextSelection,
 } from '../../vendor/editor.bundle.js';
 import { mdToHtml } from '../markdown.js';
 import { state } from '../vault.js';
@@ -291,6 +292,65 @@ const ImageFile = Node.create({
   },
 });
 
+// A page break: the next text starts on a new page (typed notes shown as
+// pages, printing and PDF export). Word files bring these in too. While the
+// note is one endless page it shows as a thin dashed line.
+const PageBreak = Node.create({
+  name: 'pageBreak',
+  group: 'block',
+  atom: true,
+  selectable: true,
+  parseHTML() { return [{ tag: 'div[data-page-break]' }]; },
+  renderHTML() { return ['div', { 'data-page-break': '', class: 'page-break' }]; },
+  addNodeView() {
+    return () => {
+      const dom = document.createElement('div');
+      dom.className = 'page-break';
+      dom.dataset.pageBreak = '';
+      dom.contentEditable = 'false';
+      dom.setAttribute('role', 'separator');
+      dom.setAttribute('aria-label', 'Page break');
+      dom.innerHTML = '<span>New page</span>';
+      return { dom };
+    };
+  },
+  addCommands() {
+    return {
+      // A new page at the cursor: before the block when the cursor is at its
+      // start (that block moves to the new page), else after it, with an
+      // empty line to write on.
+      addPageBreak: () => ({ state, tr, dispatch }) => {
+        const { $from } = state.selection;
+        const type = state.schema.nodes.pageBreak;
+        const para = state.schema.nodes.paragraph;
+        if (!type) return false;
+        if (!dispatch) return true;
+        const top = $from.depth >= 1 ? $from.before(1) : state.doc.content.size;
+        const block = $from.depth >= 1 ? $from.node(1) : null;
+        const atStart = block && block.isTextblock && $from.parentOffset === 0 && $from.depth === 1;
+        let at;
+        if (atStart) {
+          tr.insert(top, type.create());
+          at = top + 2; // inside the block, now on the new page
+        } else {
+          const after = block ? $from.after(1) : state.doc.content.size;
+          const next = tr.doc.resolve(after).nodeAfter;
+          if (next && next.isTextblock && next.content.size === 0) {
+            tr.insert(after, type.create());
+            at = after + 2;
+          } else {
+            tr.insert(after, [type.create(), para.create()]);
+            at = after + 2;
+          }
+        }
+        tr.setSelection(TextSelection.near(tr.doc.resolve(Math.min(at, tr.doc.content.size))));
+        tr.scrollIntoView();
+        return true;
+      },
+    };
+  },
+});
+
 // Task items carry a stable id (so the Tasks screen can tick them) and the
 // time they were ticked.
 const TaskItemX = TaskItem.extend({
@@ -455,6 +515,7 @@ export function extensions({ placeholder = 'Write, or type / for styles' } = {})
     Sticker,
     DueDate,
     ImageFile,
+    PageBreak,
     WikiLinks,
     Suggest,
   ];
