@@ -548,8 +548,20 @@ Opening a never-written handwritten note creates its page file, which bumps
    slide titles, or PDF bookmarks (`docsections.pdfOutline`, pdf.js
    `getOutline`); they point at page ids so adding, removing or reordering
    pages keeps them right (`docsections.resolve`). The Contents button in a
-   handwritten note shows only when it has sections. The + menu inside a
-   note still imports PDFs only. `t6n`, `t6q`.
+   handwritten note shows only when it has sections. `t6n`, `t6q`.
+   After the v28 code review (two Opus reviewers, standards and spec):
+   the + menu and the Pages sheet inside a handwritten note say "Add a
+   document" and take PDF, Word, PowerPoint and pictures (several at once,
+   added in order after the current page, sections appended); several
+   pictures chosen or dropped together become ONE note with a page each
+   ("Pictures, <date>", grouped per folder in `bulkimport.collect`; owner's
+   decision), documents a note each; pictures dropped on the map with a
+   document come along (alone they still go to Capture); Capture's Mark up a
+   document opens the same sheet; after a Word/PowerPoint import
+   `docintake.warningText` says in plain words what couldn't be shown;
+   `docintake.fileTitle` is the one rule for a file's note title. Also fixed:
+   notebooks.js added a drop listener to `#main` on every visit and never
+   removed it (stacked import sheets); `destroy` removes it now.
 2. **Pages in typed notes**: see "Typed-note pages" above. Pages button in
    the top bar (phones: ⋯ -> Pages and layout), Add page here, Insert ->
    New page (also in the `/` menu); adding a page to an Endless note
