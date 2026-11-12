@@ -48,11 +48,11 @@ def steps(page):
 
     # Sheets and blocks, in page coordinates.
     LAYOUT = """(() => { const w = document.querySelector('#n-sheets'); const p = w.pager;
-      const sh = [...document.querySelectorAll('.pg-sheet')].map(s => { const r = s.getBoundingClientRect(); return [r.top, r.bottom]; });
+      const sh = [...document.querySelectorAll('.tp-sheet')].map(s => { const r = s.getBoundingClientRect(); return [r.top, r.bottom]; });
       const P = p ? p.geometry().P : 0;
       const bl = [...document.querySelectorAll('#n-rich .ProseMirror > *')].flatMap(e => /^(UL|OL)$/.test(e.tagName) ? [...e.children] : [e]).filter(e => !e.classList.contains('page-break')).map(e => {
-        const r = e.getBoundingClientRect(); const pg = e.classList.contains('pg-push') ? parseFloat(e.style.getPropertyValue('--pg')) : 0; return [r.top + pg, r.bottom, e.tagName]; });
-      const labels = [...document.querySelectorAll('.pg-label')].map(l => l.textContent);
+        const r = e.getBoundingClientRect(); const pg = e.classList.contains('tp-push') ? parseFloat(e.style.getPropertyValue('--tp')) : 0; return [r.top + pg, r.bottom, e.tagName]; });
+      const labels = [...document.querySelectorAll('.tp-label')].map(l => l.textContent);
       return { sh, bl, P, labels, count: p ? p.count : 0, mode: p ? p.mode : 'endless' }; })()"""
 
     def check_inside(L, what):
@@ -95,7 +95,7 @@ def steps(page):
     upd1 = J(f"import('./js/vault.js').then(V => V.state.notes.get('{ids['a']}').updatedAt)")
     assert upd1 == upd0, 'choosing how pages show does not change when the note was last changed'
     # Look at a page break between pages.
-    J("(() => { const l = document.querySelectorAll('.pg-label')[1]; window.scrollBy(0, l.getBoundingClientRect().top - innerHeight / 2); })()"); page.wait_for_timeout(300)
+    J("(() => { const l = document.querySelectorAll('.tp-label')[1]; window.scrollBy(0, l.getBoundingClientRect().top - innerHeight / 2); })()"); page.wait_for_timeout(300)
     page.screenshot(path=f'{OUT}/o-down-gap-{tag}.png')
 
     PG = "document.querySelector('#n-sheets').pager"
@@ -108,7 +108,7 @@ def steps(page):
         page.locator('[data-act=contents]').click(); page.wait_for_selector('.cts-item'); page.wait_for_timeout(200)
         page.locator('.cts-t').filter(has_text=re.compile(f'^{name}$')).click(); page.wait_for_timeout(900)
         r = J(f"""(() => {{ const h = [...document.querySelectorAll('#n-rich h2')].find(e => e.textContent === '{name}'); const s = document.querySelector('#n-sticky').getBoundingClientRect().bottom;
-          return {{ top: h.getBoundingClientRect().top + (parseFloat(h.style.getPropertyValue('--pg')) || 0), bar: s, sheet: {PG}.sheetOf(h), page: {PG}.page, h: innerHeight }}; }})()""")
+          return {{ top: h.getBoundingClientRect().top + (parseFloat(h.style.getPropertyValue('--tp')) || 0), bar: s, sheet: {PG}.sheetOf(h), page: {PG}.page, h: innerHeight }}; }})()""")
         print('contents jump to', name, r)
         assert r['sheet'] == r['page'], 'Contents goes to the page the heading is on'
         assert r['bar'] - 2 <= r['top'] <= r['h'] * 0.5, 'the heading shows just under the toolbar'
@@ -149,7 +149,7 @@ def steps(page):
     page.locator('.pp-panel [data-addpage]').click(); page.wait_for_timeout(700)
     breaks = J(f"{ED}.getJSON().content.filter(b => b.type === 'pageBreak').length")
     r = J(f"""(() => {{ const pb = document.querySelector('#n-rich .page-break'); const nx = pb.nextElementSibling; const p = {PG};
-      const t = nx.getBoundingClientRect().top + (parseFloat(nx.style.getPropertyValue('--pg')) || 0); const s = p.sheetOf(nx);
+      const t = nx.getBoundingClientRect().top + (parseFloat(nx.style.getPropertyValue('--tp')) || 0); const s = p.sheetOf(nx);
       return {{ s, pb: p.sheetOf(pb), top: t, sheetTop: p.sheetTops()[s], P: p.geometry().P, count: p.count, focused: {ED}.isFocused }}; }})()""")
     print('add page here:', breaks, r)
     assert breaks == 1 and r['s'] == r['pb'] + 1, 'a page break; what follows is on the next page'
@@ -172,7 +172,7 @@ def steps(page):
     upd2 = J(f"import('./js/vault.js').then(V => V.state.notes.get('{ids['a']}').updatedAt)")
     open_panel()
     page.locator('.pp-panel [data-how=next]').click(); page.wait_for_timeout(900)
-    nx = J(f"(() => {{ const w = document.querySelector('#n-sheets'); const p = {PG}; return {{ mode: p.mode, h: w.getBoundingClientRect().height, H: p.geometry().H, page: p.page, count: p.count, nav: !document.querySelector('.pg-nav').hidden, of: document.querySelector('.pg-of').textContent }}; }})()")
+    nx = J(f"(() => {{ const w = document.querySelector('#n-sheets'); const p = {PG}; return {{ mode: p.mode, h: w.getBoundingClientRect().height, H: p.geometry().H, page: p.page, count: p.count, nav: !document.querySelector('.tp-nav').hidden, of: document.querySelector('.tp-of').textContent }}; }})()")
     print('next page:', nx)
     assert nx['mode'] == 'next' and abs(nx['h'] - nx['H']) < 2 and nx['nav'] and nx['of'] == f"Page {nx['page'] + 1} of {nx['count']}", 'one page shows (the one you were reading), with Previous and Next'
     wt = J("document.querySelector('#n-sheets').getBoundingClientRect().top")
@@ -180,11 +180,11 @@ def steps(page):
     J(f"{PG}.goTo(0)"); page.wait_for_timeout(300)
     assert J(f"import('./js/vault.js').then(V => V.state.notes.get('{ids['a']}').updatedAt)") == upd2, 'the view choice does not change when the note was changed'
     page.screenshot(path=f'{OUT}/o-next-{tag}.png')
-    page.locator('.pg-nav [data-pg=next]').click(); page.wait_for_timeout(300)
-    assert J(f"{PG}.page") == 1 and J("document.querySelector('.pg-of').textContent").startswith('Page 2 of'), 'Next turns the page'
+    page.locator('.tp-nav [data-tp=next]').click(); page.wait_for_timeout(300)
+    assert J(f"{PG}.page") == 1 and J("document.querySelector('.tp-of').textContent").startswith('Page 2 of'), 'Next turns the page'
     vis = J("(() => { const w = document.querySelector('#n-sheets'); return w.scrollTop; })()")
     assert abs(vis - nx['H']) < 2, 'the second page is the one showing'
-    page.locator('.pg-nav [data-pg=prev]').click(); page.wait_for_timeout(300)
+    page.locator('.tp-nav [data-tp=prev]').click(); page.wait_for_timeout(300)
     assert J(f"{PG}.page") == 0, 'Previous turns back'
     page.keyboard.press('PageDown'); page.wait_for_timeout(200); page.keyboard.press('ArrowRight'); page.wait_for_timeout(200)
     assert J(f"{PG}.page") == 2, 'Page Down and the right arrow turn pages while reading'
@@ -253,14 +253,14 @@ def steps(page):
     if wide: assert abs(J(f"{PG}.count") - long_pdf) <= 1, 'on the iPad the long note prints as about the pages on screen'
     # Dark mode.
     J("document.documentElement.dataset.theme = 'dark'"); page.wait_for_timeout(300)
-    J("(() => { const l = document.querySelectorAll('.pg-label')[0]; window.scrollBy(0, l.getBoundingClientRect().top - innerHeight / 2); })()"); page.wait_for_timeout(300)
+    J("(() => { const l = document.querySelectorAll('.tp-label')[0]; window.scrollBy(0, l.getBoundingClientRect().top - innerHeight / 2); })()"); page.wait_for_timeout(300)
     page.screenshot(path=f'{OUT}/o-dark-{tag}.png')
     J("document.documentElement.dataset.theme = 'light'")
 
     # 10. Endless with page breaks: thin dashed lines, no pages.
     open_note(ids['b']); page.wait_for_function(f"!!{PG}")
     open_panel(); page.locator('.pp-panel [data-how=endless]').click(); page.wait_for_timeout(700)
-    e = J("(() => ({ pager: !!document.querySelector('#n-sheets').pager?.count && !!document.querySelector('.pg-sheet'), h: [...document.querySelectorAll('.page-break')].map(b => b.getBoundingClientRect().height), vis: getComputedStyle(document.querySelector('.page-break')).visibility }))()")
+    e = J("(() => ({ pager: !!document.querySelector('#n-sheets').pager?.count && !!document.querySelector('.tp-sheet'), h: [...document.querySelectorAll('.page-break')].map(b => b.getBoundingClientRect().height), vis: getComputedStyle(document.querySelector('.page-break')).visibility }))()")
     print('endless with page breaks:', e)
     assert not e['pager'] and all(h > 10 for h in e['h']) and e['vis'] == 'visible', 'page breaks show as a line in Endless'
     assert J(f"import('./js/vault.js').then(V => V.state.notes.get('{ids['b']}').pageMode)") is None

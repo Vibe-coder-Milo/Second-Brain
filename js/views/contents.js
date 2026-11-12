@@ -37,7 +37,7 @@ function jumpTo(host, target, block = 'start', pager = null) {
   const sc = scroller(target);
   const r0 = target.getBoundingClientRect();
   // A block moved to the top of a page sits below a see-through border: aim at its text.
-  const pushed = block === 'start' ? parseFloat(target.style?.getPropertyValue('--pg')) || 0 : 0;
+  const pushed = block === 'start' ? parseFloat(target.style?.getPropertyValue('--tp')) || 0 : 0;
   const r = { top: r0.top + pushed, bottom: r0.bottom };
   const top = sc === document.scrollingElement ? 0 : sc.getBoundingClientRect().top;
   const by = block === 'end' ? r.bottom - (sc === document.scrollingElement ? window.innerHeight : sc.getBoundingClientRect().bottom) + 24 : r.top - Math.max(top, stickyBottom(host)) - 12;

@@ -131,16 +131,16 @@ export function mountPager(editor, wrap, { mode = 'down', host = null, noteId = 
   const stats = { last: 0, max: 0, runs: 0 };
 
   const layer = document.createElement('div');
-  layer.className = 'pg-layer';
+  layer.className = 'tp-layer';
   layer.setAttribute('aria-hidden', 'true');
   wrap.prepend(layer);
   const nav = document.createElement('div');
-  nav.className = 'pg-nav';
-  nav.innerHTML = '<button type="button" class="btn btn-sm" data-pg="prev">Previous</button><span class="pg-of" aria-live="polite"></span><button type="button" class="btn btn-sm" data-pg="next">Next</button>';
+  nav.className = 'tp-nav';
+  nav.innerHTML = '<button type="button" class="btn btn-sm" data-tp="prev">Previous</button><span class="tp-of" aria-live="polite"></span><button type="button" class="btn btn-sm" data-tp="next">Next</button>';
   wrap.after(nav);
   nav.addEventListener('pointerdown', (e) => { if (e.target.closest('button')) e.preventDefault(); });
-  nav.querySelector('[data-pg=prev]').onclick = () => turn(-1);
-  nav.querySelector('[data-pg=next]').onclick = () => turn(1);
+  nav.querySelector('[data-tp=prev]').onclick = () => turn(-1);
+  nav.querySelector('[data-tp=next]').onclick = () => turn(1);
 
   const plugin = new Plugin({
     key,
@@ -178,9 +178,9 @@ export function mountPager(editor, wrap, { mode = 'down', host = null, noteId = 
   }
 
   function applyMode() {
-    wrap.classList.add('pg-on');
-    wrap.classList.toggle('pg-next', mode === 'next');
-    wrap.classList.toggle('pg-down', mode === 'down');
+    wrap.classList.add('tp-on');
+    wrap.classList.toggle('tp-next', mode === 'next');
+    wrap.classList.toggle('tp-down', mode === 'down');
     nav.hidden = mode !== 'next';
   }
 
@@ -194,8 +194,8 @@ export function mountPager(editor, wrap, { mode = 'down', host = null, noteId = 
     if (g.W < 50) return;
     const nid = noteId?.();
     if (nid && nid !== 'new') seenWidth.set(nid, g.W);
-    wrap.style.setProperty('--pg-p', `${g.P}px`);
-    wrap.style.setProperty('--pg-h', `${g.H}px`);
+    wrap.style.setProperty('--tp-p', `${g.P}px`);
+    wrap.style.setProperty('--tp-h', `${g.H}px`);
     const oy = wrap.getBoundingClientRect().top - wrap.scrollTop;
     const set = key.getState(view.state);
     const old = new Map();
@@ -227,7 +227,7 @@ export function mountPager(editor, wrap, { mode = 'down', host = null, noteId = 
       if (p <= 0.5) return;
       const table = BY_MARGIN.has(it.u.node.type.name);
       const base = table ? (it.sp?.base ?? (parseFloat(getComputedStyle(it.el).marginTop) || 0)) : 0;
-      const attrs = table ? { class: 'pg-push-m', style: `margin-top:${(base + p).toFixed(1)}px` } : { class: 'pg-push', style: `--pg:${p.toFixed(1)}px` };
+      const attrs = table ? { class: 'tp-push-m', style: `margin-top:${(base + p).toFixed(1)}px` } : { class: 'tp-push', style: `--tp:${p.toFixed(1)}px` };
       decos.push(Decoration.node(it.u.pos, it.u.pos + it.u.node.nodeSize, attrs, { push: p, base }));
     });
     if (changed) {
@@ -255,8 +255,8 @@ export function mountPager(editor, wrap, { mode = 'down', host = null, noteId = 
     let out = '';
     for (let i = 0; i < count; i++) {
       const t = i * (g.H + g.G);
-      out += `<div class="pg-sheet" style="top:${t}px;height:${g.H}px"></div>`;
-      if (i && mode === 'down') out += `<div class="pg-label" style="top:${t - g.G}px;height:${g.G}px"><span>Page ${i + 1} of ${count}</span></div>`;
+      out += `<div class="tp-sheet" style="top:${t}px;height:${g.H}px"></div>`;
+      if (i && mode === 'down') out += `<div class="tp-label" style="top:${t - g.G}px;height:${g.G}px"><span>Page ${i + 1} of ${count}</span></div>`;
     }
     layer.innerHTML = out;
     layer.style.height = `${total}px`;
@@ -264,9 +264,9 @@ export function mountPager(editor, wrap, { mode = 'down', host = null, noteId = 
   }
 
   function updateNav() {
-    nav.querySelector('.pg-of').textContent = `Page ${cur + 1} of ${count}`;
-    nav.querySelector('[data-pg=prev]').disabled = cur <= 0;
-    nav.querySelector('[data-pg=next]').disabled = cur >= count - 1;
+    nav.querySelector('.tp-of').textContent = `Page ${cur + 1} of ${count}`;
+    nav.querySelector('[data-tp=prev]').disabled = cur <= 0;
+    nav.querySelector('[data-tp=next]').disabled = cur >= count - 1;
   }
 
   // Next page: show page i (the box is clipped to one page and scrolled to it).
@@ -314,7 +314,7 @@ export function mountPager(editor, wrap, { mode = 'down', host = null, noteId = 
     if (!el || !g) return 0;
     const r = el.getBoundingClientRect();
     const oy = wrap.getBoundingClientRect().top - wrap.scrollTop;
-    const pushed = el.classList?.contains('pg-push') ? parseFloat(el.style.getPropertyValue('--pg')) || 0 : 0;
+    const pushed = el.classList?.contains('tp-push') ? parseFloat(el.style.getPropertyValue('--tp')) || 0 : 0;
     return sheetOfY(r.top - oy + pushed + 1);
   }
 
@@ -421,7 +421,7 @@ export function mountPager(editor, wrap, { mode = 'down', host = null, noteId = 
       if (!editor.isDestroyed) editor.unregisterPlugin(key);
       layer.remove();
       nav.remove();
-      wrap.classList.remove('pg-on', 'pg-next', 'pg-down');
+      wrap.classList.remove('tp-on', 'tp-next', 'tp-down');
       wrap.style.minHeight = '';
       wrap.style.height = '';
       wrap.scrollTop = 0;
