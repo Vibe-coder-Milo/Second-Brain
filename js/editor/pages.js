@@ -323,10 +323,10 @@ export function mountPager(editor, wrap, { mode = 'down', host = null, noteId = 
   function turn(d) {
     goTo(cur + d);
   }
-  function goTo(i) {
+  function goTo(i, { caret = true } = {}) {
     i = Math.max(0, Math.min(count - 1, i));
     if (mode === 'next') {
-      const typing = view.hasFocus() && editor.isEditable;
+      const typing = caret && view.hasFocus() && editor.isEditable;
       show(i);
       if (typing && firstPos[i] != null) {
         try {
@@ -389,12 +389,14 @@ export function mountPager(editor, wrap, { mode = 'down', host = null, noteId = 
     geometry: () => ({ ...g }),
     setMode(m) {
       if (m === mode) return;
+      const was = current(); // keep the page you were reading in view
       mode = m;
       painted = '';
       cur = 0;
       applyMode();
       wrap.scrollTop = 0;
       paginate();
+      goTo(was, { caret: false });
     },
     paginate,
     sheetOf,

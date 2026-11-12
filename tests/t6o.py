@@ -266,6 +266,23 @@ def steps(page):
     print('markdown:', md.replace(chr(10), ' / '))
     assert 'Chapter two' in md and 'pageBreak' not in md and 'null' not in md, 'Markdown and plain text keep the words, nothing for the page breaks'
 
+    # 10b. In a notebook's pane and side by side (iPad).
+    if wide:
+        nb = J(f"""(async () => {{ const V = await import('./js/vault.js'); const M = await import('./js/model.js');
+          const nb = await V.saveNotebook(M.newNotebook({{ title: 'Paged book', region: 'career' }}));
+          const n = await V.saveNote(M.newNote({{ kind: 'note', title: 'In a notebook', titleAuto: false, notebook: nb.id, section: nb.sections[0].id, region: 'career', inbox: false, doc: ({LONG})(5), pageMode: 'down' }}));
+          return {{ nb: nb.id, n: n.id }}; }})()""")
+        page.goto(BASE + f"#/notebook/{nb['nb']}?note={nb['n']}"); page.wait_for_selector('.nb-pane #n-rich .ProseMirror'); page.wait_for_function(f"!!{PG}"); page.wait_for_timeout(800)
+        L = J(LAYOUT); w = J("document.querySelector('.nb-pane #n-sheets').getBoundingClientRect().width")
+        print('notebook pane:', L['count'], 'pages,', round(w), 'px wide')
+        assert L['count'] >= 2; check_inside(L, 'notebook pane')
+        page.screenshot(path=f'{OUT}/o-notebook-{tag}.png')
+        page.goto(BASE + f"#/note/{ids['b']}?beside={nb['n']}"); page.wait_for_selector('.split-pane'); page.wait_for_timeout(1500)
+        sides = J("[...document.querySelectorAll('.split-pane #n-sheets')].map(w => w.pager ? [w.pager.mode, w.pager.count] : null)")
+        print('side by side:', sides)
+        assert sides[0] is None and sides[1] and sides[1][0] == 'down', 'pages work side by side (the left note is Endless now)'
+        page.screenshot(path=f'{OUT}/o-split-{tag}.png')
+
     # 11. Today's note: no pages.
     did = J("""(async () => { const V = await import('./js/vault.js'); const M = await import('./js/model.js'); const D = await import('./js/doc.js');
       const n = await V.saveNote(M.newNote({ kind: 'note', daily: D.isoToday(), title: '', doc: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Today.' }] }] } })); return n.id; })()""")
