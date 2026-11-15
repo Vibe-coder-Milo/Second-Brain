@@ -51,7 +51,11 @@ def steps(page):
         page.select_option('#s-text-font', name); page.wait_for_timeout(400)
         cfg = J("import('./js/vault.js').then(V => V.state.config.text.font)")
         assert cfg == name, cfg
-        page.goto(BASE + f'#/note/{nid}'); page.wait_for_selector('#n-rich .rich p'); page.wait_for_timeout(400)
+        # (Since v29.1 the default is for notes made after it: make one.)
+        fresh = J("""(async () => { const V = await import('./js/vault.js'); const M = await import('./js/model.js');
+          return (await V.saveNote(M.newNote({ kind: 'note', title: 'Font sample', titleAuto: false, region: 'career', inbox: false,
+            doc: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'The quick brown fox.' }] }] } }))).id; })()""")
+        page.goto(BASE + f'#/note/{fresh}'); page.wait_for_selector('#n-rich .rich p'); page.wait_for_timeout(400)
         fam = J("getComputedStyle(document.querySelector('#n-rich .rich p')).fontFamily")
         ok = J(f"document.fonts.check('16px \"{name}\"')")
         print(f'{name}: note uses {fam[:45]}; loaded={ok}')
