@@ -682,6 +682,13 @@ saved that over the real place, then reopened there. Rules now:
   for a typed and a handwritten note (fails on v29.3). Not yet confirmed on
   the owner's iPad.
 
+**Checkbox ticked while reading wasn't saved** (also `sb-v29.4`): Tiptap's
+task item only changes the document when the editor is editable; with
+`onReadOnlyChecked: () => true` the box changed on screen and nothing else.
+`createRichEditor` now listens for the checkbox `change` while read-only and
+sets `checked` on the node itself (`TaskIds` adds `doneAt`; `onChange` saves).
+No need to tap Edit. `t6r`.
+
 ## Ideas noted, not requested
 
 - Confirm on a real iPad: Touch ID unlock, and writing with the Pencil across

@@ -140,6 +140,22 @@ def steps(page):
         page.wait_for_selector('.nb-pane .ink-page canvas.ink-main'); page.wait_for_timeout(1800)
         vis = J("(() => { const sc = document.querySelector('.nb-pane .ink-scroll'); const mid = sc.getBoundingClientRect().top + sc.clientHeight * 0.4; return [...sc.querySelectorAll('.ink-slot')].findIndex(s => { const r = s.getBoundingClientRect(); return r.top <= mid && r.bottom >= mid; }); })()")
         print('after:', J(SUB), '| page on screen:', vis + 1); assert 'page 3 of 5' in J(SUB) and vis == 2
+    # 7. Ticking a checkbox while reading (no Edit) is saved, and unticking too.
+    tk = J("""(async () => { const V = await import('./js/vault.js'); const M = await import('./js/model.js');
+      const item = (t) => ({ type: 'taskItem', attrs: { checked: false }, content: [{ type: 'paragraph', content: [{ type: 'text', text: t }] }] });
+      return (await V.saveNote(M.newNote({ kind: 'note', title: 'Ticks', titleAuto: false, region: 'career', inbox: false,
+        doc: { type: 'doc', content: [{ type: 'taskList', content: [item('Buy milk'), item('Call the bank')] }] } }))).id; })()""")
+    page.goto(BASE + f'#/note/{tk}'); page.wait_for_selector('#n-rich li[data-checked] input'); page.wait_for_timeout(500)
+    assert J("document.querySelector('#n-edit').textContent") == 'Edit'
+    page.locator('#n-rich li[data-checked] input').nth(1).click(); page.wait_for_timeout(1300)
+    CH = f"import('./js/vault.js').then(V => V.state.notes.get('{tk}').doc.content[0].content.map(i => [i.attrs.checked, !!i.attrs.doneAt]))"
+    got = J(CH); print('ticked while reading:', got, '| still reading:', J("document.querySelector('#n-edit').textContent"))
+    assert got == [[False, False], [True, True]] and J("document.querySelector('#n-edit').textContent") == 'Edit'
+    page.goto(BASE + '#/today'); page.wait_for_timeout(300)
+    page.goto(BASE + f'#/note/{tk}'); page.wait_for_selector('#n-rich li[data-checked] input'); page.wait_for_timeout(500)
+    assert J("[...document.querySelectorAll('#n-rich li[data-checked] input')].map(i => i.checked)") == [False, True], 'still ticked after coming back'
+    page.locator('#n-rich li[data-checked] input').nth(1).click(); page.wait_for_timeout(1300)
+    assert J(CH) == [[False, False], [False, False]], 'unticking is saved too'
     print('OK', tag)
 
 if __name__ == '__main__':

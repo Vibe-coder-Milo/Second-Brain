@@ -689,6 +689,20 @@ export function createRichEditor(el, { doc, editable = false, placeholder, onCha
     },
     onUpdate: ({ editor: ed }) => onChange?.(ed.getJSON()),
   });
+  // Ticking a checkbox while reading (not editing): the box changes on screen
+  // but the editor leaves the note alone, so nothing was saved. Change the
+  // note here; onChange then saves it like any other edit.
+  el.addEventListener('change', (e) => {
+    const box = e.target;
+    if (editor.isEditable || box?.type !== 'checkbox') return;
+    const li = box.closest('li[data-checked]');
+    if (!li || !editor.view.dom.contains(li)) return;
+    let pos = null;
+    try { pos = editor.view.posAtDOM(li, 0) - 1; } catch { return; }
+    const node = pos >= 0 ? editor.state.doc.nodeAt(pos) : null;
+    if (node?.type.name !== 'taskItem' || node.attrs.checked === box.checked) return;
+    editor.view.dispatch(editor.state.tr.setNodeMarkup(pos, undefined, { ...node.attrs, checked: box.checked }));
+  });
   editor.storage.wikiLinks.open = onOpenLink || null;
   editor.storage.callout.pick = pickLabel || null;
   editor.storage.dueDate.pick = pickDate || null;

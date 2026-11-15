@@ -6,7 +6,7 @@
 
 | Version | Date | What changed in this document |
 |---|---|---|
-| v29.4 | 15 Nov 2026 | A note keeps its place when you switch apps on the iPad (iPadOS redraws a hidden app at other sizes, which used to reset the note to page 1); typed and handwritten notes. |
+| v29.4 | 15 Nov 2026 | A note keeps its place when you switch apps on the iPad (iPadOS redraws a hidden app at other sizes, which used to reset the note to page 1); typed and handwritten notes. A checkbox ticked while reading (without Edit) is now saved. |
 | v29.3 | 15 Nov 2026 | Typed notes: tap to edit stays where you tapped; Indent more / less (and Tab) for ordinary lines; paper colour in Endless; a note reopens where you were reading after the app reloads. |
 | v29.2 | 15 Nov 2026 | Touch ID / Face ID switch in Settings can be used even when the device doesn't confirm support (it was greyed out on the owner's iPhone); failures say what to check on iPhone and iPad. |
 | v29.1 | 15 Nov 2026 | Written from `sb-v29.1` (v29 was not released on its own). Default text: size 12 added, and a change now applies only to notes made after it; existing notes keep the default they were made with. |
@@ -91,6 +91,7 @@ Dates and release numbers come from `CLAUDE.md` "Requests from the owner". The g
 | N-13 | **Paper colour doesn't apply in Endless.** | Owner | Same look in every view. | Done v29.3 |
 | N-14 | **The cut/copy/AutoFill menu shows at the top of the screen**, not by my text. | Owner, iPad | Hard to use. | Needs a screenshot to reproduce |
 | N-15 | **After switching apps the note goes back to page 1.** I want it to stay on page 3. | Owner, iPad | Losing my place when reading. | v29.3 covered a reload only; fixed for app switching in v29.4; to confirm on the iPad |
+| N-16 | **I tick a checkbox and it isn't saved**; do I need to tap Edit first? | Owner | Ticking tasks should just work. | Done v29.4 (no Edit needed) |
 | N-10 | **On the iPhone I can't tick Touch ID / Face ID in Settings** (I can on the iPad). | Owner, iPhone | Without it, the passphrase is typed every time. | Fix in v29.2 (switch usable unless the browser has no passkeys; clear messages); to confirm on the iPhone |
 | N-08 | **Text size 12** should be selectable for the default text. | Owner | Smaller text fits more on a page. | Done v29.1 |
 | N-09 | **Changing the default font, size or colour should only apply to new notes**, not existing ones. | Owner | Old notes shouldn't change look without being touched. | Done v29.1 |
@@ -166,6 +167,7 @@ From `docs/research/2026-11-06-feature-ideas.md`; items 1 to 4 are built. Not re
 | TN-21 | Tapping text while reading shall start editing at the tapped spot without moving the text on screen; a tap beside the text shall land on that line. | Done v29.3 | t6r |
 | TN-22 | Indent more / less shall move ordinary lines and headings right or left by one step (2 em, up to 8) per tap, the selected lines together; Tab and Shift+Tab shall do the same outside lists and tables; lists keep their levels; PDF export shows the indent. | Done v29.3 | t6r |
 | TN-23 | A typed note shall reopen where it was being read on that device (Scroll down and Endless: the same lines on screen; Next page: the same page), also after the app was locked or reloaded, and after switching to another app and back (the place shall not be saved or changed while the app is hidden or the window is changing size). Handwritten notes likewise stay on the page being read. | Done v29.3, v29.4 | t6r |
+| TN-24 | Ticking or unticking a checkbox while reading (not editing) shall change the note and save it, without entering editing. | Done v29.4 | t6r |
 | TN-20 | The owner shall be able to choose a typed note's paper colour in the Pages panel: White (the default for pages), Ivory or Dark, as in handwritten notes; in Endless (since v29.3) the note then shows as one sheet in that colour (none chosen: as before). Saved with the note without changing when it was last changed; PDF export uses the same colour (Dark paper with light writing). In dark mode pages stay dark. | Done v29 | t6o |
 | TN-19 | The app shall offer 15 fonts (7 before; Lora, EB Garamond, Merriweather, Playfair Display, Inter, Lexend, Patrick Hand and Kalam added), all bundled. A font shall be loaded only when a note uses it (before PDF export or page pictures); the font menu shows each name in its own font. Nothing is fetched from anywhere else. | Done v28 | t6p |
 
