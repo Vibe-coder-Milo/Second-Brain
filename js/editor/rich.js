@@ -363,6 +363,61 @@ const TaskItemX = TaskItem.extend({
   },
 }).configure({ nested: true, onReadOnlyChecked: () => true });
 
+// Indent for ordinary lines and headings (lists have their own levels): each
+// step moves the line 2 em to the right, up to 8 steps. Tab and Shift+Tab do
+// the same outside lists and tables. Drawn on canvas by drawRichText too.
+export const INDENT_MAX = 8;
+const inList = (editor) => editor.isActive('listItem') || editor.isActive('taskItem');
+const shiftIndent = (d) => ({ state: st, tr, dispatch }) => {
+  const { from, to } = st.selection;
+  let changed = false;
+  st.doc.nodesBetween(from, to, (node, pos) => {
+    if (node.type.name !== 'paragraph' && node.type.name !== 'heading') return;
+    const v = Math.max(0, Math.min(INDENT_MAX, (node.attrs.indent || 0) + d));
+    if (v === (node.attrs.indent || 0)) return;
+    tr.setNodeMarkup(pos, undefined, { ...node.attrs, indent: v });
+    changed = true;
+  });
+  if (changed && dispatch) dispatch(tr);
+  return changed;
+};
+const Indent = Extension.create({
+  name: 'indent',
+  priority: 50,
+  addGlobalAttributes() {
+    return [{
+      types: ['paragraph', 'heading'],
+      attributes: {
+        indent: {
+          default: 0,
+          parseHTML: (el) => Math.min(INDENT_MAX, Math.max(0, parseInt(el.getAttribute('data-indent') || '0', 10) || 0)),
+          renderHTML: (a) => (a.indent ? { 'data-indent': a.indent, style: `margin-left: ${a.indent * 2}em` } : {}),
+        },
+      },
+    }];
+  },
+  addCommands() {
+    return { indentMore: () => shiftIndent(1), indentLess: () => shiftIndent(-1) };
+  },
+  addKeyboardShortcuts() {
+    const ok = () => !inList(this.editor) && !this.editor.isActive('table');
+    return {
+      Tab: () => ok() && this.editor.commands.indentMore(),
+      'Shift-Tab': () => ok() && this.editor.commands.indentLess(),
+    };
+  },
+});
+
+// Indent more or less: list items move a level; other lines move right or left.
+export function indent(editor, d) {
+  const ch = () => editor.chain().focus();
+  if (inList(editor)) {
+    if (d > 0) { if (!ch().sinkListItem('listItem').run()) ch().sinkListItem('taskItem').run(); } else if (!ch().liftListItem('listItem').run()) ch().liftListItem('taskItem').run();
+    return;
+  }
+  if (d > 0) ch().indentMore().run(); else ch().indentLess().run();
+}
+
 const TaskIds = Extension.create({
   name: 'taskIds',
   addProseMirrorPlugins() {
@@ -508,6 +563,7 @@ export function extensions({ placeholder = 'Write, or type / for styles' } = {})
     FontSize,
     ToneHighlight.configure({ multicolor: true }),
     TextAlign.configure({ types: ['heading', 'paragraph'] }),
+    Indent,
     Placeholder.configure({ placeholder }),
     Callout,
     PostIt,

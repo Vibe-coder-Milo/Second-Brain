@@ -485,8 +485,15 @@ function mountTyped(el, params, ctx) {
     editor.view.dom.addEventListener('click', (e) => {
       if (editing || compact) return;
       if (e.target.closest('a, button, input, label, .wikilink, .due-chip, .callout-label')) return;
-      const pos = editor.view.posAtCoords({ left: e.clientX, top: e.clientY });
-      startEditing(pos?.pos);
+      // A tap in the margin or between lines still lands on the nearest text
+      // (it used to put the cursor at the very end of the note).
+      const r = editor.view.dom.getBoundingClientRect();
+      const left = Math.min(Math.max(e.clientX, r.left + 2), r.right - 2);
+      const pos = editor.view.posAtCoords({ left, top: e.clientY }) || editor.view.posAtCoords({ left: r.left + 2, top: e.clientY });
+      // Keep the tapped words where they are on screen while editing starts
+      // (the title and the parts above the text change as it does).
+      const block = e.target.closest('.ProseMirror > *') || e.target;
+      startEditing(pos?.pos, { anchor: { el: block, top: block.getBoundingClientRect().top } });
     });
     setupBar();
     if (editing) {
@@ -494,7 +501,70 @@ function mountTyped(el, params, ctx) {
       if (focusWhenReady) { focusWhenReady = false; editor.commands.focus('start'); } else if (id === 'new' && !n.title) setTimeout(() => $('#n-title', el)?.focus(), 50);
     }
     drawOutline();
-    applyPageMode();
+    await applyPageMode();
+    restorePlace();
+  }
+
+  // ---------- Where you were reading ----------
+  // Each typed note opens where you left it on this device (the app can be
+  // reloaded while it's away: locking, or iPadOS freeing memory). Kept as the
+  // top block on screen and how far it was scrolled, or the page in Next page.
+  const PLACE_KEY = 'sb-note-place';
+  const places = () => { try { return JSON.parse(localStorage.getItem(PLACE_KEY)) || {}; } catch { return {}; } };
+  const topLine = (sc) => {
+    const top = sc === document.scrollingElement ? 0 : sc.getBoundingClientRect().top;
+    return Math.max(top, $('#n-sticky', el)?.getBoundingClientRect().bottom || 0);
+  };
+  function savePlace() {
+    if (!editor || id === 'new' || compact || !el.isConnected) return;
+    const dom = editor.view.dom;
+    const sc = scrollBox(dom);
+    const line = topLine(sc);
+    const kids = [...dom.children].filter((k) => k.getBoundingClientRect().height > 0);
+    let i = kids.findIndex((k) => k.getBoundingClientRect().bottom > line + 1);
+    if (i < 0) i = kids.length - 1;
+    const scrolled = sc === document.scrollingElement ? window.scrollY : sc.scrollTop;
+    const place = { b: [...dom.children].indexOf(kids[i]), off: kids[i] ? Math.round(kids[i].getBoundingClientRect().top - line) : 0, top: scrolled < 40, p: pager?.mode === 'next' ? pager.current() : null };
+    try {
+      const m = places();
+      delete m[id];
+      m[id] = place;
+      const keys = Object.keys(m);
+      for (const k of keys.slice(0, Math.max(0, keys.length - 200))) delete m[k];
+      localStorage.setItem(PLACE_KEY, JSON.stringify(m));
+    } catch { /* private mode */ }
+  }
+  let placeTimer = null;
+  const onAnyScroll = () => { clearTimeout(placeTimer); placeTimer = setTimeout(savePlace, 300); };
+  const onHide = () => { if (document.visibilityState === 'hidden') savePlace(); };
+  document.addEventListener('scroll', onAnyScroll, { capture: true, passive: true });
+  document.addEventListener('visibilitychange', onHide);
+  let restoredFor = null;
+  function restorePlace() {
+    if (!editor || id === 'new' || compact || restoredFor === id || editing) return;
+    restoredFor = id;
+    const p = places()[id];
+    if (!p || (p.top && p.p == null)) return;
+    const go = () => {
+      if (!editor) return;
+      if (p.p != null && pager?.mode === 'next') { pager.goTo(p.p, { caret: false }); return; }
+      const b = editor.view.dom.children[p.b];
+      if (!b) return;
+      const sc = scrollBox(b);
+      const d = b.getBoundingClientRect().top - topLine(sc) - p.off;
+      if (sc === document.scrollingElement) window.scrollBy(0, d); else sc.scrollTop += d;
+    };
+    // After the pages are laid out (one frame), and again while the parts above
+    // settle (title, pictures, fonts), until you touch or scroll yourself.
+    let touched = false;
+    const mine = () => { touched = true; };
+    const evs = ['pointerdown', 'wheel', 'touchstart', 'keydown'];
+    evs.forEach((t) => window.addEventListener(t, mine, { capture: true, passive: true, once: true }));
+    const forId = id;
+    const again = () => { if (!touched && !editing && restoredFor === forId && id === forId) go(); };
+    requestAnimationFrame(() => requestAnimationFrame(again));
+    for (const ms of [200, 500, 1000, 1800]) setTimeout(again, ms);
+    setTimeout(() => evs.forEach((t) => window.removeEventListener(t, mine, { capture: true })), 2000);
   }
 
   // ---------- Pages ----------
@@ -510,6 +580,8 @@ function mountTyped(el, params, ctx) {
     if (!ed || !wrap || !n) return;
     wrap.dataset.paper = n.paperColor || 'white';
     const m = pageModeOf(n);
+    // Endless: one long sheet in the chosen colour (none chosen: as before).
+    wrap.classList.toggle('np-on', m === 'endless' && !!n.paperColor);
     if (m === 'endless') { pager?.destroy(); pager = null; return; }
     if (pager) { pager.setMode(m); return; }
     const P = await import('../editor/pages.js');
@@ -536,7 +608,7 @@ function mountTyped(el, params, ctx) {
 
   // The colour of the pages (White, Ivory or Dark). Just this note.
   async function setPaper(c) {
-    const paperColor = c === 'white' ? null : c;
+    const paperColor = c;
     if (id === 'new') {
       await persist(true);
       if (id === 'new') { draft = { ...draft, paperColor }; applyPageMode(); return; }
@@ -565,15 +637,15 @@ function mountTyped(el, params, ctx) {
     if (!n || !canPage()) return;
     const P = await import('../editor/pages.js');
     const now = pageModeOf(n);
-    const paper = n.paperColor || 'white';
+    const paper = n.paperColor || (now === 'endless' ? '' : 'white');
     const wide = !!anchor && (isWide() || window.innerWidth >= 700);
     const body = `${html`<div class="pp-head"><h2>Pages</h2></div>
       <h3 class="pp-sub" id="pp-how">How pages show</h3>
       <div class="chips" role="radiogroup" aria-labelledby="pp-how">${P.PAGE_MODES.map((o) => html`<button type="button" class="chip" role="radio" aria-checked="${o.id === now ? 'true' : 'false'}" aria-pressed="${o.id === now ? 'true' : 'false'}" data-how="${o.id}">${o.name}</button>`)}</div>
       <p class="hint pp-mode">${P.PAGE_MODES.find((o) => o.id === now)?.hint || ''}</p>
-      ${now === 'endless' ? '' : html`<h3 class="pp-sub" id="pp-paper">Paper colour</h3>
+      ${html`<h3 class="pp-sub" id="pp-paper">Paper colour</h3>
       <div class="chips" role="radiogroup" aria-labelledby="pp-paper">${PAPER_COLORS.map((c) => html`<button type="button" class="chip" role="radio" aria-checked="${c.id === paper ? 'true' : 'false'}" aria-pressed="${c.id === paper ? 'true' : 'false'}" data-pcol="${c.id}"><span class="dot lg" style="background:${c.bg};border:1px solid var(--field)"></span>${c.name}</button>`)}</div>
-      ${isDarkUI() ? html`<p class="hint">In dark mode pages show dark; this colour shows in light mode and in PDFs.</p>` : ''}`}
+      ${isDarkUI() ? html`<p class="hint">In dark mode pages show dark; this colour shows in light mode${now === 'endless' ? '' : ' and in PDFs'}.</p>` : ''}`}
       <button type="button" class="btn btn-sm pp-add" data-addpage>${icons.plus({ size: 16 })}Add page here</button>
       <p class="hint">Just this note. Text flows onto the next page by itself; Add page starts a new page at the cursor. Printing and PDF export use the same pages.</p>`}`;
     const box = wide ? popover(anchor, body, { label: 'Pages', width: 340, cls: 'pp-pop' }) : openSheet(body, { label: 'Pages' });
@@ -684,7 +756,7 @@ function mountTyped(el, params, ctx) {
   const outlineSoon = debounce(drawOutline, 600);
 
   // ---------- Editing and saving ----------
-  function startEditing(pos, { title = false } = {}) {
+  function startEditing(pos, { title = false, anchor = null } = {}) {
     if (editing) return;
     editing = true;
     editor?.setEditable(true);
@@ -702,9 +774,30 @@ function mountTyped(el, params, ctx) {
       t.focus();
       t.setSelectionRange(t.value.length, t.value.length);
     } else if (editor) {
-      if (typeof pos === 'number') editor.chain().focus().setTextSelection(pos).run();
+      if (typeof pos === 'number') editor.chain().setTextSelection(pos).focus(null, { scrollIntoView: !anchor }).run();
       else editor.commands.focus('end');
     }
+    if (anchor?.el?.isConnected) {
+      const keep = () => {
+        if (!anchor.el.isConnected) return;
+        const d = anchor.el.getBoundingClientRect().top - anchor.top;
+        if (Math.abs(d) < 1) return;
+        const sc = scrollBox(anchor.el);
+        if (sc === document.scrollingElement) window.scrollBy(0, d); else sc.scrollTop += d;
+      };
+      keep();
+      // Pages are laid out again on the next frame: check once more after it.
+      requestAnimationFrame(() => requestAnimationFrame(keep));
+    }
+  }
+
+  // The scrolling box the note sits in (the page, or a notebook's pane).
+  function scrollBox(node) {
+    for (let p = node?.parentElement; p; p = p.parentElement) {
+      const o = getComputedStyle(p).overflowY;
+      if ((o === 'auto' || o === 'scroll') && p.scrollHeight > p.clientHeight + 4) return p;
+    }
+    return document.scrollingElement;
   }
 
   async function stopEditing() {
@@ -865,6 +958,7 @@ function mountTyped(el, params, ctx) {
     update(p) {
       if (p.id === id) return;
       flush();
+      savePlace();
       id = p.id;
       params = p;
       editing = false;
@@ -893,6 +987,10 @@ function mountTyped(el, params, ctx) {
       }
     },
     destroy() {
+      savePlace();
+      clearTimeout(placeTimer);
+      document.removeEventListener('scroll', onAnyScroll, { capture: true });
+      document.removeEventListener('visibilitychange', onHide);
       document.removeEventListener('paste', onPaste, true);
       flush();
       destroyEditor();

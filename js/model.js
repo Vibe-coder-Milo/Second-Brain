@@ -161,8 +161,9 @@ export function normNote(n) {
     // Typed notes: one endless page (null), or A4 pages shown one under another
     // ('down') or one at a time ('next'). Just this note; syncs with it.
     pageMode: kind === 'note' && (n.pageMode === 'down' || n.pageMode === 'next') ? n.pageMode : null,
-    // Typed notes shown as pages: the paper's colour ('ivory' or 'night'; null = white).
-    paperColor: kind === 'note' && (n.paperColor === 'ivory' || n.paperColor === 'night') ? n.paperColor : null,
+    // Typed notes: the paper's colour ('white', 'ivory' or 'night'). null = never
+    // chosen: white pages, and an Endless note shows on the app's background as before.
+    paperColor: kind === 'note' && ['white', 'ivory', 'night'].includes(n.paperColor) ? n.paperColor : null,
     // Pages with highlighter marks (null: not worked out yet; see highlights.js).
     hlPages: kind === 'ink' && Array.isArray(n.hlPages) ? n.hlPages : null,
     hlCount: kind === 'ink' && Number.isFinite(n.hlCount) ? n.hlCount : null, // highlights (grouped as on the Highlights screen)

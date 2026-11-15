@@ -593,17 +593,21 @@ body.inking { overscroll-behavior: none; }
 .sheets.tp-next { overflow: hidden; }
 .tp-layer { position: absolute; left: 0; right: 0; top: 0; z-index: -1; pointer-events: none; }
 .tp-sheet { position: absolute; left: 0; right: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 4px; box-shadow: 0 1px 3px rgba(27, 42, 56, 0.08); }
-/* Paper colour of a typed note's pages (light mode; dark mode keeps dark pages). */
-:root:not([data-theme=dark]) .sheets.tp-on[data-paper=ivory] .tp-sheet { background: #FBF7EF; border-color: #E7DECD; }
-@media (prefers-color-scheme: dark) { :root:not([data-theme=light]) .sheets.tp-on[data-paper=ivory] .tp-sheet { background: var(--surface); border-color: var(--line); } }
-:root:not([data-theme=dark]) .sheets.tp-on[data-paper=night] {
+/* Paper colour of a typed note (light mode; dark mode keeps dark pages). Pages
+   colour each sheet; an Endless note with a colour chosen becomes one long sheet. */
+.sheets.np-on { display: flex; flex-direction: column; gap: 22px; padding: 28px 32px 40px; background: var(--surface); border: 1px solid var(--line); border-radius: 4px; box-shadow: 0 1px 3px rgba(27, 42, 56, 0.08); }
+@media (max-width: 699px) { .sheets.np-on { margin-left: -16px; margin-right: -16px; padding: 20px 16px 32px; border-left: 0; border-right: 0; border-radius: 0; } }
+:root:not([data-theme=dark]) .sheets:is(.tp-on, .np-on)[data-paper=white] { --surface: #FFFFFF; }
+:root:not([data-theme=dark]) .sheets.tp-on[data-paper=ivory] .tp-sheet, :root:not([data-theme=dark]) .sheets.np-on[data-paper=ivory] { background: #FBF7EF; border-color: #E7DECD; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme=light]) .sheets.tp-on[data-paper=ivory] .tp-sheet, :root:not([data-theme=light]) .sheets.np-on[data-paper=ivory] { background: var(--surface); border-color: var(--line); } }
+:root:not([data-theme=dark]) .sheets:is(.tp-on, .np-on)[data-paper=night] {
   --surface: #1E2B38; --surface-2: #213344; --tint: #233646; --ink: #E4ECE9; --on-ink: #13202D; --muted: #A3B2B0;
   --line: #2D3D4C; --line-soft: #26394A; --field: #3A5063; --field-strong: #56707F; --focus: #A9C6EA; color-scheme: dark;
 }
-:root:not([data-theme=dark]) .sheets.tp-on[data-paper=night] .tp-sheet { background: #1E2B38; border-color: #2D3D4C; }
-:root:not([data-theme=dark]) .sheets.tp-on[data-paper=night] .rich:not(.tb-rich) { color: var(--note-ink-dark, var(--ink)); caret-color: var(--ink); }
-:root:not([data-theme=dark]) .sheets.tp-on[data-paper=night] .rich [style*="--tcd"]:not(mark *) { color: var(--tcd) !important; }
-:root:not([data-theme=dark]) .sheets.tp-on[data-paper=night] .rich mark[style*="--hld"] { background-color: var(--hld) !important; color: var(--ink) !important; }
+:root:not([data-theme=dark]) .sheets.tp-on[data-paper=night] .tp-sheet, :root:not([data-theme=dark]) .sheets.np-on[data-paper=night] { background: #1E2B38; border-color: #2D3D4C; }
+:root:not([data-theme=dark]) .sheets:is(.tp-on, .np-on)[data-paper=night] .rich:not(.tb-rich) { color: var(--note-ink-dark, var(--ink)); caret-color: var(--ink); }
+:root:not([data-theme=dark]) .sheets:is(.tp-on, .np-on)[data-paper=night] .rich [style*="--tcd"]:not(mark *) { color: var(--tcd) !important; }
+:root:not([data-theme=dark]) .sheets:is(.tp-on, .np-on)[data-paper=night] .rich mark[style*="--hld"] { background-color: var(--hld) !important; color: var(--ink) !important; }
 .tp-label { position: absolute; left: 0; right: 0; display: flex; align-items: center; justify-content: center; font: 600 12px/1 var(--sans); color: var(--muted); letter-spacing: 0.02em; }
 .tp-nav { position: sticky; bottom: calc(env(safe-area-inset-bottom) + 12px); z-index: 5; align-self: center; display: flex; align-items: center; gap: 10px; padding: 5px; background: var(--surface); border: 1px solid var(--field); border-radius: 24px; box-shadow: 0 6px 18px rgba(27, 42, 56, 0.14); }
 .tp-nav[hidden] { display: none; }

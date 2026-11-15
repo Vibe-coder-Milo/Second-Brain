@@ -595,11 +595,14 @@ export function drawRichText(ctx, doc, x, y, width, { size = BOX_SIZE, font = BO
 
   const block = (b, px, pw, depth = 0) => {
     const st = { size, family: base, color };
+    // Indented lines and headings (2 em a step, as on screen).
+    const ind = Math.min(8, Math.max(0, b.attrs?.indent || 0));
     switch (b.type) {
-      case 'paragraph': cy += paragraph(runsOf(b, st), px, pw) + size * gap; break;
+      case 'paragraph': cy += paragraph(runsOf(b, st), px + ind * 2 * size, pw - ind * 2 * size) + size * gap; break;
       case 'heading': {
         const lv = b.attrs?.level || 1;
         const s2 = { ...st, size: size * [0, 1.7, 1.35, 1.12][lv], bold: true, color: lv === 3 ? tint('#51606C') : color };
+        if (ind) { px += ind * 2 * s2.size; pw -= ind * 2 * s2.size; }
         cy += size * 0.3;
         cy += paragraph(runsOf(b, s2), px, pw, { lineH: 1.25 }) + size * 0.2;
         break;

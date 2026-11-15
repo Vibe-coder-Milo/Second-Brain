@@ -8,6 +8,7 @@ import { icons } from '../icons.js';
 import { popover, closePopover, labelPicker, datePicker, stickerDrawer, tooltips } from '../ui.js';
 import { searchNotes, displayTitle } from '../model.js';
 import { readClipboardImages } from '../clipimages.js';
+import * as R from './rich.js';
 import { TEXT_PALETTE, HL_PALETTE, colourName, suggestKey } from './rich.js';
 import { FONTS, NOTE_FONT, TEXT_SIZE } from '../fonts.js';
 import { POSTIT_COLORS } from '../stickers.js';
@@ -235,8 +236,8 @@ export function mountFormatBar(bar, editor, opts = {}) {
       case 'bullets': ch().toggleBulletList().run(); break;
       case 'numbers': ch().toggleOrderedList().run(); break;
       case 'checklist': ch().toggleTaskList().run(); break;
-      case 'indent': if (!ch().sinkListItem('listItem').run()) ch().sinkListItem('taskItem').run(); break;
-      case 'outdent': if (!ch().liftListItem('listItem').run()) ch().liftListItem('taskItem').run(); break;
+      case 'indent': R.indent(editor, 1); break;
+      case 'outdent': R.indent(editor, -1); break;
       case 'align': {
         const order = ['left', 'center', 'right'];
         const cur = order.find((a) => editor.isActive({ textAlign: a })) || 'left';
@@ -354,8 +355,8 @@ export function mountNoteBars(tools, props, editor, opts = {}) {
       case 'bullets': ch().toggleBulletList().run(); break;
       case 'numbers': ch().toggleOrderedList().run(); break;
       case 'checklist': ch().toggleTaskList().run(); break;
-      case 'indent': if (!ch().sinkListItem('listItem').run()) ch().sinkListItem('taskItem').run(); break;
-      case 'outdent': if (!ch().liftListItem('listItem').run()) ch().liftListItem('taskItem').run(); break;
+      case 'indent': R.indent(editor, 1); break;
+      case 'outdent': R.indent(editor, -1); break;
       case 'align': {
         const order = ['left', 'center', 'right'];
         const cur = order.find((a) => editor.isActive({ textAlign: a })) || 'left';

@@ -84,7 +84,7 @@ through a private GitHub repo. Everything is encrypted on the device.
   - models: transformers and onnxruntime (`ort/`) with the model files;
   - OCR: tesseract.
 - **Service worker** (`sw.js`):
-  - Bump `VERSION` (`sb-vN`; currently `sb-v29.2`; small follow-ups can be `.1`, `.2` as the owner asked) on every release.
+  - Bump `VERSION` (`sb-vN`; currently `sb-v29.3`; small follow-ups can be `.1`, `.2` as the owner asked) on every release.
   - Add every new JS/CSS file to `SHELL`, or it won't work offline.
   - The app shows an update bar (`js/appupdate.js`).
 - **Views:** `js/views/*.js` export `mount(main, params, ctx)`, returning
@@ -631,6 +631,36 @@ Passwords → Passwords; Face ID & Passcode → Password AutoFill). Likely
 cause on the owner's iPhone: passkeys kept in a third-party password app
 without PRF, or Apple Passwords AutoFill off. Not yet confirmed on the
 iPhone. `t5t`.
+
+### 15 Nov 2026, evening (`sb-v29.3`)
+
+1. **Tap to edit jumped away** (`note.js` click handler, `startEditing`):
+   starting editing redraws the head, figures and details above the text,
+   which moved the tapped words; a tap in a margin (no `posAtCoords`) put the
+   cursor at the END. Now x is clamped into the text, focus doesn't scroll,
+   and the tapped block is kept at the same screen y (`anchor`, checked again
+   after the page layout frame). `t6r`.
+2. **Indent for ordinary lines** (`rich.js` `Indent` extension, `indent()`):
+   paragraphs and headings get `attrs.indent` 0..8 (2 em a step,
+   `data-indent` + `margin-left`); lists keep sink/lift; Tab / Shift+Tab
+   outside lists and tables; `drawRichText` draws it. An older app version
+   drops the attribute (the line just shows unindented). `t6r`.
+3. **Face ID on iPhone**: the owner reports an iPhone message about passkeys
+   being stronger; asked for a screenshot (not changed in v29.3).
+4. **Paper colour in Endless**: `paperColor` may now be 'white' too (null =
+   never chosen). Endless with a colour: `#n-sheets.np-on` becomes one sheet
+   (same token overrides as pages). PDF export of Endless notes stays white.
+   `t6r`.
+5. **Cut/copy/AutoFill menu at the top of the screen** (iOS's own menu):
+   not reproduced; asked the owner for a screenshot and which device.
+6. **Reopens on page 1 after switching apps**: locking (or iPadOS freeing
+   memory) reloads the app, and typed notes kept no place. Now
+   `savePlace`/`restorePlace` in `note.js` keep, per note in `localStorage`
+   (`sb-note-place`, 200 notes, ids only): the top block on screen and its
+   offset, or the page in Next page; saved on scroll (300 ms), when hidden
+   and when leaving; restored after layout and re-applied for 2 s until the
+   owner touches or scrolls. Handwritten notes already did this
+   (`sb-last-pages`). `t6r`.
 
 ## Ideas noted, not requested
 

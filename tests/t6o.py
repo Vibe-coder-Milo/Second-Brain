@@ -114,7 +114,7 @@ def steps(page):
     print('PDF page corner:', px); assert px == [30, 43, 56], 'the PDF has the same paper colour'
     assert J(f"import('./js/vault.js').then(V => [V.state.notes.get('{ids['a']}').paperColor, V.state.notes.get('{ids['a']}').updatedAt])") == ['night', upd0], 'saved with the note, not counted as a change'
     open_panel(); page.locator('.pp-panel [data-pcol=white]').click(); page.wait_for_timeout(500)
-    assert J(SHEET) == 'rgb(255, 255, 255)' and J(f"import('./js/vault.js').then(V => V.state.notes.get('{ids['a']}').paperColor)") is None
+    assert J(SHEET) == 'rgb(255, 255, 255)' and J(f"import('./js/vault.js').then(V => V.state.notes.get('{ids['a']}').paperColor)") == 'white'
 
     PG = "document.querySelector('#n-sheets').pager"
     ED = "document.querySelector('#n-rich .ProseMirror').editor"
