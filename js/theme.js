@@ -35,13 +35,18 @@ export function onTheme(fn) {
 }
 
 // The default text from Settings, as CSS variables the editors read: size,
-// font, and colour (with its brightened twin for dark backgrounds).
-export function applyTextDefaults(t) {
-  const st = document.documentElement.style;
+// font, and colour (with its brightened twin for dark backgrounds). On the
+// page itself it is the current default (new notes); a note's own editor gets
+// the default from when the note was made (`textFor` in model.js) through
+// `el`, so changing the default never changes existing notes.
+export function applyTextDefaults(t, el = document.documentElement) {
+  const st = el.style;
   if (!t) { for (const k of ['--note-size', '--default-note-font', '--note-ink', '--note-ink-dark']) st.removeProperty(k); return; }
   st.setProperty('--note-size', `${t.size}px`);
-  if (t.font) st.setProperty('--default-note-font', fontCss(t.font)); else st.removeProperty('--default-note-font');
-  if (t.color) { st.setProperty('--note-ink', t.color); st.setProperty('--note-ink-dark', darkInk(t.color)); } else { st.removeProperty('--note-ink'); st.removeProperty('--note-ink-dark'); }
+  // On a note's own editor "usual" must be said outright, or the page's (current) default would show through.
+  const own = el !== document.documentElement;
+  if (t.font) st.setProperty('--default-note-font', fontCss(t.font)); else if (own) st.setProperty('--default-note-font', 'var(--serif)'); else st.removeProperty('--default-note-font');
+  if (t.color) { st.setProperty('--note-ink', t.color); st.setProperty('--note-ink-dark', darkInk(t.color)); } else if (own) { st.setProperty('--note-ink', 'var(--ink)'); st.setProperty('--note-ink-dark', 'var(--ink)'); } else { st.removeProperty('--note-ink'); st.removeProperty('--note-ink-dark'); }
 }
 
 mql.addEventListener?.('change', () => { if (!document.documentElement.dataset.theme) window.dispatchEvent(new Event('sb-theme')); });

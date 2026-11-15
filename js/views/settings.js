@@ -4,7 +4,7 @@ import { html, raw, $, fmtAgo, toast, downloadText, isoDay } from '../util.js';
 import * as V from '../vault.js';
 import { state } from '../vault.js';
 import { meta } from '../db.js';
-import { PALETTE, TEXT_DEFAULT_COLORS, REGION_COLOUR_NAMES, regionColors } from '../model.js';
+import { PALETTE, TEXT_DEFAULT_COLORS, REGION_COLOUR_NAMES, regionColors, withNewText } from '../model.js';
 import { FONT_IDS, TEXT_SIZES, TEXT_SIZE, fontCss } from '../fonts.js';
 import { passphraseStrength } from '../crypto.js';
 import { probe, syncNow, explainError } from '../sync.js';
@@ -39,7 +39,10 @@ function bindTextPrefs(main) {
   const host = $('#s-text', main);
   if (!host) return;
   const save = async (patch) => {
-    await V.saveConfig({ text: { ...state.config.text, ...patch } });
+    // Only notes made from now on use the new default; earlier notes keep theirs.
+    const hidden = V.sealedState() === 'locked' || state.hiddenSealed > 0;
+    const notesSince = hidden ? null : (t) => [...state.notes.values(), ...state.bin.values()].some((n) => n.kind === 'note' && (n.createdAt || 0) >= t);
+    await V.saveConfig(withNewText(state.config, patch, { notesSince }));
     host.innerHTML = textPrefsHtml();
   };
   host.addEventListener('change', (e) => { if (e.target.id === 's-text-font') save({ font: e.target.value || null }); });
@@ -182,7 +185,7 @@ export function mount(main, params, ctx) {
         <label class="check"><input type="checkbox" id="s-darkpaper" ${state.device?.darkPaper !== false ? raw('checked') : ''}> In dark mode, show handwritten pages and whiteboards dark too</label>
         <p class="hint">Easier on the eyes at night. Dark ink shows light, and colours are brightened a little. PDFs and images you export always use light paper.</p>
         <h3 class="set-sub" id="s-text-h">Default text</h3>
-        <p class="hint">Typed notes and Today’s note use it, including notes you already have (except text you’ve given its own font, size or colour). New text boxes on handwritten pages and whiteboards start with it; ones already placed stay as they are, so they don’t shift over your writing.</p>
+        <p class="hint">For notes you make from now on: typed notes, Today’s note, and new text boxes on handwritten pages and whiteboards. Notes you already have stay as they are.</p>
         <div id="s-text">${raw(textPrefsHtml())}</div>
       </section>
 

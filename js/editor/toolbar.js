@@ -180,7 +180,7 @@ function fontMenu(editor, anchor, opts) {
 }
 
 // Text without its own size shows at the default size from Settings.
-const sizeOf = (editor, base) => parseInt(editor.getAttributes('textStyle').fontSize || '', 10) || base || state.config?.text?.size || TEXT_SIZE;
+const sizeOf = (editor, base) => parseInt(editor.getAttributes('textStyle').fontSize || '', 10) || (typeof base === 'function' ? base() : base) || state.config?.text?.size || TEXT_SIZE;
 
 export function mountFormatBar(bar, editor, opts = {}) {
   const compact = !!opts.compact;

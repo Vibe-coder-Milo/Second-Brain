@@ -84,7 +84,7 @@ through a private GitHub repo. Everything is encrypted on the device.
   - models: transformers and onnxruntime (`ort/`) with the model files;
   - OCR: tesseract.
 - **Service worker** (`sw.js`):
-  - Bump `VERSION` (`sb-vN`; currently `sb-v29`) on every release.
+  - Bump `VERSION` (`sb-vN`; currently `sb-v29.1`; small follow-ups can be `.1`, `.2` as the owner asked) on every release.
   - Add every new JS/CSS file to `SHELL`, or it won't work offline.
   - The app shows an update bar (`js/appupdate.js`).
 - **Views:** `js/views/*.js` export `mount(main, params, ctx)`, returning
@@ -164,11 +164,17 @@ through a private GitHub repo. Everything is encrypted on the device.
   and `text { font, size, color }`, the default text (`normText`; font null =
   the usual one, Spectral in notes and Overpass in text boxes; colour null = the
   app's ink). Two rules, by design:
-  - Typed text follows it live: `applyTextDefaults()` (`theme.js`) sets CSS
-    variables (`--note-size`, `--default-note-font`, `--note-ink`,
-    `--note-ink-dark`) on unlock and on `config`/`remote` events, so existing
-    notes change too, except text with its own marks or a note with its own
-    `font`. Typed-note PDF export (`export.js`) uses the same values.
+  - Since `sb-v29.1` (owner's request) a change applies only to notes made
+    after it. Notes aren't rewritten: `config.textPast` keeps earlier defaults
+    as `{ until, font, size, color }` and `textFor(n, config)` (`model.js`)
+    gives a note the default in place at its `createdAt`. `withNewText()`
+    records a change (several changes with no note made in between collapse
+    into one). `applyTextDefaults(t, el)` (`theme.js`) sets the CSS variables
+    (`--note-size`, `--default-note-font`, `--note-ink`, `--note-ink-dark`)
+    on the page for the current default and on each note's editor host
+    (`note.js`, `today.js`) for that note's; "usual" is set outright there.
+    A note's own `font` and text marks still win. PDF export (`export.js`,
+    `pagedexport.js`) uses `textFor` too. Sizes 12 to 28.
   - Placed objects copy it when created and then keep their own: ink text
     boxes get `o.size` (`boxSize()`), `o.font`, `o.color`; whiteboard text gets
     `color` and starts at the nearest S/M/L size. Changing the default later
@@ -591,7 +597,7 @@ Opening a never-written handwritten note creates its page file, which bumps
    that notes simply stay. Updates themselves never need a reinstall.
    The owner declined showing the logo inside the app.
 
-### 15 Nov 2026 (`sb-v29`)
+### 15 Nov 2026 (`sb-v29.1`; the owner asked for 29.1, not 30)
 
 1. **Paper colour for typed pages**: `n.paperColor` ('ivory'|'night'|null =
    white; typed notes only, saved with `touch:false`), chosen in the Pages
@@ -607,6 +613,10 @@ Opening a never-written handwritten note creates its page file, which bumps
    (`deviceunlock.unlock({ signal })`). `t5t` simulates the hang. Not yet
    confirmed on the owner's iPhone: if it still fails, ask what they see
    (switch greyed out in Settings, an error message, or nothing).
+3. **Text size 12** in Settings' default text (`TEXT_SIZES`). `t6a`.
+4. **Default text only for new notes**: see "Synced settings" above. `t6a`.
+   Settings shows the version as "Version 29.1" (`appupdate.js` reads
+   `sb-v29.1`).
 
 ## Ideas noted, not requested
 

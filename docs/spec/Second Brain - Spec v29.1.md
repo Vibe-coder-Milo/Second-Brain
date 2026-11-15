@@ -1,12 +1,13 @@
 # Second brain: product specification
 
-**Version 29** (app release `sb-v29`) · **15 November 2026**
+**Version 29.1** (app release `sb-v29.1`) · **15 November 2026**
 
 ## Version history
 
 | Version | Date | What changed in this document |
 |---|---|---|
-| v29 | 15 Nov 2026 | Written from `sb-v29`. Typed notes shown as pages get a paper colour (White, the default, Ivory or Dark), kept in PDF export; on the unlock screen a tap on Unlock with Touch ID or Face ID now always starts a fresh try (the try made on opening could hang on iPhone and leave the button greyed out). |
+| v29.1 | 15 Nov 2026 | Written from `sb-v29.1` (v29 was not released on its own). Default text: size 12 added, and a change now applies only to notes made after it; existing notes keep the default they were made with. |
+| v29 | 15 Nov 2026 | Typed notes shown as pages get a paper colour (White, the default, Ivory or Dark), kept in PDF export; on the unlock screen a tap on Unlock with Touch ID or Face ID now always starts a fresh try (the try made on opening could hang on iPhone and leave the button greyed out). |
 | v28 | 12 Nov 2026 | Written from `sb-v28`. Mark up a document now works for PDF, Word, PowerPoint and pictures, with Contents made from their sections; Add a document inside a handwritten note; several pictures become one note with a page each; pages in typed notes (Scroll down / Next page / Endless, text flows on, Add page / New page); 15 fonts; new home screen icon; saves of one note kept in order (fixes a page setting flipping back); code review by two reviewers. |
 | v27 | 12 Nov 2026 | First spec, written from `sb-v26`. In v27: typed notes no longer pushed right inside notebooks on wide iPads; per-note page view (Scroll down, Next page, Endless) for handwritten and PDF notes; Word and PowerPoint reader (import screens to follow); this spec. |
 
@@ -82,6 +83,8 @@ Dates and release numbers come from `CLAUDE.md` "Requests from the owner". The g
 | N-04 | **Next page or scroll, per note, for handwritten and PDF notes, and page options that are easy to find.** Today "Showing pages" is one setting for every note on the device and sits inside All pages. | Owner, iPad | Some notes (slides) suit turning pages, others (a long PDF) suit scrolling. The choice should be per note and visible. | Done v27 |
 | N-06 | **Paper colour for typed pages.** When a typed note shows as pages (Scroll down), the paper turns white. I want to choose its colour, as in handwritten notes; white by default. | Owner | Matches handwritten notes; easier on the eyes. | Done v29 |
 | N-07 | **Face ID or Touch ID unlock doesn't seem to work on iPhone** (iOS 27). | Owner, iPhone | Typing the passphrase every time is slow. | Fix in v29 (a stuck first try no longer blocks the button); to confirm on the owner's iPhone |
+| N-08 | **Text size 12** should be selectable for the default text. | Owner | Smaller text fits more on a page. | Done v29.1 |
+| N-09 | **Changing the default font, size or colour should only apply to new notes**, not existing ones. | Owner | Old notes shouldn't change look without being touched. | Done v29.1 |
 | N-05 | **A typed note is pushed to the right inside a notebook on a wide iPad.** | Owner, iPad | The note is cramped and looks broken in the owner's usual layout. | Done v27 |
 
 **Rules for N-01 and N-02** (agreed so far):
@@ -138,7 +141,7 @@ From `docs/research/2026-11-06-feature-ideas.md`; items 1 to 4 are built. Not re
 | TN-03 | The toolbar shall be the same two rows as handwritten notes and shall be present while reading, so nothing jumps. | Done v1 | t5k, t5l |
 | TN-04 | The app shall offer fonts (seven at first, 15 from v28, see TN-19), sizes, alignment and 30 text colours, shown brightened in dark mode. | Done v1 | t6a |
 | TN-05 | Tapping a note's title shall start editing the title, every time. | Done v23 | t6g |
-| TN-06 | A default text font, size and colour (Settings) shall apply to typed notes (including existing ones), Today, PDF export, and start new text boxes and whiteboard text, which then keep their own values. | Done v17, extended v18 | t6a |
+| TN-06 | A default text font, size (12 to 28) and colour (Settings) shall apply to typed notes and Today's note made after it was chosen, their PDF export, and new text boxes and whiteboard text. Notes made before keep the default they were made with (since v29.1; before that existing notes followed it). Notes are not rewritten: earlier defaults are kept with the date they ended. | Done v17, extended v18, changed v29.1 | t6a |
 | TN-07 | `[[` shall link to another note; links shall show bold and blue. | Done v1 | t4a, t5n |
 | TN-08 | Pictures shall be insertable by paste, drag and Insert menu, going where the cursor is (or the end while reading). | Done v25 | t5j, t6i |
 | TN-09 | **Contents** shall list headings with reading time, mark the current one, jump under the sticky toolbar, and offer Back to top and To the end. | Done v26 | t6j |

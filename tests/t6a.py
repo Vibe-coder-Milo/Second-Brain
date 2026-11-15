@@ -1,5 +1,7 @@
-"""Default text in Settings: font, size and colour. Typed notes (ones already
-written too) and Today's note use them (headings grow with the size), a colour
+"""Default text in Settings: font, size (12 to 28) and colour. Typed notes made
+after the change and Today's note use them; notes made before keep the default
+they were made with (15 Nov 2026: the owner asked that a change never alters
+existing notes) (headings grow with the size), a colour
 shows brightened in dark mode, a note's own font wins, PDF exports of typed
 notes use them, new text boxes on handwritten pages and new whiteboard text
 start with them, and the choice is kept in the synced settings."""
@@ -21,6 +23,8 @@ def steps(page):
     # Settings: pick 22, Chart blue, Atkinson Hyperlegible.
     page.goto(BASE + '#/settings'); page.wait_for_selector('#s-text')
     page.locator('#s-text-h').scroll_into_view_if_needed()
+    page.locator('[data-text-size="12"]').click(); page.wait_for_timeout(300)
+    assert J("import('./js/vault.js').then(V => V.state.config.text.size)") == 12, 'size 12 can be chosen'
     page.locator('[data-text-size="22"]').click(); page.wait_for_timeout(300)
     page.locator('[data-text-colour="#2B5684"]').click(); page.wait_for_timeout(300)
     page.select_option('#s-text-font', 'Atkinson Hyperlegible'); page.wait_for_timeout(400)
@@ -30,7 +34,17 @@ def steps(page):
     print('saved:', cfg)
     assert cfg == {'font': 'Atkinson Hyperlegible', 'size': 22, 'color': '#2B5684'}
     assert J("document.querySelector('[data-text-size=\"22\"]').getAttribute('aria-checked')") == 'true'
-    # The typed note now uses them.
+    # The note made before keeps how it looked.
+    page.goto(BASE + f'#/note/{nid}'); page.wait_for_selector('#n-rich .rich p'); page.wait_for_timeout(300)
+    kept = style('#n-rich .rich p'); print('existing note:', kept)
+    assert kept == before, 'an existing note does not change'
+    past = J("import('./js/vault.js').then(V => V.state.config.textPast.map(e => [e.font, e.size, e.color]))"); print('kept defaults:', past)
+    assert past == [[None, 18, None]], 'three quick changes keep one earlier default'
+    # A note made now uses them.
+    nid = J("""(async () => { const V = await import('./js/vault.js'); const M = await import('./js/model.js');
+      return (await V.saveNote(M.newNote({ kind: 'note', title: 'New text check', titleAuto: false, region: 'career', inbox: false,
+        doc: { type: 'doc', content: [{ type: 'heading', attrs: { level: 1 }, content: [{ type: 'text', text: 'Big heading' }] }, { type: 'paragraph', content: [{ type: 'text', text: 'Some words to read.' }] }] } }))).id; })()""")
+    old_id = J("import('./js/vault.js').then(V => [...V.state.notes.values()].find(n => n.title === 'Text check').id)")
     page.goto(BASE + f'#/note/{nid}'); page.wait_for_selector('#n-rich .rich p'); page.wait_for_timeout(300)
     after = style('#n-rich .rich p'); h1b = style('#n-rich .rich h1')
     print('after:', after, 'heading', h1b['size'])
@@ -89,6 +103,11 @@ def steps(page):
     page.locator('[data-text-size="18"]').click(); page.wait_for_timeout(300)
     cfg = J("import('./js/vault.js').then(V => V.state.config.text)"); print('reset:', cfg)
     assert cfg == {'font': None, 'size': 18, 'color': None}
+    # Going back to usual doesn't change the note made under Atkinson 22, nor the older one.
+    page.goto(BASE + f'#/note/{nid}'); page.wait_for_selector('#n-rich .rich p'); page.wait_for_timeout(300)
+    k2 = style('#n-rich .rich p'); print('note made under 22 after reset:', k2); assert abs(k2['size'] - 22) < 0.5 and 'Atkinson' in k2['font']
+    page.goto(BASE + f'#/note/{old_id}'); page.wait_for_selector('#n-rich .rich p'); page.wait_for_timeout(300)
+    assert style('#n-rich .rich p') == before
     print('OK')
 if __name__ == '__main__':
     mob = len(sys.argv) > 1 and sys.argv[1] == 'phone'

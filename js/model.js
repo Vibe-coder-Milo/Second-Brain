@@ -389,5 +389,36 @@ export function normConfig(c) {
     labels: Array.isArray(c?.labels) ? c.labels : d.labels,
     myStickers: Array.isArray(c?.myStickers) ? c.myStickers : [],
     text: normText(c?.text),
+    textPast: normTextPast(c?.textPast),
   };
+}
+
+// The default text applies to notes made after it was chosen; notes keep the
+// default that was in place when they were made. `textPast` lists the earlier
+// defaults: `{ until, font, size, color }`, oldest first. A note made before
+// `until` uses that entry (the first one that fits), later notes the current one.
+function normTextPast(list) {
+  if (!Array.isArray(list)) return [];
+  return list.filter((e) => e && Number(e.until) > 0).map((e) => ({ until: Number(e.until), ...normText(e) })).sort((a, b) => a.until - b.until).slice(-200);
+}
+export function textFor(n, config) {
+  const made = Number(n?.createdAt) || Date.now();
+  return (config?.textPast || []).find((e) => made < e.until) || config?.text || { ...DEFAULT_TEXT };
+}
+// The new default text, with the old one kept for the notes made before now.
+// Changing it again before any note was made just moves the date along.
+export function withNewText(config, patch, { notesSince = null } = {}) {
+  const old = normText(config.text);
+  const next = normText({ ...old, ...patch });
+  const same = (a, b) => a.font === b.font && a.size === b.size && a.color === b.color;
+  if (same(old, next)) return { text: next, textPast: config.textPast || [] };
+  const now = Date.now();
+  let past = [...(config.textPast || [])];
+  const last = past[past.length - 1];
+  if (last && notesSince && !notesSince(last.until)) {
+    // No note was made under the current default: it never needs keeping.
+    past[past.length - 1] = { ...last, until: now };
+    if (same(last, next)) past.pop(); // back to the one before: notes after `last.until` all use it
+  } else past.push({ until: now, ...old });
+  return { text: next, textPast: past };
 }

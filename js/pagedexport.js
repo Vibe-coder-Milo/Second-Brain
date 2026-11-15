@@ -7,8 +7,8 @@
 // here (export.js lays them out as before).
 
 import { state } from './vault.js';
-import { displayTitle, PAGE_W, A4_H, PAPER_COLORS } from './model.js';
-import { NOTE_FONT, TEXT_SIZE } from './fonts.js';
+import { displayTitle, PAGE_W, A4_H, PAPER_COLORS, textFor } from './model.js';
+import { NOTE_FONT, TEXT_SIZE, fontIdsIn, loadFonts } from './fonts.js';
 import { flow, unitsOfJson, REF_W, MARGIN, seenWidth } from './editor/pages.js';
 
 // Space above a block on screen (CSS), in text sizes: between blocks, before
@@ -26,7 +26,7 @@ export async function pagedCanvases(n, { px = 1240 } = {}) {
   const u = PAGE_W / W; // page units per screen pixel
   const M = Math.max(16, Math.round(W * MARGIN)) * u;
   const width = PAGE_W - 2 * M;
-  const dt = state.config?.text || {};
+  const dt = textFor(n, state.config);
   const sizePx = dt.size || TEXT_SIZE;
   const size = sizePx * u;
   const fontId = n.font || dt.font || NOTE_FONT;
@@ -36,6 +36,7 @@ export async function pagedCanvases(n, { px = 1240 } = {}) {
   for (const f of n.files) imgs.push({ f, img: await fileImageReady(f.id) });
   const walkImgs = async (node) => { if (node?.type === 'imageFile') await fileImageReady(node.attrs?.fileId); for (const c of node?.content || []) await walkImgs(c); };
   await walkImgs(doc);
+  await loadFonts([...fontIdsIn(doc), fontId, NOTE_FONT]);
   await document.fonts?.ready;
   const probe = document.createElement('canvas').getContext('2d');
 

@@ -4,7 +4,7 @@
 
 import { state, notesIn } from './vault.js';
 import * as V from './vault.js';
-import { displayTitle, PAGE_W, A4_H } from './model.js';
+import { displayTitle, PAGE_W, A4_H, textFor } from './model.js';
 import { downloadBlob, toast } from './util.js';
 import { NOTE_FONT, TEXT_SIZE, boxSize, fontIdsIn, loadFonts } from './fonts.js';
 
@@ -184,9 +184,9 @@ async function typedCanvases(n, { px = PX, heading = true } = {}) {
   const walkImgs = async (node) => { if (node?.type === 'imageFile') await fileImageReady(node.attrs?.fileId); for (const c of node?.content || []) await walkImgs(c); };
   await walkImgs(doc);
   // Load the fonts the note and its marks use (canvas text needs them loaded).
-  await loadFonts([...fontIdsIn(doc), n.font, state.config?.text?.font, NOTE_FONT].filter(Boolean));
+  await loadFonts([...fontIdsIn(doc), n.font, textFor(n, state.config).font, NOTE_FONT].filter(Boolean));
   // The note's own font, else the default text from Settings (as on screen).
-  const dt = state.config?.text || {};
+  const dt = textFor(n, state.config);
   const fontId = n.font || dt.font || NOTE_FONT;
   const layout = (ctx) => {
     let y = M;

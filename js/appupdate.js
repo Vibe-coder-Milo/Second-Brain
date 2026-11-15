@@ -56,12 +56,12 @@ export async function checkForUpdate() {
 export async function appVersion() {
   try {
     const keys = await caches.keys();
-    const v = keys.map((k) => /^sb-v(\d+)$/.exec(k)).filter(Boolean).map((m) => Number(m[1])).sort((a, b) => b - a)[0];
+    const v = keys.map((k) => /^sb-v(\d+(?:\.\d+)?)$/.exec(k)).filter(Boolean).map((m) => m[1]).sort((a, b) => Number(b) - Number(a))[0];
     if (v) return `Version ${v}`;
   } catch { /* no caches here */ }
   try {
     const t = await (await fetch('sw.js', { cache: 'no-store' })).text();
-    const m = /VERSION = 'sb-v(\d+)'/.exec(t);
+    const m = /VERSION = 'sb-v(\d+(?:\.\d+)?)'/.exec(t);
     if (m) return `Version ${m[1]}`;
   } catch { /* offline */ }
   return 'Version unknown';

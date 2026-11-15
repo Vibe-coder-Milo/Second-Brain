@@ -56,7 +56,7 @@ export async function loadFonts(ids) {
 // Text sizes offered in Settings, and the usual one. Sizes in typed text
 // (`fontSize` marks) are measured against TEXT_SIZE, so in a text box on a
 // handwritten page an 18 px mark is the box's own size.
-export const TEXT_SIZES = [14, 16, 18, 20, 22, 24, 28];
+export const TEXT_SIZES = [12, 14, 16, 18, 20, 22, 24, 28];
 export const TEXT_SIZE = 18;
 // A text box's size is in page units (the page is 1000 wide): 20 units
 // matches typed text at 18.

@@ -5,8 +5,8 @@
 import { html, raw, $, fmtDate, fmtTime, toast, debounce, isWide, downloadText } from '../util.js';
 import * as V from '../vault.js';
 import { state } from '../vault.js';
-import { isDarkUI } from '../theme.js';
-import { newNote, displayTitle, kindName, PAPER_COLORS, regionColors, typeName, NOTE_TYPES, TEMPLATES, guessRegions, SOURCE_LABEL, labelMap } from '../model.js';
+import { isDarkUI, applyTextDefaults } from '../theme.js';
+import { newNote, displayTitle, kindName, PAPER_COLORS, textFor, regionColors, typeName, NOTE_TYPES, TEMPLATES, guessRegions, SOURCE_LABEL, labelMap } from '../model.js';
 import { docOutline, docLabels, docPlainText } from '../doc.js';
 import { compressImage } from '../images.js';
 import { rerunOcr } from '../ocr.js';
@@ -478,7 +478,8 @@ function mountTyped(el, params, ctx) {
       pickDate: (cur, cb) => datePicker(host, cur).then((d) => cb(d === undefined ? undefined : d)),
       images: { sealed: () => !!note()?.sealed },
     });
-    // A note with its own font keeps it; others use the default from Settings.
+    // The default text from when this note was made; a note with its own font keeps it.
+    applyTextDefaults(textFor(n, state.config), host);
     if (n.font) host.style.setProperty('--note-font', R.fontCss(n.font)); else host.style.removeProperty('--note-font');
     // Tap the text while reading to start editing there.
     editor.view.dom.addEventListener('click', (e) => {
@@ -603,7 +604,8 @@ function mountTyped(el, params, ctx) {
         onRecord: () => record(),
         onHideKeyboard: () => {},
         sealed: () => !!note()?.sealed,
-        noteFont: () => note()?.font || state.config.text?.font,
+        noteFont: () => note()?.font || textFor(note(), state.config).font,
+        baseSize: () => textFor(note(), state.config).size,
         setNoteFont: (f) => { patch({ font: f }); $('#n-rich', el)?.style.setProperty('--note-font', rich.fontCss(f)); },
         addPage: canPage() ? () => addPageHere() : null,
       });
@@ -887,6 +889,7 @@ function mountTyped(el, params, ctx) {
         drawProps();
         drawConnections();
         applyPageMode();
+        if (evt.type === 'config' || evt.type === 'remote') { const h = $('#n-rich', el); if (h) applyTextDefaults(textFor(n, state.config), h); }
       }
     },
     destroy() {

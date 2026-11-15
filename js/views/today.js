@@ -3,7 +3,8 @@
 import { html, raw, $, toast, debounce, fmtTime, fmtDate, firstLine } from '../util.js';
 import * as V from '../vault.js';
 import { state } from '../vault.js';
-import { displayTitle, regionColors, kindName } from '../model.js';
+import { displayTitle, regionColors, kindName, textFor } from '../model.js';
+import { applyTextDefaults } from '../theme.js';
 import { onThisDay, worthAnotherLook } from '../resurface.js';
 import { icons } from '../icons.js';
 import { datePicker, labelPicker } from '../ui.js';
@@ -243,6 +244,8 @@ export function mount(el, params, ctx) {
       pickDate: (cur, cb) => datePicker(host, cur).then((d) => cb(d)),
       images: { sealed: () => false },
     });
+    // Today's note keeps the default text from when it was made (a new one: the current default).
+    applyTextDefaults(textFor(n, state.config), host);
     editor.on('focus', showBar);
     // Tapping the empty part of the card starts typing at the end.
     host.closest('.today-note').onclick = (e) => { if (editor && !editor.view.dom.contains(e.target)) editor.commands.focus('end'); };
