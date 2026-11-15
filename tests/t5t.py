@@ -49,6 +49,19 @@ def main(mob):
         page.wait_for_selector('.shell', timeout=20000)
         n = J("import('./js/vault.js').then(V => [...V.state.notes.values()].find(x => x.title === 'Secret plan')?.body)")
         print('unlocked by fingerprint on opening:', n == 'Only for me'); assert n == 'Only for me'
+        # iPhone: the try made on opening (no tap yet) can hang. The button stays
+        # usable, and a tap stops that try and starts a fresh one that works.
+        page.add_init_script("""(() => { if (!sessionStorage.getItem('hangFirst')) return; sessionStorage.removeItem('hangFirst');
+          const real = navigator.credentials.get.bind(navigator.credentials); let first = true;
+          navigator.credentials.get = (o) => { if (!first) return real(o); first = false;
+            return new Promise((_, no) => o?.signal?.addEventListener('abort', () => no(new DOMException('stopped', 'AbortError')))); }; })()""")
+        J("sessionStorage.setItem('hangFirst', '1')")
+        with page.expect_navigation(): J("import('./js/vault.js').then(V => setTimeout(() => V.lock(), 50))")
+        page.wait_for_selector('#bio', timeout=10000); page.wait_for_timeout(1500)
+        hung = J("({ shell: !!document.querySelector('.shell'), enabled: !document.querySelector('#bio').disabled, err: !document.querySelector('#err').hidden })")
+        print('first try hangs:', hung); assert not hung['shell'] and hung['enabled'] and not hung['err']
+        page.locator('#bio').click(); page.wait_for_selector('.shell', timeout=20000)
+        print('a tap unlocks anyway: yes')
         # Fingerprint not recognised: the button stays, the passphrase still works.
         cdp.send('WebAuthn.setUserVerified', {'authenticatorId': auth, 'isUserVerified': False})
         J("import('./js/vault.js').then(V => setTimeout(() => V.lock(), 50))")

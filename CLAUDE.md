@@ -84,7 +84,7 @@ through a private GitHub repo. Everything is encrypted on the device.
   - models: transformers and onnxruntime (`ort/`) with the model files;
   - OCR: tesseract.
 - **Service worker** (`sw.js`):
-  - Bump `VERSION` (`sb-vN`; currently `sb-v28`) on every release.
+  - Bump `VERSION` (`sb-vN`; currently `sb-v29`) on every release.
   - Add every new JS/CSS file to `SHELL`, or it won't work offline.
   - The app shows an update bar (`js/appupdate.js`).
 - **Views:** `js/views/*.js` export `mount(main, params, ctx)`, returning
@@ -590,6 +590,23 @@ Opening a never-written handwritten note creates its page file, which bumps
    again with "Set up from another device" (repo, token, passphrase), never
    that notes simply stay. Updates themselves never need a reinstall.
    The owner declined showing the logo inside the app.
+
+### 15 Nov 2026 (`sb-v29`)
+
+1. **Paper colour for typed pages**: `n.paperColor` ('ivory'|'night'|null =
+   white; typed notes only, saved with `touch:false`), chosen in the Pages
+   panel when the note shows as pages. `#n-sheets[data-paper]`; Dark paper in
+   light mode redefines the theme tokens inside `.sheets.tp-on` and uses the
+   `--tcd`/`--hld` dark text colours. Dark mode keeps dark pages. PDF export
+   (`pagedexport.js`) fills the page colour and draws with `setInkTone(true)`
+   on Dark. `t6o`.
+2. **Face ID on iPhone "doesn't seem to work"** (iOS 27): the unlock screen
+   tries Face ID on opening, without a tap; iOS can leave that try hanging,
+   and the button stayed disabled for up to 90 s. Now each try has an
+   `AbortController` and a tap aborts the stuck one and starts a fresh one
+   (`deviceunlock.unlock({ signal })`). `t5t` simulates the hang. Not yet
+   confirmed on the owner's iPhone: if it still fails, ask what they see
+   (switch greyed out in Settings, an error message, or nothing).
 
 ## Ideas noted, not requested
 

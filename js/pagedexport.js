@@ -7,7 +7,7 @@
 // here (export.js lays them out as before).
 
 import { state } from './vault.js';
-import { displayTitle, PAGE_W, A4_H } from './model.js';
+import { displayTitle, PAGE_W, A4_H, PAPER_COLORS } from './model.js';
 import { NOTE_FONT, TEXT_SIZE } from './fonts.js';
 import { flow, unitsOfJson, REF_W, MARGIN, seenWidth } from './editor/pages.js';
 
@@ -66,7 +66,10 @@ export async function pagedCanvases(n, { px = 1240 } = {}) {
   if (figs.length) y += 8 * u;
 
   // Each block (and each list item) on its own, with its height.
-  setInkTone(false);
+  // The paper's colour (white unless chosen); on Dark paper the text is drawn light.
+  const paper = PAPER_COLORS.find((c) => c.id === n.paperColor) || PAPER_COLORS[0];
+  const night = paper.id === 'night';
+  setInkTone(night);
   const units = unitsOfJson(doc).map(({ node, list, index }) => {
     const one = list ? { type: 'doc', content: [{ ...list, attrs: { ...(list.attrs || {}), start: (list.attrs?.start || 1) + index }, content: [node] }] } : { type: 'doc', content: [node] };
     const kind = node.type === 'pageBreak' ? 'break' : node.type === 'heading' ? 'heading' : 'block';
@@ -91,14 +94,14 @@ export async function pagedCanvases(n, { px = 1240 } = {}) {
     c.width = px;
     c.height = Math.round(A4_H * k);
     const ctx = c.getContext('2d');
-    ctx.fillStyle = '#FFFFFF';
+    ctx.fillStyle = paper.bg;
     ctx.fillRect(0, 0, c.width, c.height);
     ctx.save();
     ctx.setTransform(k, 0, 0, k, 0, -s * A4_H * k);
     const from = s * A4_H;
     const to = from + A4_H;
     if (s === 0) {
-      ctx.fillStyle = '#1B2A38';
+      ctx.fillStyle = night ? '#E4ECE9' : '#1B2A38';
       ctx.font = titleFont;
       ctx.textBaseline = 'alphabetic';
       titleLines.forEach((t, i) => ctx.fillText(t, M, titleTop + i * 36 * u + 30 * u * 0.95));
@@ -112,5 +115,6 @@ export async function pagedCanvases(n, { px = 1240 } = {}) {
     c.range = [s, s + 1, lay.count];
     out.push(c);
   }
+  setInkTone(false);
   return out;
 }

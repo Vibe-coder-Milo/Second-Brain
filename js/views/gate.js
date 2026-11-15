@@ -66,23 +66,27 @@ export async function renderUnlock(root) {
   if (!bioOn) return;
   const bio = $('#bio', root);
   $('#use-pass', root).onclick = showPass;
-  let busy = false;
+  // Opening the app tries straight away. On iPhone that first try can be
+  // refused or left hanging (no tap yet), so a tap always stops it and starts
+  // a fresh one, which Safari accepts.
+  let current = null;
   const tryBio = async (auto = false) => {
-    if (busy) return;
-    busy = true;
-    bio.disabled = true;
+    if (current && auto) return;
+    current?.abort();
+    const ctl = new AbortController();
+    current = ctl;
     err.hidden = true;
     try {
-      await B.unlock();
+      await B.unlock({ signal: ctl.signal });
     } catch (ex) {
-      bio.disabled = false;
-      // Opening the app tries straight away; if that's cancelled, the button is there.
+      if (current !== ctl || ex.code === 'AbortError') return; // a tap replaced it
+      // If the automatic try is cancelled, the button is there.
       if (!(auto && ex.code === 'NotAllowedError')) {
         err.textContent = ex.message || 'Could not unlock.';
         err.hidden = false;
       }
       if (ex.code === 'DEVICE_KEY_MISMATCH' || ex.code === 'NO_PRF') showPass();
-    } finally { busy = false; }
+    } finally { if (current === ctl) current = null; }
   };
   bio.onclick = () => tryBio(false);
   if (document.visibilityState === 'visible') setTimeout(() => tryBio(true), 250);

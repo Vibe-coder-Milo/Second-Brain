@@ -5,7 +5,8 @@
 import { html, raw, $, fmtDate, fmtTime, toast, debounce, isWide, downloadText } from '../util.js';
 import * as V from '../vault.js';
 import { state } from '../vault.js';
-import { newNote, displayTitle, kindName, regionColors, typeName, NOTE_TYPES, TEMPLATES, guessRegions, SOURCE_LABEL, labelMap } from '../model.js';
+import { isDarkUI } from '../theme.js';
+import { newNote, displayTitle, kindName, PAPER_COLORS, regionColors, typeName, NOTE_TYPES, TEMPLATES, guessRegions, SOURCE_LABEL, labelMap } from '../model.js';
 import { docOutline, docLabels, docPlainText } from '../doc.js';
 import { compressImage } from '../images.js';
 import { rerunOcr } from '../ocr.js';
@@ -506,6 +507,7 @@ function mountTyped(el, params, ctx) {
     const wrap = $('#n-sheets', el);
     const ed = editor;
     if (!ed || !wrap || !n) return;
+    wrap.dataset.paper = n.paperColor || 'white';
     const m = pageModeOf(n);
     if (m === 'endless') { pager?.destroy(); pager = null; return; }
     if (pager) { pager.setMode(m); return; }
@@ -531,6 +533,20 @@ function mountTyped(el, params, ctx) {
     applyPageMode();
   }
 
+  // The colour of the pages (White, Ivory or Dark). Just this note.
+  async function setPaper(c) {
+    const paperColor = c === 'white' ? null : c;
+    if (id === 'new') {
+      await persist(true);
+      if (id === 'new') { draft = { ...draft, paperColor }; applyPageMode(); return; }
+    }
+    await flush();
+    const cur = state.notes.get(id);
+    if (!cur || (cur.paperColor || null) === paperColor) return;
+    await V.saveNote({ ...cur, paperColor }, { touch: false });
+    applyPageMode();
+  }
+
   // A new page at the cursor (while reading: at the end). An endless note
   // starts showing as pages, so you can see the new page.
   async function addPageHere() {
@@ -548,16 +564,21 @@ function mountTyped(el, params, ctx) {
     if (!n || !canPage()) return;
     const P = await import('../editor/pages.js');
     const now = pageModeOf(n);
+    const paper = n.paperColor || 'white';
     const wide = !!anchor && (isWide() || window.innerWidth >= 700);
     const body = `${html`<div class="pp-head"><h2>Pages</h2></div>
       <h3 class="pp-sub" id="pp-how">How pages show</h3>
       <div class="chips" role="radiogroup" aria-labelledby="pp-how">${P.PAGE_MODES.map((o) => html`<button type="button" class="chip" role="radio" aria-checked="${o.id === now ? 'true' : 'false'}" aria-pressed="${o.id === now ? 'true' : 'false'}" data-how="${o.id}">${o.name}</button>`)}</div>
       <p class="hint pp-mode">${P.PAGE_MODES.find((o) => o.id === now)?.hint || ''}</p>
+      ${now === 'endless' ? '' : html`<h3 class="pp-sub" id="pp-paper">Paper colour</h3>
+      <div class="chips" role="radiogroup" aria-labelledby="pp-paper">${PAPER_COLORS.map((c) => html`<button type="button" class="chip" role="radio" aria-checked="${c.id === paper ? 'true' : 'false'}" aria-pressed="${c.id === paper ? 'true' : 'false'}" data-pcol="${c.id}"><span class="dot lg" style="background:${c.bg};border:1px solid var(--field)"></span>${c.name}</button>`)}</div>
+      ${isDarkUI() ? html`<p class="hint">In dark mode pages show dark; this colour shows in light mode and in PDFs.</p>` : ''}`}
       <button type="button" class="btn btn-sm pp-add" data-addpage>${icons.plus({ size: 16 })}Add page here</button>
       <p class="hint">Just this note. Text flows onto the next page by itself; Add page starts a new page at the cursor. Printing and PDF export use the same pages.</p>`}`;
     const box = wide ? popover(anchor, body, { label: 'Pages', width: 340, cls: 'pp-pop' }) : openSheet(body, { label: 'Pages' });
     box.el.classList.add('pp-panel');
     box.el.querySelectorAll('[data-how]').forEach((b) => { b.onclick = async () => { box.close(); await setPageMode(b.dataset.how); }; });
+    box.el.querySelectorAll('[data-pcol]').forEach((b) => { b.onclick = async () => { box.close(); await setPaper(b.dataset.pcol); }; });
     box.el.querySelector('[data-addpage]').onclick = () => { box.close(); addPageHere(); };
   }
 

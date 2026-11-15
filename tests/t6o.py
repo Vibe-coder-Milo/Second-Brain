@@ -98,6 +98,24 @@ def steps(page):
     J("(() => { const l = document.querySelectorAll('.tp-label')[1]; window.scrollBy(0, l.getBoundingClientRect().top - innerHeight / 2); })()"); page.wait_for_timeout(300)
     page.screenshot(path=f'{OUT}/o-down-gap-{tag}.png')
 
+    # 2b. Paper colour (15 Nov): White by default, Ivory or Dark per note, the same in PDFs.
+    SHEET = "getComputedStyle(document.querySelector('.tp-sheet')).backgroundColor"
+    assert J(SHEET) == 'rgb(255, 255, 255)', 'pages are white by default'
+    open_panel()
+    assert J("document.querySelector('.pp-panel [data-pcol=white]').getAttribute('aria-checked')") == 'true'
+    page.locator('.pp-panel [data-pcol=ivory]').click(); page.wait_for_timeout(500)
+    assert J(SHEET) == 'rgb(251, 247, 239)', 'ivory pages'
+    open_panel(); page.locator('.pp-panel [data-pcol=night]').click(); page.wait_for_timeout(500)
+    dk = J("({ bg: " + SHEET + ", ink: getComputedStyle(document.querySelector('#n-rich .ProseMirror')).color })")
+    print('dark paper:', dk); assert dk['bg'] == 'rgb(30, 43, 56)' and dk['ink'] != 'rgb(27, 42, 56)', 'dark pages with light writing'
+    page.screenshot(path=f'{OUT}/o-dark-paper-{tag}.png')
+    px = J(f"""(async () => {{ const V = await import('./js/vault.js'); const E = await import('./js/export.js'); const n = V.state.notes.get('{ids['a']}');
+      const c = (await E.typedPages(n, {{ px: 300 }}))[0]; return [...c.getContext('2d').getImageData(3, 3, 1, 1).data].slice(0, 3); }})()""")
+    print('PDF page corner:', px); assert px == [30, 43, 56], 'the PDF has the same paper colour'
+    assert J(f"import('./js/vault.js').then(V => [V.state.notes.get('{ids['a']}').paperColor, V.state.notes.get('{ids['a']}').updatedAt])") == ['night', upd0], 'saved with the note, not counted as a change'
+    open_panel(); page.locator('.pp-panel [data-pcol=white]').click(); page.wait_for_timeout(500)
+    assert J(SHEET) == 'rgb(255, 255, 255)' and J(f"import('./js/vault.js').then(V => V.state.notes.get('{ids['a']}').paperColor)") is None
+
     PG = "document.querySelector('#n-sheets').pager"
     ED = "document.querySelector('#n-rich .ProseMirror').editor"
     # The page a top-level block (by index) is on.

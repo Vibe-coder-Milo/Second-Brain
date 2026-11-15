@@ -44,7 +44,8 @@ export const passDue = (e) => !e || Date.now() - (e.passAt || 0) > PASS_EVERY_DA
 function friendly(e) {
   if (e?.code) return e;
   const name = e?.name;
-  const msg = name === 'NotAllowedError' ? `${bioName} was cancelled, or took too long.`
+  const msg = name === 'AbortError' ? 'Stopped.'
+    : name === 'NotAllowedError' ? `${bioName} was cancelled, or took too long.`
     : name === 'InvalidStateError' ? 'This device already has a passkey for Second brain. Try again.'
       : name === 'SecurityError' ? 'This only works on the app’s own web address.'
         : `${bioName} isn’t available here.`;
@@ -83,10 +84,11 @@ export async function register() {
 }
 
 // The passkey's secret for this salt (Touch ID or Face ID asks).
-export async function secret(credId, salt) {
+export async function secret(credId, salt, { signal } = {}) {
   let cred;
   try {
     cred = await navigator.credentials.get({
+      signal,
       publicKey: {
         challenge: C.randomBytes(32),
         allowCredentials: [{ type: 'public-key', id: credId }],
@@ -114,10 +116,10 @@ export async function finish(opener, credId) {
 }
 
 // Unlock the vault with Touch ID or Face ID.
-export async function unlock() {
+export async function unlock({ signal } = {}) {
   const e = await enrolment();
   if (!e) throw new Error('Not set up on this device.');
-  const s = await secret(b64ToBytes(e.credId), b64ToBytes(e.prfSalt));
+  const s = await secret(b64ToBytes(e.credId), b64ToBytes(e.prfSalt), { signal });
   const key = await C.unwrapKeyFromDevice(e.blob, s);
   await V.unlockWithKey(key);
 }
