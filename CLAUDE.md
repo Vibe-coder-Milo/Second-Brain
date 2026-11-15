@@ -84,7 +84,7 @@ through a private GitHub repo. Everything is encrypted on the device.
   - models: transformers and onnxruntime (`ort/`) with the model files;
   - OCR: tesseract.
 - **Service worker** (`sw.js`):
-  - Bump `VERSION` (`sb-vN`; currently `sb-v29.1`; small follow-ups can be `.1`, `.2` as the owner asked) on every release.
+  - Bump `VERSION` (`sb-vN`; currently `sb-v29.2`; small follow-ups can be `.1`, `.2` as the owner asked) on every release.
   - Add every new JS/CSS file to `SHELL`, or it won't work offline.
   - The app shows an update bar (`js/appupdate.js`).
 - **Views:** `js/views/*.js` export `mount(main, params, ctx)`, returning
@@ -617,6 +617,20 @@ Opening a never-written handwritten note creates its page file, which bumps
 4. **Default text only for new notes**: see "Synced settings" above. `t6a`.
    Settings shows the version as "Version 29.1" (`appupdate.js` reads
    `sb-v29.1`).
+
+### 15 Nov 2026, later (`sb-v29.2`)
+
+**"In Settings on the iPhone I can't tick Touch ID / Face ID; on the iPad I
+can."** The switch was disabled whenever the browser didn't confirm support
+(`isUserVerifyingPlatformAuthenticatorAvailable()` false, or
+`getClientCapabilities()['extension:prf'] === false`), with a misleading
+"needs iOS 18" hint. Now `deviceunlock.support()` gives 'yes' | 'maybe' |
+'no'; only 'no' (no passkeys at all) disables it. 'maybe' lets the owner try,
+and failures say where to look on Apple devices (`appleTip`: AutoFill &
+Passwords → Passwords; Face ID & Passcode → Password AutoFill). Likely
+cause on the owner's iPhone: passkeys kept in a third-party password app
+without PRF, or Apple Passwords AutoFill off. Not yet confirmed on the
+iPhone. `t5t`.
 
 ## Ideas noted, not requested
 

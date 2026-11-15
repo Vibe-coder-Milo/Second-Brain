@@ -26,6 +26,13 @@ def main(mob):
         page.get_by_role('button', name='Create my second brain').click()
         page.wait_for_selector('.shell', timeout=20000)
         J("""(async () => { const V = await import('./js/vault.js'); const M = await import('./js/model.js'); await V.updateDevice({ organise: false, semantic: false }); await V.saveNote(M.newNote({ title: 'Secret plan', titleAuto: false, body: 'Only for me', region: 'career', inbox: false })); })()""")
+        # A device that doesn't confirm it (iPhone, 15 Nov): the switch can still be used.
+        J("window._uv = PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable; PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable = async () => false")
+        page.goto(BASE + '#/settings'); page.wait_for_selector('#s-bio'); page.wait_for_timeout(300)
+        maybe = [page.locator('#s-bio').is_enabled(), page.locator('#s-bio').locator('xpath=../following-sibling::p').inner_text()]
+        print('not confirmed:', maybe); assert maybe[0] and 'didn’t confirm' in maybe[1]
+        J("PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable = window._uv")
+        page.goto(BASE + '#/today'); page.wait_for_timeout(200)
         # Settings: turn it on.
         page.goto(BASE + '#/settings'); page.wait_for_selector('#s-bio')
         print('switch enabled:', page.locator('#s-bio').is_enabled(), '|', page.locator('#s-bio').locator('xpath=../following-sibling::p').inner_text()[:90])

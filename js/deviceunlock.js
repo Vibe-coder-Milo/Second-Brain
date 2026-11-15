@@ -21,16 +21,24 @@ const apple = /iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent);
 // What to call it on this device.
 export const bioName = apple ? 'Touch ID or Face ID' : 'fingerprint or face';
 
-// Can this browser do it at all?
-export async function available() {
-  if (!window.isSecureContext || !window.PublicKeyCredential || !navigator.credentials?.create) return false;
-  try { if (!(await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable())) return false; } catch { return false; }
+// Can this browser do it? 'yes', 'no' (no passkeys at all), or 'maybe': the
+// browser didn't confirm it (iPhones can say no and still do it, for example
+// when passkeys are kept in another password app), so let the owner try:
+// turning it on is the real test, and says plainly what went wrong.
+export async function support() {
+  if (!window.isSecureContext || !window.PublicKeyCredential || !navigator.credentials?.create) return 'no';
+  let sure = true;
+  try { if (!(await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable())) sure = false; } catch { sure = false; }
   try {
     const caps = await PublicKeyCredential.getClientCapabilities?.();
-    if (caps && caps['extension:prf'] === false) return false;
+    if (caps && caps['extension:prf'] === false) sure = false;
   } catch { /* unknown: try it */ }
-  return true;
+  return sure ? 'yes' : 'maybe';
 }
+export const available = async () => (await support()) !== 'no';
+
+// Where to look on an iPhone or iPad when it doesn't work.
+export const appleTip = 'On iPhone or iPad: Settings → General → AutoFill & Passwords: turn on Passwords (Apple’s own) and set it as where passkeys are saved; and Settings → Face ID & Passcode: turn on Password AutoFill.';
 
 // This device's setup, if it's for the vault that's here.
 export async function enrolment() {
@@ -41,14 +49,19 @@ export async function enrolment() {
 // Time to ask for the passphrase again?
 export const passDue = (e) => !e || Date.now() - (e.passAt || 0) > PASS_EVERY_DAYS * 86400000;
 
+function noPrfText() {
+  return apple ? `The passkey was made, but the app that keeps it can’t lock your key with ${bioName}. ${appleTip}`
+    : `${bioName} on this device can’t lock your key. Try another browser, or keep using your passphrase.`;
+}
+
 function friendly(e) {
   if (e?.code) return e;
   const name = e?.name;
   const msg = name === 'AbortError' ? 'Stopped.'
-    : name === 'NotAllowedError' ? `${bioName} was cancelled, or took too long.`
+    : name === 'NotAllowedError' ? (apple ? `${bioName} was cancelled, or didn’t open. If nothing appeared: ${appleTip}` : `${bioName} was cancelled, or took too long.`)
     : name === 'InvalidStateError' ? 'This device already has a passkey for Second brain. Try again.'
       : name === 'SecurityError' ? 'This only works on the app’s own web address.'
-        : `${bioName} isn’t available here.`;
+        : apple ? `${bioName} isn’t available here. ${appleTip}` : `${bioName} isn’t available here.`;
   const out = new Error(msg);
   out.code = name || 'FAILED';
   return out;
@@ -76,7 +89,7 @@ export async function register() {
   } catch (e) { throw friendly(e); }
   if (!cred) throw friendly(null);
   if (cred.getClientExtensionResults?.().prf?.enabled === false) {
-    const e = new Error(`${bioName} on this device can’t protect a key (it needs iPadOS or iOS 18 or later).`);
+    const e = new Error(noPrfText());
     e.code = 'NO_PRF';
     throw e;
   }
@@ -100,7 +113,7 @@ export async function secret(credId, salt, { signal } = {}) {
   } catch (e) { throw friendly(e); }
   const out = cred?.getClientExtensionResults?.().prf?.results?.first;
   if (!out) {
-    const e = new Error(`${bioName} on this device can’t protect a key (it needs iPadOS or iOS 18 or later).`);
+    const e = new Error(noPrfText());
     e.code = 'NO_PRF';
     throw e;
   }

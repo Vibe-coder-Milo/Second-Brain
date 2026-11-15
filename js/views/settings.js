@@ -141,7 +141,8 @@ export function mount(main, params, ctx) {
       if (est?.usage) usage = `${(est.usage / 1048576).toFixed(1)} MB used on this device`;
     } catch { /* ignore */ }
     const persisted = await navigator.storage?.persisted?.().catch(() => false);
-    const bioOk = await B.available().catch(() => false);
+    const bioSupport = await B.support().catch(() => 'no');
+    const bioOk = bioSupport !== 'no';
     const bioOn = !!(await B.enrolment().catch(() => null));
     const counts = new Map();
     for (const n of state.notes.values()) if (n.region) counts.set(n.region, (counts.get(n.region) || 0) + 1);
@@ -197,8 +198,9 @@ export function mount(main, params, ctx) {
           <label class="check"><input type="checkbox" id="s-bio" ${bioOn ? raw('checked') : ''} ${bioOk || bioOn ? '' : raw('disabled')}> Unlock with ${B.bioName} on this device</label>
           <p class="hint">${bioOn
             ? `On. Your passphrase is still asked for every ${B.PASS_EVERY_DAYS} days so you don’t forget it, and sealed notes always need theirs. This device’s passcode can stand in for ${B.bioName}, so keep the passcode to yourself.`
-            : bioOk ? `Quicker than typing your passphrase. A passkey on this device, opened by ${B.bioName}, locks a copy of your key that never leaves this device.`
-              : 'Not available in this browser. On iPad and iPhone it needs iPadOS or iOS 18 or later.'}</p>
+            : bioSupport === 'yes' ? `Quicker than typing your passphrase. A passkey on this device, opened by ${B.bioName}, locks a copy of your key that never leaves this device.`
+              : bioOk ? `Quicker than typing your passphrase. This device didn’t confirm it can do it, but you can try; if it doesn’t work, you’ll see what to check.`
+              : 'Not available in this browser. On iPad and iPhone it needs iPadOS or iOS 18 or later, in Safari or the Home Screen app.'}</p>
         </div>
         <div class="btn-row">
           <button type="button" class="btn" data-act="lock">${icons.lock({ size: 16 })}Lock now</button>
