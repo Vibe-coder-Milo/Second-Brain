@@ -100,10 +100,46 @@ def steps(page):
     # Next page: comes back on the same page.
     J(f"import('./js/vault.js').then(async V => {{ const n = V.state.notes.get('{nid}'); await V.saveNote({{ ...n, pageMode: 'next' }}, {{ touch: false }}); }})")
     page.goto(BASE + '#/today'); page.wait_for_timeout(300); open_note()
+    page.mouse.move(300, 500); page.mouse.wheel(0, 1); page.wait_for_timeout(100)  # you, turning pages
     J("document.querySelector('#n-sheets').pager.goTo(2, { caret: false })"); page.wait_for_timeout(600)
     J("document.dispatchEvent(new Event('scroll'))"); page.wait_for_timeout(500)
     page.goto(BASE + '#/today'); page.wait_for_timeout(300); open_note(); page.wait_for_timeout(600)
     cur = J("document.querySelector('#n-sheets').pager.current()"); print('next page reopened on page', cur + 1); assert cur == 2
+    # 6b. Switching apps on the iPad: while the app is away iPadOS redraws it at
+    # other sizes (a notebook then hides its note). The place must survive.
+    if wide:
+        nb = J(f"""(async () => {{ const V = await import('./js/vault.js'); const M = await import('./js/model.js');
+          const nb = await V.saveNotebook(M.newNotebook({{ title: 'Place book', region: 'career' }}));
+          const n = V.state.notes.get('{nid}'); await V.saveNote({{ ...n, notebook: nb.id, section: nb.sections[0].id, pageMode: 'down' }}, {{ touch: false }});
+          return nb.id; }})()""")
+        page.goto(BASE + f"#/notebook/{nb}?note={nid}"); page.wait_for_selector('.nb-pane #n-rich .ProseMirror p'); page.wait_for_timeout(2300)
+        TOP = "Math.round(document.querySelectorAll('.nb-pane #n-rich .ProseMirror > p')[30].getBoundingClientRect().top)"
+        page.mouse.move(700, 400); page.mouse.wheel(0, 300); page.wait_for_timeout(200)
+        J("(() => { const p = document.querySelectorAll('.nb-pane #n-rich .ProseMirror > p')[30]; let sc = p.parentElement; while (sc && !(/(auto|scroll)/.test(getComputedStyle(sc).overflowY) && sc.scrollHeight > sc.clientHeight + 4)) sc = sc.parentElement; const d = p.getBoundingClientRect().top - 300; if (sc) sc.scrollTop += d; else window.scrollBy(0, d); })()")
+        page.wait_for_timeout(700)
+        t0 = J(TOP)
+        hide = lambda v: J("(v) => { Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => v }); document.dispatchEvent(new Event('visibilitychange')); }", v)
+        hide('hidden')
+        page.set_viewport_size({'width': 820, 'height': 1180}); page.wait_for_timeout(700)
+        page.set_viewport_size({'width': 1180, 'height': 820}); page.wait_for_timeout(700)
+        hide('visible')
+        page.wait_for_selector('.nb-pane #n-rich .ProseMirror p'); page.wait_for_timeout(2600)
+        t1 = J(TOP); print('line 31 before switching apps', t0, 'after', t1)
+        assert abs(t1 - t0) < 10, 'the note stays where you were reading after switching apps'
+        # Handwritten: page 3 stays page 3.
+        iid = J(f"""(async () => {{ const V = await import('./js/vault.js'); const M = await import('./js/model.js');
+          return (await V.saveNote(M.newNote({{ kind: 'ink', title: 'Five pages', titleAuto: false, notebook: '{nb}', region: 'career', inbox: false, pages: [1, 2, 3, 4, 5].map(() => M.newPage({{}})) }}))).id; }})()""")
+        page.goto(BASE + f"#/notebook/{nb}?note={iid}"); page.wait_for_selector('.nb-pane .ink-page canvas.ink-main'); page.wait_for_timeout(900)
+        J("(() => { const sc = document.querySelector('.nb-pane .ink-scroll'); const sl = sc.querySelectorAll('.ink-slot')[2]; sc.scrollTop = sl.offsetTop - 10; })()"); page.wait_for_timeout(900)
+        SUB = "document.querySelector('.nb-pane #iv-sub').textContent"
+        print('before:', J(SUB)); assert 'page 3 of 5' in J(SUB)
+        hide('hidden')
+        page.set_viewport_size({'width': 820, 'height': 1180}); page.wait_for_timeout(700)
+        page.set_viewport_size({'width': 1180, 'height': 820}); page.wait_for_timeout(700)
+        hide('visible')
+        page.wait_for_selector('.nb-pane .ink-page canvas.ink-main'); page.wait_for_timeout(1800)
+        vis = J("(() => { const sc = document.querySelector('.nb-pane .ink-scroll'); const mid = sc.getBoundingClientRect().top + sc.clientHeight * 0.4; return [...sc.querySelectorAll('.ink-slot')].findIndex(s => { const r = s.getBoundingClientRect(); return r.top <= mid && r.bottom >= mid; }); })()")
+        print('after:', J(SUB), '| page on screen:', vis + 1); assert 'page 3 of 5' in J(SUB) and vis == 2
     print('OK', tag)
 
 if __name__ == '__main__':

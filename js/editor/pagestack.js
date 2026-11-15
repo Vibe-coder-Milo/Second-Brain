@@ -51,7 +51,7 @@ export class PageStack {
     // Scrolling: say which page is in view, and make it the live page once
     // scrolling settles there.
     this.onScroll = () => {
-      if (this.raf) return;
+      if (this.raf || document.visibilityState !== 'visible') return; // a hidden app is redrawn at other sizes: not you scrolling
       this.raf = requestAnimationFrame(() => {
         this.raf = 0;
         const i = this.focusIndex();

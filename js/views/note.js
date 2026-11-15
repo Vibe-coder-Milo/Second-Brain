@@ -515,16 +515,25 @@ function mountTyped(el, params, ctx) {
     const top = sc === document.scrollingElement ? 0 : sc.getBoundingClientRect().top;
     return Math.max(top, $('#n-sticky', el)?.getBoundingClientRect().bottom || 0);
   };
-  function savePlace() {
+  // Don't trust the layout while the app is away or the window is changing
+  // size: iPadOS redraws a hidden app at other sizes (its app-switcher
+  // pictures), and a notebook hides its note on a narrow window. A place
+  // saved then would be the top of the note.
+  let quietUntil = 0;
+  const laidOut = () => document.visibilityState === 'visible' && !!editor && editor.view.dom.getClientRects().length > 0 && editor.view.dom.offsetHeight > 0;
+  function savePlace({ force = false } = {}) {
     if (!editor || id === 'new' || compact || !el.isConnected) return;
+    if (!force && (Date.now() < quietUntil || !laidOut())) return;
     const dom = editor.view.dom;
+    if (!dom.getClientRects().length) return;
     const sc = scrollBox(dom);
     const line = topLine(sc);
     const kids = [...dom.children].filter((k) => k.getBoundingClientRect().height > 0);
+    if (!kids.length) return;
     let i = kids.findIndex((k) => k.getBoundingClientRect().bottom > line + 1);
     if (i < 0) i = kids.length - 1;
     const scrolled = sc === document.scrollingElement ? window.scrollY : sc.scrollTop;
-    const place = { b: [...dom.children].indexOf(kids[i]), off: kids[i] ? Math.round(kids[i].getBoundingClientRect().top - line) : 0, top: scrolled < 40, p: pager?.mode === 'next' ? pager.current() : null };
+    const place = { b: [...dom.children].indexOf(kids[i]), off: Math.round(kids[i].getBoundingClientRect().top - line), top: scrolled < 40, p: pager?.mode === 'next' ? pager.current() : null };
     try {
       const m = places();
       delete m[id];
@@ -534,26 +543,48 @@ function mountTyped(el, params, ctx) {
       localStorage.setItem(PLACE_KEY, JSON.stringify(m));
     } catch { /* private mode */ }
   }
+  // Put the note back at its saved place.
+  function applyPlace() {
+    const p = places()[id];
+    if (!p || !editor || !laidOut()) return;
+    if (p.p != null && pager?.mode === 'next') { if (pager.current() !== p.p) pager.goTo(p.p, { caret: false }); return; }
+    if (p.top) return;
+    const b = editor.view.dom.children[p.b];
+    if (!b) return;
+    const sc = scrollBox(b);
+    const d = b.getBoundingClientRect().top - topLine(sc) - p.off;
+    if (Math.abs(d) < 1) return;
+    if (sc === document.scrollingElement) window.scrollBy(0, d); else sc.scrollTop += d;
+  }
   let placeTimer = null;
   const onAnyScroll = () => { clearTimeout(placeTimer); placeTimer = setTimeout(savePlace, 300); };
-  const onHide = () => { if (document.visibilityState === 'hidden') savePlace(); };
+  // Away and back, or the window changed size (turning the iPad, Split View):
+  // stay on the lines you were reading.
+  let settleTimers = [];
+  const settle = () => {
+    quietUntil = Date.now() + 1200;
+    clearTimeout(placeTimer);
+    settleTimers.forEach(clearTimeout);
+    if (editing || id === 'new' || compact) return;
+    settleTimers = [80, 350, 900].map((ms) => setTimeout(() => { if (!editing) applyPlace(); }, ms));
+  };
+  const onHide = () => {
+    if (document.visibilityState === 'hidden') { if (Date.now() >= quietUntil) savePlace({ force: true }); quietUntil = Infinity; } else settle();
+  };
+  const onWinResize = () => settle();
+  // You touched or scrolled yourself: from here on, where you go is the place.
+  const onUser = () => { if (quietUntil !== Infinity) { quietUntil = 0; settleTimers.forEach(clearTimeout); } };
+  const USER_EVS = ['pointerdown', 'wheel', 'touchstart', 'keydown'];
+  USER_EVS.forEach((t) => window.addEventListener(t, onUser, { capture: true, passive: true }));
   document.addEventListener('scroll', onAnyScroll, { capture: true, passive: true });
   document.addEventListener('visibilitychange', onHide);
+  window.addEventListener('resize', onWinResize);
   let restoredFor = null;
   function restorePlace() {
     if (!editor || id === 'new' || compact || restoredFor === id || editing) return;
     restoredFor = id;
     const p = places()[id];
     if (!p || (p.top && p.p == null)) return;
-    const go = () => {
-      if (!editor) return;
-      if (p.p != null && pager?.mode === 'next') { pager.goTo(p.p, { caret: false }); return; }
-      const b = editor.view.dom.children[p.b];
-      if (!b) return;
-      const sc = scrollBox(b);
-      const d = b.getBoundingClientRect().top - topLine(sc) - p.off;
-      if (sc === document.scrollingElement) window.scrollBy(0, d); else sc.scrollTop += d;
-    };
     // After the pages are laid out (one frame), and again while the parts above
     // settle (title, pictures, fonts), until you touch or scroll yourself.
     let touched = false;
@@ -561,7 +592,8 @@ function mountTyped(el, params, ctx) {
     const evs = ['pointerdown', 'wheel', 'touchstart', 'keydown'];
     evs.forEach((t) => window.addEventListener(t, mine, { capture: true, passive: true, once: true }));
     const forId = id;
-    const again = () => { if (!touched && !editing && restoredFor === forId && id === forId) go(); };
+    quietUntil = Math.max(quietUntil === Infinity ? 0 : quietUntil, Date.now() + 2000);
+    const again = () => { if (!touched && !editing && restoredFor === forId && id === forId) applyPlace(); };
     requestAnimationFrame(() => requestAnimationFrame(again));
     for (const ms of [200, 500, 1000, 1800]) setTimeout(again, ms);
     setTimeout(() => evs.forEach((t) => window.removeEventListener(t, mine, { capture: true })), 2000);
@@ -989,6 +1021,9 @@ function mountTyped(el, params, ctx) {
     destroy() {
       savePlace();
       clearTimeout(placeTimer);
+      settleTimers.forEach(clearTimeout);
+      window.removeEventListener('resize', onWinResize);
+      USER_EVS.forEach((t) => window.removeEventListener(t, onUser, { capture: true }));
       document.removeEventListener('scroll', onAnyScroll, { capture: true });
       document.removeEventListener('visibilitychange', onHide);
       document.removeEventListener('paste', onPaste, true);

@@ -55,6 +55,10 @@ export function mount(el, params, ctx) {
   const LAST_KEY = 'sb-last-pages';
   const lastPages = () => { try { return JSON.parse(localStorage.getItem(LAST_KEY)) || {}; } catch { return {}; } };
   const rememberPage = (pageId) => {
+    // Not while the app is away or the note is hidden (iPadOS redraws a hidden
+    // app at other sizes; a notebook hides its note on a narrow window): the
+    // page "in view" then is page 1, whatever you were reading.
+    if (document.visibilityState !== 'visible' || !el.isConnected || !el.getClientRects().length) return;
     try {
       const m = lastPages();
       delete m[id];
@@ -954,7 +958,7 @@ export function mount(el, params, ctx) {
         canSwitch: () => !!surface && !surface.drawing && !surface.editing && !surface.sel && !zoom && !replay,
         onWant: (i) => wantPage(i),
         onActivateNow: (i, d) => activate(i, d),
-        onIndicator: (i) => { showWhere(i); flashIndicator(i); },
+        onIndicator: (i) => { showWhere(i); flashIndicator(i); const pg = note()?.pages[i]; if (pg) rememberPage(pg.id); },
       });
     }
     stack.sync(pageIdx);
@@ -1481,6 +1485,18 @@ export function mount(el, params, ctx) {
 
   const onResize = () => drawTools();
   window.addEventListener('resize', onResize);
+  // Back from another app: still on the page you were reading (iPadOS may have
+  // redrawn the app at other sizes meanwhile, which can move the pages).
+  const onBack = () => {
+    if (document.visibilityState !== 'visible') return;
+    setTimeout(() => {
+      const n = note();
+      if (!n || !stack || !surface || surface.drawing || surface.editing) return;
+      const at = n.pages.findIndex((p) => p.id === lastPages()[id]);
+      if (at >= 0 && at !== stack.focusIndex()) showPage(at);
+    }, 250);
+  };
+  document.addEventListener('visibilitychange', onBack);
   // Dark mode on or off: the swatches show colours as they'll look on the page.
   const onThemeChange = () => { drawTools(); zoom?.render(); };
   window.addEventListener('sb-theme', onThemeChange);
@@ -1536,6 +1552,7 @@ export function mount(el, params, ctx) {
       zoom?.destroy();
       zoom = null;
       window.removeEventListener('resize', onResize);
+      document.removeEventListener('visibilitychange', onBack);
       window.removeEventListener('sb-theme', onThemeChange);
       document.removeEventListener('keydown', onPageKeys);
       document.removeEventListener('paste', onPaste, true);

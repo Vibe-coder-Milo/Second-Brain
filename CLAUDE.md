@@ -84,7 +84,7 @@ through a private GitHub repo. Everything is encrypted on the device.
   - models: transformers and onnxruntime (`ort/`) with the model files;
   - OCR: tesseract.
 - **Service worker** (`sw.js`):
-  - Bump `VERSION` (`sb-vN`; currently `sb-v29.3`; small follow-ups can be `.1`, `.2` as the owner asked) on every release.
+  - Bump `VERSION` (`sb-vN`; currently `sb-v29.4`; small follow-ups can be `.1`, `.2` as the owner asked) on every release.
   - Add every new JS/CSS file to `SHELL`, or it won't work offline.
   - The app shows an update bar (`js/appupdate.js`).
 - **Views:** `js/views/*.js` export `mount(main, params, ctx)`, returning
@@ -661,6 +661,26 @@ iPhone. `t5t`.
    and when leaving; restored after layout and re-applied for 2 s until the
    owner touches or scrolls. Handwritten notes already did this
    (`sb-last-pages`). `t6r`.
+
+### 15 Nov 2026, night (`sb-v29.4`)
+
+**"Issue 6 doesn't seem to be fixed"** (back to page 1 after switching apps
+on the iPad). v29.3 only covered a reload. The real cause: while the app is
+away iPadOS redraws it at other sizes (app-switcher pictures, e.g. portrait
+820 px). Below 900 px a notebook hides its pane and, on the resize, closes
+and remounts the note; the hidden note measured "scrolled to the top" and
+saved that over the real place, then reopened there. Rules now:
+- `note.js`: a place is saved only when the document is visible and the
+  editor has layout (`laidOut()`), never during the quiet time after a
+  resize or coming back (`quietUntil`; `Infinity` while hidden; a touch,
+  wheel or key ends it). Going hidden saves once (`force`). Coming back or a
+  resize re-applies the saved place (`applyPlace`, 80/350/900 ms).
+- `inknote.js`: `rememberPage` ignores a hidden app or hidden note, follows
+  the page in view (`onIndicator`), and coming back shows the remembered
+  page if the pages moved. `pagestack.js` ignores scrolls while hidden.
+- `t6r` hides the document, resizes to portrait and back inside a notebook,
+  for a typed and a handwritten note (fails on v29.3). Not yet confirmed on
+  the owner's iPad.
 
 ## Ideas noted, not requested
 
