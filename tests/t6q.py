@@ -106,7 +106,7 @@ def steps(page):
     assert page.locator('[data-act=contents]').count() == 0, 'no Contents without sections'
 
     # --- PDF with bookmarks, and one without
-    bring('/tmp/outlined.pdf'); done_single()
+    bring(os.path.join(FX, 'outlined.pdf')); done_single()
     o = [x for x in notes() if x['title'] == 'outlined'][0]
     ix = {p_['id']: i for i, p_ in enumerate(o['pages'])}
     got = [(s['title'], s['level'], ix[s['pageId']]) for s in o['secs']]; print('bookmarks', got)

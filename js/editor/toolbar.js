@@ -330,10 +330,13 @@ export function formatPainter(editor, onChange) {
   let locked = false;
   let pointer = false;
   let timer = 0;
-  const set = (l, lock = false) => { look = l; locked = !!l && lock; editor.view.dom.classList.toggle('painting', !!l); onChange?.(!!l, locked); };
+  // The editor's page element, or null once the editor is gone (its view then throws).
+  const dom = () => { try { return editor.isDestroyed ? null : editor.view.dom; } catch { return null; } };
+  const host = dom();
+  const set = (l, lock = false) => { look = l; locked = !!l && lock; dom()?.classList.toggle('painting', !!l); onChange?.(!!l, locked); };
   const tryPaint = () => {
     clearTimeout(timer);
-    if (!look || pointer) return;
+    if (!look || pointer || !dom()) return;
     const { from, to, empty } = editor.state.selection;
     if (empty || (from === look.at[0] && to === look.at[1])) return;
     paintLook(editor, look);
@@ -351,7 +354,7 @@ export function formatPainter(editor, onChange) {
   const onUp = () => { if (!pointer) return; pointer = false; if (look) { clearTimeout(timer); timer = setTimeout(tryPaint, touch ? 800 : 60); } };
   const onKey = (e) => { if (e.key === 'Escape' && look) set(null); };
   editor.on('selectionUpdate', onSel);
-  editor.view.dom.addEventListener('pointerdown', onDown);
+  host?.addEventListener('pointerdown', onDown);
   document.addEventListener('pointerup', onUp, true);
   document.addEventListener('pointercancel', onUp, true);
   document.addEventListener('keydown', onKey);
@@ -370,7 +373,7 @@ export function formatPainter(editor, onChange) {
     destroy() {
       clearTimeout(timer);
       editor.off('selectionUpdate', onSel);
-      editor.view.dom.removeEventListener('pointerdown', onDown);
+      host?.removeEventListener('pointerdown', onDown);
       document.removeEventListener('pointerup', onUp, true);
       document.removeEventListener('pointercancel', onUp, true);
       document.removeEventListener('keydown', onKey);
