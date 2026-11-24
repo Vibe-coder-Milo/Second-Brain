@@ -30,7 +30,7 @@ def steps(page):
     page.select_option('#s-text-font', 'Atkinson Hyperlegible'); page.wait_for_timeout(400)
     page.locator('#s-text-h').scroll_into_view_if_needed(); page.wait_for_timeout(200)
     page.screenshot(path=f'{OUT}/a-settings-{tag}.png')
-    cfg = J("import('./js/vault.js').then(V => V.state.config.text)")
+    cfg = J("import('./js/vault.js').then(V => { const t = V.state.config.text; return { font: t.font, size: t.size, color: t.color }; })")
     print('saved:', cfg)
     assert cfg == {'font': 'Atkinson Hyperlegible', 'size': 22, 'color': '#2B5684'}
     assert J("document.querySelector('[data-text-size=\"22\"]').getAttribute('aria-checked')") == 'true'
@@ -101,7 +101,7 @@ def steps(page):
     page.locator('[data-text-colour=""]').click(); page.wait_for_timeout(300)
     page.select_option('#s-text-font', ''); page.wait_for_timeout(300)
     page.locator('[data-text-size="18"]').click(); page.wait_for_timeout(300)
-    cfg = J("import('./js/vault.js').then(V => V.state.config.text)"); print('reset:', cfg)
+    cfg = J("import('./js/vault.js').then(V => { const t = V.state.config.text; return { font: t.font, size: t.size, color: t.color }; })"); print('reset:', cfg)
     assert cfg == {'font': None, 'size': 18, 'color': None}
     # Going back to usual doesn't change the note made under Atkinson 22, nor the older one.
     page.goto(BASE + f'#/note/{nid}'); page.wait_for_selector('#n-rich .rich p'); page.wait_for_timeout(300)

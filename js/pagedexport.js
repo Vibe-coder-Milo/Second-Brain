@@ -8,7 +8,7 @@
 
 import { state } from './vault.js';
 import { displayTitle, PAGE_W, A4_H, PAPER_COLORS, textFor } from './model.js';
-import { NOTE_FONT, TEXT_SIZE, fontIdsIn, loadFonts } from './fonts.js';
+import { NOTE_FONT, TEXT_SIZE, fontIdsIn, loadFonts, headsFor } from './fonts.js';
 import { flow, unitsOfJson, REF_W, MARGIN, seenWidth } from './editor/pages.js';
 
 // Space above a block on screen (CSS), in text sizes: between blocks, before
@@ -30,7 +30,7 @@ export async function pagedCanvases(n, { px = 1240 } = {}) {
   const sizePx = dt.size || TEXT_SIZE;
   const size = sizePx * u;
   const fontId = n.font || dt.font || NOTE_FONT;
-  const opts = { size, font: fontId, color: dt.color || undefined, lineH: 1.55, gap: 0 };
+  const opts = { size, font: fontId, color: dt.color || undefined, lineH: 1.55, gap: 0, heads: headsFor(dt) };
   // Pictures first, so they're ready when drawn.
   const imgs = [];
   for (const f of n.files) imgs.push({ f, img: await fileImageReady(f.id) });

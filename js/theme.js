@@ -1,7 +1,7 @@
 // Light, dark, or follow the device. The choice is also kept in localStorage
 // (it isn't private) so the lock screen uses it before the vault is open.
 
-import { fontCss } from './fonts.js';
+import { fontCss, HEAD_RATIO } from './fonts.js';
 
 const KEY = 'sb-theme';
 const mql = window.matchMedia('(prefers-color-scheme: dark)');
@@ -39,9 +39,21 @@ export function onTheme(fn) {
 // page itself it is the current default (new notes); a note's own editor gets
 // the default from when the note was made (`textFor` in model.js) through
 // `el`, so changing the default never changes existing notes.
+// Title, Heading and Subheading (h1 to h3) get `--hN-size`, `--hN-ink` and
+// `--hN-ink-dark` when Settings gives them their own; otherwise they follow
+// the body text as before.
+const HEAD_VARS = [1, 2, 3].flatMap((lv) => [`--h${lv}-size`, `--h${lv}-ink`, `--h${lv}-ink-dark`]);
 export function applyTextDefaults(t, el = document.documentElement) {
   const st = el.style;
-  if (!t) { for (const k of ['--note-size', '--default-note-font', '--note-ink', '--note-ink-dark']) st.removeProperty(k); return; }
+  if (!t) { for (const k of ['--note-size', '--default-note-font', '--note-ink', '--note-ink-dark', ...HEAD_VARS]) st.removeProperty(k); return; }
+  const own0 = el !== document.documentElement;
+  for (const lv of [1, 2, 3]) {
+    const size = t[`h${lv}Size`];
+    const col = t[`h${lv}Color`];
+    // On a note's own editor "usual" is said outright (currentColor = the text's colour).
+    if (size) st.setProperty(`--h${lv}-size`, `${size}px`); else if (own0) st.setProperty(`--h${lv}-size`, `${HEAD_RATIO[lv]}em`); else st.removeProperty(`--h${lv}-size`);
+    if (col) { st.setProperty(`--h${lv}-ink`, col); st.setProperty(`--h${lv}-ink-dark`, darkInk(col)); } else if (own0) { st.setProperty(`--h${lv}-ink`, 'currentColor'); st.setProperty(`--h${lv}-ink-dark`, 'currentColor'); } else { st.removeProperty(`--h${lv}-ink`); st.removeProperty(`--h${lv}-ink-dark`); }
+  }
   st.setProperty('--note-size', `${t.size}px`);
   // On a note's own editor "usual" must be said outright, or the page's (current) default would show through.
   const own = el !== document.documentElement;

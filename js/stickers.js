@@ -1,6 +1,8 @@
 // Sticker library: the packs from the mockups, drawn as small SVGs.
 // Sizes are in page units (a page is 1000 wide).
 
+import { state } from './vault.js';
+
 const W = '#FFFFFF';
 
 const tab = (txt, fill) => ({ vb: '0 0 38 26', w: 66, h: 45, svg: `<path d="M0 26 V6 a6 6 0 0 1 6 -6 H32 a6 6 0 0 1 6 6 V26 Z" fill="${fill}"/><text x="19" y="18" font-family="Overpass, sans-serif" font-size="11" font-weight="700" fill="#1B2A38" text-anchor="middle">${txt}</text>` });
@@ -94,13 +96,39 @@ function textWidth(text) {
 }
 const escXml = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
-// A tag-shaped label sticker sized to its name.
+// Every label tag has the same width (24 Nov 2026: tags sized to their
+// names looked uneven side by side): wide enough for the longest of your
+// labels' names, between 92 and 140 units. A name that still doesn't fit
+// gets smaller letters (down to 9), then "…".
+const LABEL_FS = 12.5;
+let widthKey = '';
+let widthAll = 92;
+function labelWidth() {
+  const names = (state.config?.labels || []).map((l) => l.name || '');
+  const key = names.join('\u0001');
+  if (key !== widthKey) {
+    widthKey = key;
+    widthAll = Math.round(Math.min(140, Math.max(92, ...names.map((n) => textWidth(n) + 42))));
+  }
+  return widthAll;
+}
+// The name as it fits a tag `vw` units wide: its letter size and text.
+export function labelText(name, vw) {
+  const room = vw - 5 - 18 - 6;
+  const w = textWidth(name);
+  if (w <= room) return { fs: LABEL_FS, text: name };
+  const fs = Math.max(9, (LABEL_FS * room) / w);
+  let text = name;
+  while (text.length > 1 && (textWidth(text) * fs) / LABEL_FS > room) text = text.slice(0, -1);
+  return { fs, text: text === name ? name : `${text.trimEnd()}…` };
+}
 export function labelDef(label) {
   const name = label?.name || 'Label';
   const color = label?.color || '#6B7A85';
-  const W0 = Math.round(Math.max(56, textWidth(name) + 42));
+  const W0 = labelWidth();
   const right = W0 - 5;
-  const svg = `<path d="M12 3 H${right - 5} a5 5 0 0 1 5 5 V24 a5 5 0 0 1 -5 5 H12 L2 16 Z" fill="${color}" stroke="#FFFFFF" stroke-width="3" stroke-linejoin="round"/><circle cx="12" cy="16" r="2.6" fill="#FFFFFF"/><text x="${(18 + right) / 2}" y="20.5" font-family="Overpass, sans-serif" font-size="12.5" font-weight="700" fill="#FFFFFF" text-anchor="middle">${escXml(name)}</text>`;
+  const { fs, text } = labelText(name, W0);
+  const svg = `<path d="M12 3 H${right - 5} a5 5 0 0 1 5 5 V24 a5 5 0 0 1 -5 5 H12 L2 16 Z" fill="${color}" stroke="#FFFFFF" stroke-width="3" stroke-linejoin="round"/><circle cx="12" cy="16" r="2.6" fill="#FFFFFF"/><text x="${(18 + right) / 2}" y="${16 + fs * 0.36}" font-family="Overpass, sans-serif" font-size="${+fs.toFixed(2)}" font-weight="700" fill="#FFFFFF" text-anchor="middle">${escXml(text)}</text>`;
   return { name, vb: `0 0 ${W0} 32`, w: Math.round(W0 * 1.45), h: 46, svg };
 }
 

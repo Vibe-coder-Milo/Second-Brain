@@ -38,6 +38,8 @@ export const icons = {
   tag: (o) => svg('<path d="M3 12V5a2 2 0 0 1 2-2h7l9 9-9 9z"/><circle cx="8" cy="8" r="1.5"/>', o),
   history: (o) => svg('<path d="M3 12a9 9 0 1 0 3-6.7"/><polyline points="3 4 3 9 8 9"/><polyline points="12 7 12 12 15.5 14"/>', o),
   share: (o) => svg('<path d="M12 3v12"/><polyline points="7 8 12 3 17 8"/><path d="M5 13v7h14v-7"/>', o),
+  // Copy formatting (format painter): a paint roller.
+  brush: (o) => svg('<rect x="4" y="3.5" width="14" height="5" rx="1.5"/><path d="M18 6h2v5.5h-8V15"/><rect x="10.5" y="15" width="3" height="6" rx="1"/>', { size: 20, ...o }),
   bold: (o) => svg('<path d="M7 5h6a3.5 3.5 0 0 1 0 7H7z"/><path d="M7 12h7a3.5 3.5 0 0 1 0 7H7z"/>', { sw: 2.2, size: 20, ...o }),
   italic: (o) => svg('<line x1="14" y1="5" x2="10" y2="19"/><line x1="10" y1="5" x2="18" y2="5"/><line x1="6" y1="19" x2="14" y2="19"/>', { size: 20, ...o }),
   underline: (o) => svg('<path d="M7 4v7a5 5 0 0 0 10 0V4"/><line x1="5" y1="20" x2="19" y2="20"/>', { size: 20, ...o }),

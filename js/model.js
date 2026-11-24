@@ -3,7 +3,7 @@
 import { uid, firstLine } from './util.js';
 import { docTasks, mdTasks } from './doc.js';
 import { isDarkUI } from './theme.js';
-import { FONT_IDS, TEXT_SIZES, TEXT_SIZE } from './fonts.js';
+import { FONT_IDS, TEXT_SIZES, TEXT_SIZE, HEAD_SIZES } from './fonts.js';
 
 // Region colours: a dot/line colour and a darker (or lighter, at night) text colour
 // that passes contrast on the map background.
@@ -367,16 +367,25 @@ export const TEXT_DEFAULT_COLORS = [
   ['Ink black', '#16191D'], ['Chart blue', '#2B5684'], ['Royal blue', '#2E5BD8'], ['Deep teal', '#1F6467'], ['Forest green', '#2F6B4F'],
   ['Brown', '#6B4A3A'], ['Deep red', '#9B2C2C'], ['Plum', '#5E3F8A'], ['Berry', '#8A2F64'], ['Slate grey', '#3F4650'],
 ];
-export const DEFAULT_TEXT = { font: null, size: TEXT_SIZE, color: null };
+// Title, Heading and Subheading (h1 to h3) can each have their own size and
+// colour (null = follow the body text, as before 24 Nov 2026).
+export const DEFAULT_TEXT = { font: null, size: TEXT_SIZE, color: null, h1Size: null, h1Color: null, h2Size: null, h2Color: null, h3Size: null, h3Color: null };
+const hexOrNull = (c) => (typeof c === 'string' && /^#[0-9a-f]{6}$/i.test(c) ? c.toUpperCase() : null);
 export function normText(t) {
   const size = Number(t?.size);
-  const color = typeof t?.color === 'string' && /^#[0-9a-f]{6}$/i.test(t.color) ? t.color.toUpperCase() : null;
-  return {
+  const out = {
     font: FONT_IDS.includes(t?.font) ? t.font : null,
     size: TEXT_SIZES.includes(size) ? size : DEFAULT_TEXT.size,
-    color,
+    color: hexOrNull(t?.color),
   };
+  for (const lv of [1, 2, 3]) {
+    const s = Number(t?.[`h${lv}Size`]);
+    out[`h${lv}Size`] = HEAD_SIZES.includes(s) ? s : null;
+    out[`h${lv}Color`] = hexOrNull(t?.[`h${lv}Color`]);
+  }
+  return out;
 }
+const sameText = (a, b) => Object.keys(DEFAULT_TEXT).every((k) => a[k] === b[k]);
 
 export function defaultConfig() {
   return { regions: DEFAULT_REGIONS.map((r) => ({ ...r })), labels: DEFAULT_LABELS.map((l) => ({ ...l })), myStickers: [], favColors: null, text: { ...DEFAULT_TEXT }, lastSweepAt: null, createdAt: Date.now() };
@@ -411,7 +420,7 @@ export function textFor(n, config) {
 export function withNewText(config, patch, { notesSince = null } = {}) {
   const old = normText(config.text);
   const next = normText({ ...old, ...patch });
-  const same = (a, b) => a.font === b.font && a.size === b.size && a.color === b.color;
+  const same = sameText;
   if (same(old, next)) return { text: next, textPast: config.textPast || [] };
   const now = Date.now();
   let past = [...(config.textPast || [])];
@@ -422,4 +431,31 @@ export function withNewText(config, patch, { notesSince = null } = {}) {
     if (same(last, next)) past.pop(); // back to the one before: notes after `last.until` all use it
   } else past.push({ until: now, ...old });
   return { text: next, textPast: past };
+}
+
+// Two devices changed settings before syncing. Each setting (`regions`,
+// `labels`, `text`, ...) keeps the side that changed it last: `saveConfig`
+// stamps the settings it changes in `stamps`. Settings with no stamp on
+// either side (written by an older app version) come from the side saved
+// last. Before 24 Nov 2026 the whole of this device's copy won, so a change
+// made on the other device (a new default text size) could be lost.
+export function mergeConfig(mine, theirs) {
+  const a = mine || {};
+  const b = theirs || {};
+  const sa = a.stamps || {};
+  const sb = b.stamps || {};
+  const aNewer = (a.updatedAt || 0) >= (b.updatedAt || 0);
+  const out = {};
+  for (const k of new Set([...Object.keys(a), ...Object.keys(b)])) {
+    if (k === 'stamps' || k === 'updatedAt') continue;
+    const ta = sa[k] || 0;
+    const tb = sb[k] || 0;
+    const useA = ta || tb ? ta >= tb : aNewer;
+    out[k] = useA ? (k in a ? a[k] : b[k]) : (k in b ? b[k] : a[k]);
+  }
+  const stamps = { ...sb };
+  for (const [k, t] of Object.entries(sa)) stamps[k] = Math.max(t, stamps[k] || 0);
+  out.stamps = stamps;
+  out.updatedAt = Math.max(a.updatedAt || 0, b.updatedAt || 0);
+  return out;
 }

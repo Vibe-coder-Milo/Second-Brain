@@ -127,6 +127,14 @@
 .rich h2 { font-family: var(--note-font); font-weight: 400; font-size: 1.39em; line-height: 1.25; margin: 0.9em 0 0.15em; }
 .rich h3 { font-family: var(--sans); font-weight: 700; font-size: 0.89em; line-height: 1.35; margin: 1em 0 0.1em; letter-spacing: 0.01em; }
 .rich > h1:first-child, .rich > h2:first-child, .rich > h3:first-child { margin-top: 0; }
+/* Title, Heading and Subheading can have their own size and colour (Settings);
+   text boxes on handwritten pages keep their own rules. */
+.rich:not(.tb-rich) h1 { font-size: var(--h1-size, 1.78em); color: var(--h1-ink, inherit); }
+.rich:not(.tb-rich) h2 { font-size: var(--h2-size, 1.39em); color: var(--h2-ink, inherit); }
+.rich:not(.tb-rich) h3 { font-size: var(--h3-size, 0.89em); color: var(--h3-ink, inherit); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme=light]) .rich:not(.tb-rich) :is(h1, h2, h3) { color: var(--hd-ink-dark, inherit); } }
+:root[data-theme=dark] .rich:not(.tb-rich) :is(h1, h2, h3), :root:not([data-theme=dark]) .sheets:is(.tp-on, .np-on)[data-paper=night] .rich:not(.tb-rich) :is(h1, h2, h3) { color: var(--hd-ink-dark, inherit); }
+.rich h1 { --hd-ink-dark: var(--h1-ink-dark); } .rich h2 { --hd-ink-dark: var(--h2-ink-dark); } .rich h3 { --hd-ink-dark: var(--h3-ink-dark); }
 .rich ul, .rich ol { margin: 0; padding-left: 1.5em; }
 .rich li { margin: 0.12em 0; }
 .rich li > p { margin: 0; }
@@ -304,6 +312,10 @@ body.inking { overscroll-behavior: none; }
 .tool { width: 42px; height: 42px; display: inline-flex; align-items: center; justify-content: center; border: 0; border-radius: 11px; background: none; color: var(--ink); cursor: pointer; flex-shrink: 0; }
 .tool:hover { background: var(--tint); }
 .tool[aria-pressed='true'] { background: var(--ink); color: var(--on-ink); }
+/* The brush kept on (double-tap) shows a dot; text shows a paint cursor while it's on. */
+.tool.locked { position: relative; }
+.tool.locked::after { content: ''; position: absolute; right: 5px; top: 5px; width: 6px; height: 6px; border-radius: 50%; background: var(--on-ink); }
+.ProseMirror.painting { cursor: copy; }
 .ink-swatch { width: 34px; height: 34px; border-radius: 50%; border: 0; padding: 0; cursor: pointer; background: none; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
 .ink-swatch::before { content: ''; width: 24px; height: 24px; border-radius: 50%; background: var(--c); box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.14); }
 .ink-swatch[aria-pressed='true'] { box-shadow: inset 0 0 0 2px var(--ink); }
@@ -1048,6 +1060,14 @@ td.tv-tags, td.tv-select { min-width: 150px; }
 .text-colours { display: flex; flex-wrap: wrap; gap: 10px; padding: 4px; }
 .swatch.usual { background: linear-gradient(135deg, var(--ink) 50%, var(--bg) 50%); }
 .text-sample { margin: 0; padding: 12px 14px; border-radius: 12px; background: var(--surface); border: 1px solid var(--line); min-height: 0; }
+.text-group { margin: 6px 0 -4px; font-size: 13px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); }
+.head-prefs { display: grid; gap: 10px; }
+.head-row { display: grid; grid-template-columns: minmax(90px, 1fr) auto auto; align-items: center; gap: 10px; }
+.head-name { font-weight: 600; font-size: 15px; }
+.head-row select { width: 140px; }
+.head-col { gap: 8px; min-width: 150px; justify-content: flex-start; }
+.head-col .swatch { width: 20px; height: 20px; cursor: inherit; }
+@media (max-width: 420px) { .head-row { grid-template-columns: 1fr auto; } .head-col { grid-column: 1 / -1; } }
 
 /* ---------- Dark mode: text colours and dark pages ---------- */
 /* Text colours and highlights carry a dark-mode version (--tcd, --hld). */

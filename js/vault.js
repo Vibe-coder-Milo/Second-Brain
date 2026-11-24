@@ -63,10 +63,20 @@ export async function updateDevice(patch) {
 }
 
 export async function saveConfig(patch = {}) {
-  state.config = normConfig({ ...state.config, ...patch, updatedAt: Date.now() });
+  const now = Date.now();
+  // Each changed setting gets a time, so sync can merge two devices' changes (mergeConfig).
+  const stamps = { ...(state.config?.stamps || {}) };
+  for (const k of Object.keys(patch)) stamps[k] = now;
+  state.config = normConfig({ ...state.config, ...patch, stamps, updatedAt: now });
   await writeRecord(CONFIG_ID, state.config, 'm');
   emit({ type: 'config' });
   changed();
+}
+// Sync: keep the settings merged from this device's and another device's changes.
+export async function replaceConfig(cfg) {
+  state.config = normConfig(cfg);
+  await writeRecord(CONFIG_ID, state.config, 'm');
+  emit({ type: 'config' });
 }
 
 async function writeRecord(id, obj, kid) {

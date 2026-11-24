@@ -84,7 +84,7 @@ through a private GitHub repo. Everything is encrypted on the device.
   - models: transformers and onnxruntime (`ort/`) with the model files;
   - OCR: tesseract.
 - **Service worker** (`sw.js`):
-  - Bump `VERSION` (`sb-vN`; currently `sb-v29.4`; small follow-ups can be `.1`, `.2` as the owner asked) on every release.
+  - Bump `VERSION` (`sb-vN`; currently `sb-v29.5`; small follow-ups can be `.1`, `.2` as the owner asked) on every release.
   - Add every new JS/CSS file to `SHELL`, or it won't work offline.
   - The app shows an update bar (`js/appupdate.js`).
 - **Views:** `js/views/*.js` export `mount(main, params, ctx)`, returning
@@ -161,7 +161,9 @@ through a private GitHub repo. Everything is encrypted on the device.
   `organise`, `autoLink`, `autoLockMin`, `sync {owner, repo, branch, token}`,
   `organiserLog` and more.
 - **Synced settings** (`state.config`, `normConfig`): regions, labels, stickers,
-  and `text { font, size, color }`, the default text (`normText`; font null =
+  and `text { font, size, color, h1Size, h1Color, h2Size, h2Color, h3Size, h3Color }`
+  (heading values null = follow the body, `HEAD_RATIO` in fonts.js; CSS vars
+  `--hN-size`, `--hN-ink`, `--hN-ink-dark`; PDF export via `headsFor`), the default text (`normText`; font null =
   the usual one, Spectral in notes and Overpass in text boxes; colour null = the
   app's ink). Two rules, by design:
   - Since `sb-v29.1` (owner's request) a change applies only to notes made
@@ -181,6 +183,11 @@ through a private GitHub repo. Everything is encrypted on the device.
     must not move text over handwriting.
   - Fonts, sizes and the 18 px / 20-unit relation live in `js/fonts.js` only
     (no imports, so `theme.js` and `model.js` can use it).
+  - `saveConfig(patch)` stamps each changed key in `config.stamps`; a sync
+    conflict on the settings record is merged per key (`mergeConfig` in
+    model.js, newer stamp wins; unstamped keys from the side saved last).
+    Before `sb-v29.5` this device's whole copy won and the other device's
+    change (e.g. a new default size) was lost.
 
 ## Things that are easy to break
 
@@ -688,6 +695,36 @@ task item only changes the document when the editor is editable; with
 `createRichEditor` now listens for the checkbox `change` while read-only and
 sets `checked` on the node itself (`TaskIds` adds `doneAt`; `onChange` saves).
 No need to tap Edit. `t6r`.
+
+### 24 Nov 2026 (`sb-v29.5`)
+
+1. **Labels the same size**: label tags were as wide as their names (54 to
+   81 units). `labelDef` (stickers.js) now gives every tag one width: the
+   longest of the owner's label names, between 92 and 140; a longer name gets
+   smaller letters (`labelText`, down to 9) then "…". Labels already stuck on
+   handwritten pages keep their placed size; `drawLabelTag` draws them from
+   their own `w`/`h` so they don't stretch. `t6s`.
+2. **Brush (copy formatting)** (`formatPainter` in toolbar.js, button
+   `data-act=paint` in the typed-note props row, text boxes too): picks up
+   the marks (bold, italic, underline, strike, textStyle, highlight) at the
+   cursor/selection, plus the line style (paragraph/heading level) when the
+   whole line or just the cursor was picked up. The next selection made
+   (pointer up: 60 ms for mouse/Pencil, 800 ms for touch; else a selection
+   steady for 800 ms) gets exactly that look; line style only on top-level
+   lines selected whole. Double-tap keeps it on (`.locked`), tap or Escape
+   stops it. `t6s`.
+3. **"/" menu needed two taps on the iPad**: the menu was redrawn on every
+   editor update (the tap hides the keyboard), and Safari drops a click when
+   the touched element changed after touch start. Now it redraws only when
+   the list changes and picks on pointerup (taps under 12 px; the following
+   click is swallowed, `swallowClick`). `t6s` copies Safari's rule (fails
+   on v29.4). Not yet confirmed on the owner's iPad.
+4. **"Default 14 but new notes are 18"**: on this device new notes are 14
+   (checked: plain, inside a notebook, after a reload). The likely cause is
+   the settings conflict above (another device's copy with 18 won). Fixed
+   with `mergeConfig`. Also: Title, Heading and Subheading size and colour in
+   Settings (Default text). Not yet confirmed on the owner's devices: if it
+   still happens, ask which device and where the note was made.
 
 ## Ideas noted, not requested
 

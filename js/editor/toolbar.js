@@ -274,6 +274,110 @@ export function mountFormatBar(bar, editor, opts = {}) {
   return { refresh, destroy() { editor.off('selectionUpdate', refresh); editor.off('transaction', refresh); } };
 }
 
+// ---- Copy formatting (the brush) -------------------------------------------------
+// Tap the brush with the cursor in (or words selected in) text that looks the
+// way you want, then select other words: they take the same look. What is
+// copied: bold, italic, underline, strikethrough, font, size, colour and
+// highlight; and, when the whole line was picked up (or just the cursor was
+// in it), its style (Title, Heading, Subheading or Body text), which goes to
+// lines that are selected whole. Double-tap the brush to keep it on for
+// several places; tap it again (or Escape) to stop.
+
+const LOOK_MARKS = ['bold', 'italic', 'underline', 'strike', 'textStyle', 'highlight'];
+const LINE_TYPES = ['paragraph', 'heading'];
+
+function pickUpLook(editor) {
+  const { state } = editor;
+  const { from, to, empty, $from } = state.selection;
+  let marks = null;
+  if (empty) marks = state.storedMarks || $from.marks();
+  else state.doc.nodesBetween(from, to, (n) => { if (!marks && n.isText) marks = n.marks; return !marks; });
+  marks = (marks || []).filter((m) => LOOK_MARKS.includes(m.type.name));
+  const par = $from.parent;
+  const whole = empty || (state.selection.$to.parent === par && $from.parentOffset === 0 && state.selection.$to.parentOffset === par.content.size);
+  const line = whole && LINE_TYPES.includes(par.type.name) ? { type: par.type.name, level: par.attrs.level } : null;
+  return { marks, line, at: [from, to] };
+}
+
+function paintLook(editor, look) {
+  const { state } = editor;
+  const { from, to } = state.selection;
+  if (from === to) return false;
+  const tr = state.tr;
+  for (const name of LOOK_MARKS) { const t = state.schema.marks[name]; if (t) tr.removeMark(from, to, t); }
+  for (const m of look.marks) tr.addMark(from, to, m);
+  if (look.line) {
+    const type = state.schema.nodes[look.line.type];
+    state.doc.nodesBetween(from, to, (node, pos) => {
+      if (!LINE_TYPES.includes(node.type.name)) return true;
+      // Only lines selected whole, and only top-level ones (not inside a list).
+      const whole = from <= pos + 1 && to >= pos + node.nodeSize - 1 && node.content.size > 0;
+      if (whole && state.doc.resolve(pos).depth === 0 && type) {
+        const attrs = { ...node.attrs };
+        if (look.line.type === 'heading') attrs.level = look.line.level; else delete attrs.level;
+        try { tr.setNodeMarkup(pos, type, attrs); } catch { /* not allowed here */ }
+      }
+      return false;
+    });
+  }
+  editor.view.dispatch(tr.scrollIntoView());
+  return true;
+}
+
+// Brush state for one editor; `onChange(on, locked)` updates the button.
+export function formatPainter(editor, onChange) {
+  let look = null;
+  let locked = false;
+  let pointer = false;
+  let timer = 0;
+  const set = (l, lock = false) => { look = l; locked = !!l && lock; editor.view.dom.classList.toggle('painting', !!l); onChange?.(!!l, locked); };
+  const tryPaint = () => {
+    clearTimeout(timer);
+    if (!look || pointer) return;
+    const { from, to, empty } = editor.state.selection;
+    if (empty || (from === look.at[0] && to === look.at[1])) return;
+    paintLook(editor, look);
+    look.at = [from, to];
+    if (!locked) set(null);
+  };
+  // Mouse and Pencil selections end when the pointer lifts; the iPad's
+  // selection handles and Shift+arrows only show as a selection that stops
+  // changing.
+  const onSel = () => { if (look) { clearTimeout(timer); timer = setTimeout(tryPaint, 800); } };
+  // A finger on the iPad selects a word first and then the handles move, so
+  // touch waits for the selection to settle; mouse and Pencil paint at once.
+  let touch = false;
+  const onDown = (e) => { pointer = true; touch = e.pointerType === 'touch'; };
+  const onUp = () => { if (!pointer) return; pointer = false; if (look) { clearTimeout(timer); timer = setTimeout(tryPaint, touch ? 800 : 60); } };
+  const onKey = (e) => { if (e.key === 'Escape' && look) set(null); };
+  editor.on('selectionUpdate', onSel);
+  editor.view.dom.addEventListener('pointerdown', onDown);
+  document.addEventListener('pointerup', onUp, true);
+  document.addEventListener('pointercancel', onUp, true);
+  document.addEventListener('keydown', onKey);
+  let lastTap = 0;
+  return {
+    // The brush button: one tap picks up the look for one use, a second tap
+    // within a moment keeps it on, a tap while it's on puts it down.
+    tap() {
+      const now = Date.now();
+      if (look && now - lastTap < 450 && !locked) { set(look, true); toast('Brush stays on. Tap it again to stop.'); }
+      else if (look) set(null);
+      else { set(pickUpLook(editor)); toast('Now select the words to format.'); }
+      lastTap = now;
+    },
+    get on() { return !!look; },
+    destroy() {
+      clearTimeout(timer);
+      editor.off('selectionUpdate', onSel);
+      editor.view.dom.removeEventListener('pointerdown', onDown);
+      document.removeEventListener('pointerup', onUp, true);
+      document.removeEventListener('pointercancel', onUp, true);
+      document.removeEventListener('keydown', onKey);
+    },
+  };
+}
+
 // ---- The typed-note toolbar ---------------------------------------------------------
 // Two rows, shaped and placed like the handwritten-note toolbar: the top row
 // holds the tools and never changes (undo, style, bold, lists, label, insert,
@@ -298,7 +402,7 @@ export function mountNoteBars(tools, props, editor, opts = {}) {
     <button type="button" class="pen-chip" data-act="font" aria-label="Font"><span class="fc-aa">Aa</span><span id="fb-font">Spectral</span>${raw(icons.chevron({ size: 14 }))}</button>
     <div class="tg fb-size" role="group" aria-label="Text size"><button type="button" class="tool sm" data-act="smaller" aria-label="Smaller text">−</button><span id="fb-size">18</span><button type="button" class="tool sm" data-act="larger" aria-label="Larger text">+</button></div>
     <div class="tg colours" role="group" aria-label="Text colour"></div>
-    <div class="tg">${wide ? '' : html`${T('italic', 'italic', 'Italic', true)}${T('underline', 'underline', 'Underline', true)}`}${T('strike', 'strike', 'Strikethrough', true)}${wide ? '' : T('numbers', 'numbers', 'Numbered list', true)}${T('outdent', 'outdent', 'Indent less')}${T('indent', 'indent', 'Indent more')}${T('align', 'align', 'Alignment')}</div>
+    <div class="tg">${T('paint', 'brush', 'Copy formatting: tap, then select words to give them the same look (double-tap to keep it on)', true)}${wide ? '' : html`${T('italic', 'italic', 'Italic', true)}${T('underline', 'underline', 'Underline', true)}`}${T('strike', 'strike', 'Strikethrough', true)}${wide ? '' : T('numbers', 'numbers', 'Numbered list', true)}${T('outdent', 'outdent', 'Indent less')}${T('indent', 'indent', 'Indent more')}${T('align', 'align', 'Alignment')}</div>
     ${opts.hideKeyboard ? html`<div class="tg">${T('hidekb', 'keyboardDown', 'Hide keyboard')}</div>` : ''}`}`;
   props.hidden = false;
   // Default, then the colours you used last, then the full picker.
@@ -314,6 +418,11 @@ export function mountNoteBars(tools, props, editor, opts = {}) {
   };
   let refresh = null;
   drawQuick();
+  const painter = formatPainter(editor, (on, locked) => {
+    const pb = props.querySelector('[data-act=paint]');
+    pb?.setAttribute('aria-pressed', on ? 'true' : 'false');
+    pb?.classList.toggle('locked', locked);
+  });
 
   const onDown = (e) => { if (e.target.closest('button')) e.preventDefault(); };
   const onClick = async (e) => {
@@ -321,6 +430,7 @@ export function mountNoteBars(tools, props, editor, opts = {}) {
     if (!b) return;
     const act = b.dataset.act;
     if (act === 'record') { opts.onRecord?.(); return; }
+    if (act === 'paint') { opts.ensureEditing?.(); painter.tap(); return; }
     if (act === 'undo' || act === 'redo') { opts.ensureEditing?.(); editor.chain().focus()[act]().run(); refresh(); return; }
     opts.ensureEditing?.();
     const ch = () => editor.chain().focus();
@@ -397,6 +507,7 @@ export function mountNoteBars(tools, props, editor, opts = {}) {
     refresh,
     setRecording(on) { tools.querySelector('[data-act=record]')?.setAttribute('aria-pressed', on ? 'true' : 'false'); },
     destroy() {
+      painter.destroy();
       editor.off('selectionUpdate', refresh);
       editor.off('transaction', refresh);
       for (const bar of [tools, props]) { bar.removeEventListener('pointerdown', onDown); bar.removeEventListener('click', onClick); bar.innerHTML = ''; }
@@ -420,6 +531,15 @@ export function pinTop(elm) {
 }
 
 // ---- "/" menu and [[ autocomplete -------------------------------------------------
+
+// After a pick made when the finger lifts, the browser still sends a click to
+// whatever is under it now (the note, once the menu is gone): drop that one.
+function swallowClick() {
+  const stop = (e) => { e.stopPropagation(); e.preventDefault(); off(); };
+  const off = () => { document.removeEventListener('click', stop, true); clearTimeout(t); };
+  document.addEventListener('click', stop, true);
+  const t = setTimeout(off, 700);
+}
 
 export function attachSuggest(editor, opts = {}) {
   let pop = null;
@@ -464,10 +584,45 @@ export function attachSuggest(editor, opts = {}) {
       ? styleMenuHtml(editor, items, idx)
       : html`<ul class="style-menu" role="listbox">${items.map((it, i) => html`<li role="option" aria-selected="${i === idx ? 'true' : 'false'}"><button type="button" data-i="${i}"><span class="sm-name serif">${it.missing ? html`Link to “${it.title}”` : it.title}</span></button></li>`)}</ul>`;
     const box = caretBox(editor, cur.from);
-    if (!pop) pop = popover(box, body, { label: cur.kind === 'slash' ? 'Styles' : 'Link to a note', width: 290, onClose: () => { pop = null; } });
-    else pop.el.innerHTML = String(body);
-    pop.el.querySelectorAll('[data-style]').forEach((b, i) => { b.onclick = () => choose(i); });
-    pop.el.querySelectorAll('[data-i]').forEach((b) => { b.onclick = () => choose(Number(b.dataset.i)); });
+    if (!pop) {
+      pop = popover(box, body, { label: cur.kind === 'slash' ? 'Styles' : 'Link to a note', width: 290, onClose: () => { pop = null; } });
+      shown = String(body);
+      bindPicks(pop.el);
+    } else if (String(body) !== shown) {
+      // Only redraw when the list changed: the editor updates for many other
+      // reasons (on the iPad the first tap hides the keyboard), and a redraw
+      // under the finger used to swallow that tap.
+      shown = String(body);
+      pop.el.innerHTML = shown;
+    }
+  };
+
+  // Pick on the first touch: a tap (not a scroll of the list) chooses when the
+  // finger lifts, and the click that follows is swallowed so it can't land in
+  // the note below once the menu has gone.
+  let shown = '';
+  const pickIndex = (t) => {
+    const b = t?.closest?.('[data-style], [data-i]');
+    if (!b || !pop) return -1;
+    if (b.dataset.i !== undefined) return Number(b.dataset.i);
+    return [...pop.el.querySelectorAll('[data-style]')].indexOf(b);
+  };
+  const bindPicks = (el) => {
+    let down = null;
+    el.addEventListener('pointerdown', (e) => { down = { x: e.clientX, y: e.clientY, i: pickIndex(e.target) }; });
+    el.addEventListener('pointercancel', () => { down = null; });
+    el.addEventListener('pointerup', (e) => {
+      const d = down;
+      down = null;
+      if (!d || Math.hypot(e.clientX - d.x, e.clientY - d.y) > 12) return;
+      const i = pickIndex(document.elementFromPoint(e.clientX, e.clientY)) ?? -1;
+      const at = i >= 0 ? i : d.i;
+      if (at < 0) return;
+      e.preventDefault();
+      swallowClick();
+      choose(at);
+    });
+    el.addEventListener('click', (e) => { const i = pickIndex(e.target); if (i >= 0) choose(i); });
   };
 
   editor.storage.suggest.onChange = (found) => {

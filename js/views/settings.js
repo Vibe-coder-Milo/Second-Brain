@@ -5,7 +5,7 @@ import * as V from '../vault.js';
 import { state } from '../vault.js';
 import { meta } from '../db.js';
 import { PALETTE, TEXT_DEFAULT_COLORS, REGION_COLOUR_NAMES, regionColors, withNewText } from '../model.js';
-import { FONT_IDS, TEXT_SIZES, TEXT_SIZE, fontCss } from '../fonts.js';
+import { FONT_IDS, TEXT_SIZES, TEXT_SIZE, HEAD_SIZES, HEAD_NAMES, headSize, fontCss } from '../fonts.js';
 import { passphraseStrength } from '../crypto.js';
 import { probe, syncNow, explainError } from '../sync.js';
 import { confirmSheet, openSheet, popover } from '../ui.js';
@@ -13,10 +13,12 @@ import * as C from '../crypto.js';
 import * as B from '../deviceunlock.js';
 import { syncFields, readSyncFields } from './gate.js';
 import { icons } from '../icons.js';
-import { themePref, applyTheme } from '../theme.js';
+import { themePref, applyTheme, applyTextDefaults } from '../theme.js';
 import { appVersion, checkForUpdate } from '../appupdate.js';
 
-// Default text: font, size and colour for new typed text (synced to every device).
+// Default text: font, then size and colour for body text and for Title,
+// Heading and Subheading (synced to every device; only for notes made from now on).
+const colourName = (c) => TEXT_DEFAULT_COLORS.find(([, x]) => x === c)?.[0] || 'Usual ink';
 function textPrefsHtml() {
   const t = state.config.text || {};
   const size = t.size || TEXT_SIZE;
@@ -26,6 +28,7 @@ function textPrefsHtml() {
         <option value="" ${!t.font ? raw('selected') : ''}>Usual (Spectral in notes)</option>
         ${FONT_IDS.map((f) => html`<option value="${f}" ${t.font === f ? raw('selected') : ''}>${f}</option>`)}
       </select></div>
+    <h4 class="text-group">Body text</h4>
     <div class="set-row"><span id="s-text-size-l">Size</span>
       <div class="seg text-sizes" role="radiogroup" aria-labelledby="s-text-size-l">${TEXT_SIZES.map((n) => html`<button type="button" role="radio" data-text-size="${n}" aria-checked="${n === size ? 'true' : 'false'}" aria-label="${n} point">${n}</button>`)}</div></div>
     <div class="set-row"><span id="s-text-col-l">Colour</span>
@@ -33,24 +36,53 @@ function textPrefsHtml() {
         <button type="button" role="radio" class="swatch usual" data-text-colour="" aria-checked="${!t.color ? 'true' : 'false'}" aria-label="Usual ink (follows light and dark)"></button>
         ${TEXT_DEFAULT_COLORS.map(([n, c]) => html`<button type="button" role="radio" class="swatch" data-text-colour="${c}" style="background:${c}" aria-checked="${t.color === c ? 'true' : 'false'}" aria-label="${n}"></button>`)}
       </div></div>
-    <p class="rich text-sample" id="s-text-sample" style="font-family:${t.font ? fontCss(t.font) : 'var(--serif)'}">This is how your typed text will look.</p>`);
+    <h4 class="text-group">Titles and headings</h4>
+    <p class="hint" style="margin:0">Usual follows the body text size.</p>
+    <div class="head-prefs">${[1, 2, 3].map((lv) => {
+      const own = t[`h${lv}Size`];
+      const col = t[`h${lv}Color`];
+      return html`<div class="head-row"><span class="head-name">${HEAD_NAMES[lv]}</span>
+        <select data-head-size="${lv}" aria-label="${HEAD_NAMES[lv]} size">
+          <option value="" ${!own ? raw('selected') : ''}>Usual (${headSize({ size }, lv)})</option>
+          ${HEAD_SIZES.map((n) => html`<option value="${n}" ${own === n ? raw('selected') : ''}>${n}</option>`)}
+        </select>
+        <button type="button" class="btn btn-sm head-col" data-head-colour="${lv}" aria-label="${HEAD_NAMES[lv]} colour: ${col ? colourName(col) : 'same as body text'}"><span class="swatch ${col ? '' : 'usual'}" style="${col ? `background:${col}` : ''}" aria-hidden="true"></span>${col ? colourName(col) : 'Same as body'}</button></div>`;
+    })}</div>
+    <div class="rich text-sample" id="s-text-sample" style="font-family:${t.font ? fontCss(t.font) : 'var(--serif)'}"><h1>Title</h1><h2>Heading</h2><h3>Subheading</h3><p>This is how your typed text will look.</p></div>`);
 }
 function bindTextPrefs(main) {
   const host = $('#s-text', main);
   if (!host) return;
+  const draw = () => { host.innerHTML = textPrefsHtml(); applyTextDefaults(state.config.text, $('#s-text-sample', host)); };
   const save = async (patch) => {
     // Only notes made from now on use the new default; earlier notes keep theirs.
     const hidden = V.sealedState() === 'locked' || state.hiddenSealed > 0;
     const notesSince = hidden ? null : (t) => [...state.notes.values(), ...state.bin.values()].some((n) => n.kind === 'note' && (n.createdAt || 0) >= t);
     await V.saveConfig(withNewText(state.config, patch, { notesSince }));
-    host.innerHTML = textPrefsHtml();
+    draw();
   };
-  host.addEventListener('change', (e) => { if (e.target.id === 's-text-font') save({ font: e.target.value || null }); });
+  draw();
+  host.addEventListener('change', (e) => {
+    if (e.target.id === 's-text-font') save({ font: e.target.value || null });
+    const hs = e.target.closest('[data-head-size]');
+    if (hs) save({ [`h${hs.dataset.headSize}Size`]: Number(hs.value) || null });
+  });
   host.addEventListener('click', (e) => {
     const sz = e.target.closest('[data-text-size]');
     if (sz) { save({ size: Number(sz.dataset.textSize) }); return; }
     const col = e.target.closest('[data-text-colour]');
-    if (col) save({ color: col.dataset.textColour || null });
+    if (col) { save({ color: col.dataset.textColour || null }); return; }
+    const hc = e.target.closest('[data-head-colour]');
+    if (hc) {
+      const lv = hc.dataset.headColour;
+      const cur = state.config.text?.[`h${lv}Color`] || '';
+      const p = popover(hc, `${html`<div class="pop-head">${HEAD_NAMES[lv]} colour</div>
+        <div class="text-colours" role="radiogroup" aria-label="${HEAD_NAMES[lv]} colour">
+          <button type="button" role="radio" class="swatch usual" data-hc="" aria-checked="${!cur ? 'true' : 'false'}" aria-label="Same as body text"></button>
+          ${TEXT_DEFAULT_COLORS.map(([n, c]) => html`<button type="button" role="radio" class="swatch" data-hc="${c}" style="background:${c}" aria-checked="${cur === c ? 'true' : 'false'}" aria-label="${n}"></button>`)}
+        </div>`}`, { label: `${HEAD_NAMES[lv]} colour`, width: 270 });
+      p.el.querySelectorAll('[data-hc]').forEach((b) => { b.onclick = () => { p.close(); save({ [`h${lv}Color`]: b.dataset.hc || null }); }; });
+    }
   });
 }
 

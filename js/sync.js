@@ -4,11 +4,11 @@
 // Each sync is one commit, so the repo history doubles as version history.
 
 import { meta, records, files } from './db.js';
-import { state, emit, applyRemoteRecord, forgetNote, decryptEnv, saveNote, saveNotebook, CONFIG_ID, forgetPageCache, decodePageBytes, encodePageBytes } from './vault.js';
+import { state, emit, applyRemoteRecord, forgetNote, decryptEnv, saveNote, saveNotebook, CONFIG_ID, replaceConfig, forgetPageCache, decodePageBytes, encodePageBytes } from './vault.js';
 import * as C from './crypto.js';
 import { textToB64, b64ToText, bytesToB64, b64ToBytes, debounce } from './util.js';
 // (bytesToB64 / b64ToBytes carry encrypted file payloads.)
-import { normNote, normNotebook, displayTitle, hasPages } from './model.js';
+import { normNote, normNotebook, displayTitle, hasPages, mergeConfig } from './model.js';
 
 const apiBase = () => 'https://api.github.com';
 
@@ -358,7 +358,14 @@ async function attemptSync(gh) {
   // newer version wins and the other is kept as a copy in the inbox.
   for (const { rec, sha } of conflicts) {
     const env = JSON.parse(b64ToText((await gh.getBlob(sha)).content));
-    if (rec.id === CONFIG_ID) { pushes.push({ kind: 'notes', rec: { ...rec, remoteSha: sha } }); continue; }
+    if (rec.id === CONFIG_ID) {
+      // Settings changed on both devices: merge them setting by setting.
+      const theirs = state.keys.m ? await C.decryptJSON(state.keys.m, CONFIG_ID, env).catch(() => null) : null;
+      await records.put({ ...rec, remoteSha: sha });
+      if (theirs) await replaceConfig(mergeConfig(state.config, theirs));
+      pushes.push({ kind: 'notes', rec: await records.get(CONFIG_ID) });
+      continue;
+    }
     const remoteNote = await decryptEnv(rec.id, env).catch(() => null);
     const localNote = state.notes.get(rec.id) || state.notebooks.get(rec.id) || (await decryptEnv(rec.id, rec.env).catch(() => null));
     if (!remoteNote || !localNote) {

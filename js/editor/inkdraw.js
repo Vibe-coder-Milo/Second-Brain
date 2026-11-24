@@ -6,7 +6,7 @@ import { getStroke } from '../../vendor/freehand.js';
 import { PAGE_W, PAPER_COLORS } from '../model.js';
 import { state } from '../vault.js';
 import * as V from '../vault.js';
-import { stickerDef, stickerSVG, svgImage, labelDef, tapePattern, postitColor } from '../stickers.js';
+import { stickerDef, stickerSVG, svgImage, labelDef, labelText, tapePattern, postitColor } from '../stickers.js';
 import { labelMap } from '../model.js';
 import { isDarkUI, darkInk, darkHighlight } from '../theme.js';
 import { pdfAreaReady } from '../pdfview.js';
@@ -319,8 +319,11 @@ export async function fileImageReady(fileId) {
 // ---- Objects ---------------------------------------------------------------------
 
 export function drawLabelTag(ctx, label, o) {
-  const d = labelDef(label);
-  const [, , vw, vh] = d.vb.split(' ').map(Number);
+  // The tag keeps the shape it was placed with (labels stuck on before
+  // 24 Nov 2026 were sized to their names); the name fits inside it.
+  const vh = 32;
+  const vw = o.w && o.h ? (o.w / o.h) * vh : labelDef(label).w / 1.45;
+  const { fs, text } = labelText(label?.name || 'Label', vw);
   ctx.save();
   ctx.translate(o.x + o.w / 2, o.y + o.h / 2);
   if (o.rot) ctx.rotate(o.rot);
@@ -336,10 +339,10 @@ export function drawLabelTag(ctx, label, o) {
   ctx.fill(path);
   ctx.fillStyle = '#FFFFFF';
   ctx.beginPath(); ctx.arc(12, 16, 2.6, 0, 6.3); ctx.fill();
-  ctx.font = '700 12.5px Overpass, system-ui, sans-serif';
+  ctx.font = `700 ${fs}px Overpass, system-ui, sans-serif`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'alphabetic';
-  ctx.fillText(label?.name || 'Label', (18 + right) / 2, 20.5);
+  ctx.fillText(text, (18 + right) / 2, 16 + fs * 0.36);
   ctx.restore();
 }
 
@@ -488,7 +491,7 @@ function wrapPlain(ctx, text, width) {
 
 // lineH and gap (line height and the space after a paragraph, in text sizes)
 // can be set to lay text out like the typed-note screen (PDF export of pages).
-export function drawRichText(ctx, doc, x, y, width, { size = BOX_SIZE, font = BOX_FONT, color: color0 = '#1B2A38', redraw, lineH: lineH0 = 1.42, gap = 0.25 } = {}) {
+export function drawRichText(ctx, doc, x, y, width, { size = BOX_SIZE, font = BOX_FONT, color: color0 = '#1B2A38', redraw, lineH: lineH0 = 1.42, gap = 0.25, heads = null } = {}) {
   const color = tint(color0);
   const soft = dark ? '#3A4B5B' : '#CDD9D6';
   const base = fontCss(font, BOX_FONT);
@@ -601,7 +604,9 @@ export function drawRichText(ctx, doc, x, y, width, { size = BOX_SIZE, font = BO
       case 'paragraph': cy += paragraph(runsOf(b, st), px + ind * 2 * size, pw - ind * 2 * size) + size * gap; break;
       case 'heading': {
         const lv = b.attrs?.level || 1;
-        const s2 = { ...st, size: size * [0, 1.7, 1.35, 1.12][lv], bold: true, color: lv === 3 ? tint('#51606C') : color };
+        // `heads`: Title, Heading and Subheading's own size and colour from Settings (headsFor in fonts.js).
+        const hd = heads?.[lv];
+        const s2 = { ...st, size: size * (hd?.k || [0, 1.7, 1.35, 1.12][lv]), bold: true, color: hd?.color ? tint(hd.color) : lv === 3 ? tint('#51606C') : color };
         if (ind) { px += ind * 2 * s2.size; pw -= ind * 2 * s2.size; }
         cy += size * 0.3;
         cy += paragraph(runsOf(b, s2), px, pw, { lineH: 1.25 }) + size * 0.2;

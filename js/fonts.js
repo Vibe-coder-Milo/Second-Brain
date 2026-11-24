@@ -58,6 +58,16 @@ export async function loadFonts(ids) {
 // handwritten page an 18 px mark is the box's own size.
 export const TEXT_SIZES = [12, 14, 16, 18, 20, 22, 24, 28];
 export const TEXT_SIZE = 18;
+// Title, Heading and Subheading in typed notes (h1, h2, h3). Usually they
+// follow the body size (HEAD_RATIO, as in notes.css); Settings can give each
+// its own size from HEAD_SIZES and its own colour.
+export const HEAD_SIZES = [12, 14, 16, 18, 20, 22, 24, 26, 28, 32, 36, 40, 48];
+export const HEAD_RATIO = { 1: 1.78, 2: 1.39, 3: 0.89 };
+export const HEAD_NAMES = { 1: 'Title', 2: 'Heading', 3: 'Subheading' };
+// For canvas drawing (PDF export): each heading's own size as a share of the
+// body size, and its own colour; null where it follows the body text.
+export const headsFor = (t) => Object.fromEntries([1, 2, 3].map((lv) => [lv, { k: t?.[`h${lv}Size`] ? t[`h${lv}Size`] / (t.size || TEXT_SIZE) : null, color: t?.[`h${lv}Color`] || null }]));
+export const headSize = (t, lv) => t?.[`h${lv}Size`] || Math.round((t?.size || TEXT_SIZE) * HEAD_RATIO[lv]);
 // A text box's size is in page units (the page is 1000 wide): 20 units
 // matches typed text at 18.
 export const BOX_SIZE = 20;

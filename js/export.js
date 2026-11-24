@@ -6,7 +6,7 @@ import { state, notesIn } from './vault.js';
 import * as V from './vault.js';
 import { displayTitle, PAGE_W, A4_H, textFor } from './model.js';
 import { downloadBlob, toast } from './util.js';
-import { NOTE_FONT, TEXT_SIZE, boxSize, fontIdsIn, loadFonts } from './fonts.js';
+import { NOTE_FONT, TEXT_SIZE, boxSize, fontIdsIn, loadFonts, headsFor } from './fonts.js';
 
 export const safeName = (s) => String(s || 'note').replace(/[\\/:*?"<>|#^[\]\n\r]+/g, '-').replace(/\s+/g, ' ').trim().slice(0, 80) || 'note';
 const isoDate = (ts) => new Date(ts).toISOString().slice(0, 10);
@@ -215,7 +215,7 @@ async function typedCanvases(n, { px = PX, heading = true } = {}) {
       y += h + 24;
     }
     setInkTone(false);
-    y += drawRichText(ctx, doc, M, y, width, { size: boxSize(dt.size || TEXT_SIZE), font: fontId, color: dt.color || undefined });
+    y += drawRichText(ctx, doc, M, y, width, { size: boxSize(dt.size || TEXT_SIZE), font: fontId, color: dt.color || undefined, heads: headsFor(dt) });
     return y + M;
   };
   const probe = document.createElement('canvas').getContext('2d');
