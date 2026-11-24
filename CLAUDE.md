@@ -84,7 +84,7 @@ through a private GitHub repo. Everything is encrypted on the device.
   - models: transformers and onnxruntime (`ort/`) with the model files;
   - OCR: tesseract.
 - **Service worker** (`sw.js`):
-  - Bump `VERSION` (`sb-vN`; currently `sb-v29.5`; small follow-ups can be `.1`, `.2` as the owner asked) on every release.
+  - Bump `VERSION` (`sb-vN`; currently `sb-v29.6`; small follow-ups can be `.1`, `.2` as the owner asked) on every release.
   - Add every new JS/CSS file to `SHELL`, or it won't work offline.
   - The app shows an update bar (`js/appupdate.js`).
 - **Views:** `js/views/*.js` export `mount(main, params, ctx)`, returning
@@ -725,6 +725,16 @@ No need to tap Edit. `t6r`.
    with `mergeConfig`. Also: Title, Heading and Subheading size and colour in
    Settings (Default text). Not yet confirmed on the owner's devices: if it
    still happens, ask which device and where the note was made.
+
+### 24 Nov 2026, later (`sb-v29.6`)
+
+**"Default 14 but it still shows 18."** Typed notes, page view and Today
+were 14 (checked again). The 18 was the size box in the toolbar of a text
+box on a handwritten page: `inknote.js` passed `baseSize: TEXT_SIZE`, so it
+always said 18 (the text itself was drawn at the default). Now `baseSize` is
+the box's own size in typed terms and `sizeScale` = that / TEXT_SIZE converts
+size marks (relative to TEXT_SIZE) to what is shown; − and + step from it
+(`sizeOf`/`sizeMark` in toolbar.js). `t6s`.
 
 ## Ideas noted, not requested
 

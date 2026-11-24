@@ -20,7 +20,7 @@ import { isDarkUI } from '../theme.js';
 import { linkedWith, mentions, related, subNotes } from '../connections.js';
 import { miniMapHtml } from '../minimap.js';
 import { notebookPicker, textSheet } from './notebooks.js';
-import { BOX_FONT, TEXT_SIZE } from '../fonts.js';
+import { BOX_FONT, BOX_SIZE, TEXT_SIZE } from '../fonts.js';
 import { resolve as docSectionsOf } from '../docsections.js';
 import { fileKind, fileTitle, warningText, PAGE_ACCEPT } from '../docintake.js';
 import { imagesIn, isTypingTarget, readClipboardImages } from '../clipimages.js';
@@ -883,8 +883,12 @@ export function mount(el, params, ctx) {
     const props = $('#iv-props', el);
     if (!tools || !props) return;
     document.body.classList.add('editing');
+    const boxPx = () => Math.round(((surface?.editing?.size || BOX_SIZE) * TEXT_SIZE) / BOX_SIZE);
     fmt = T.mountNoteBars(tools, props, ed, {
-      baseSize: TEXT_SIZE, // text boxes size their text against the box's own size
+      // A text box's size in typed-text terms (a box of 16 units = 14), and
+      // size marks scaled to it, so the toolbar shows the size you see.
+      baseSize: () => boxPx(),
+      sizeScale: () => boxPx() / TEXT_SIZE,
       wide: isWide() || window.innerWidth >= 700,
       hideKeyboard: !isWide(),
       dark: () => !!surface?.dark,

@@ -181,7 +181,18 @@ function fontMenu(editor, anchor, opts) {
 }
 
 // Text without its own size shows at the default size from Settings.
-const sizeOf = (editor, base) => parseInt(editor.getAttributes('textStyle').fontSize || '', 10) || (typeof base === 'function' ? base() : base) || state.config?.text?.size || TEXT_SIZE;
+// `scale`: what one px of a size mark shows as. In a text box on a
+// handwritten page a mark is measured against TEXT_SIZE but drawn against the
+// box's own size, so there scale = box size / TEXT_SIZE (before v29.6 the
+// toolbar showed 18 there whatever the default).
+const val = (v) => (typeof v === 'function' ? v() : v);
+const sizeOf = (editor, base, scale = 1) => {
+  const mark = parseFloat(editor.getAttributes('textStyle').fontSize || '');
+  if (mark) return Math.round(mark * (val(scale) || 1));
+  return val(base) || state.config?.text?.size || TEXT_SIZE;
+};
+// A new size as shown, written as a mark.
+const sizeMark = (shown, scale = 1) => `${+(shown / (val(scale) || 1)).toFixed(2)}px`;
 
 export function mountFormatBar(bar, editor, opts = {}) {
   const compact = !!opts.compact;
@@ -458,8 +469,8 @@ export function mountNoteBars(tools, props, editor, opts = {}) {
         break;
       }
       case 'font': fontMenu(editor, b, opts); break;
-      case 'smaller': ch().setFontSize(`${Math.max(12, sizeOf(editor, opts.baseSize) - 2)}px`).run(); break;
-      case 'larger': ch().setFontSize(`${Math.min(48, sizeOf(editor, opts.baseSize) + 2)}px`).run(); break;
+      case 'smaller': ch().setFontSize(sizeMark(Math.max(12, sizeOf(editor, opts.baseSize, opts.sizeScale) - 2), opts.sizeScale)).run(); break;
+      case 'larger': ch().setFontSize(sizeMark(Math.min(48, sizeOf(editor, opts.baseSize, opts.sizeScale) + 2), opts.sizeScale)).run(); break;
       case 'bold': ch().toggleBold().run(); break;
       case 'italic': ch().toggleItalic().run(); break;
       case 'underline': ch().toggleUnderline().run(); break;
@@ -493,7 +504,7 @@ export function mountNoteBars(tools, props, editor, opts = {}) {
     const st = tools.querySelector('#fb-style');
     if (st) st.textContent = name;
     const sz = props.querySelector('#fb-size');
-    if (sz) sz.textContent = String(sizeOf(editor, opts.baseSize));
+    if (sz) sz.textContent = String(sizeOf(editor, opts.baseSize, opts.sizeScale));
     const fn = props.querySelector('#fb-font');
     if (fn) fn.textContent = FONTS.find((f) => f.id === (editor.getAttributes('textStyle').fontFamily || opts.noteFont?.() || NOTE_FONT))?.name || NOTE_FONT;
     const press = { bold: 'bold', italic: 'italic', underline: 'underline', strike: 'strike', bullets: 'bulletList', numbers: 'orderedList', checklist: 'taskList' };

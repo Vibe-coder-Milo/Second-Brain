@@ -1,4 +1,4 @@
-"""24 Nov 2026 (sb-v29.5): labels are all the same width; the brush copies
+"""24 Nov 2026 (sb-v29.5, v29.6): labels are all the same width; the brush copies
 formatting; one tap picks from the "/" menu even when the editor updates
 under the finger (the iPad hides its keyboard on that tap); Settings gives
 Title, Heading and Subheading their own size and colour (new notes only, on
@@ -80,6 +80,22 @@ def steps(page):
       await pg.render({ canvas: c, canvasContext: c.getContext('2d'), viewport: vp }).promise; const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
       let n = 0; for (let i = 0; i < d.length; i += 4) if (d[i] > 120 && d[i] - d[i + 1] > 70 && d[i] - d[i + 2] > 70) n++; return n; }""", __import__('base64').b64encode(data).decode())
     print('red pixels in the PDF:', red); assert red > 200, 'the exported title uses its colour'
+
+    # ---- 2b. A text box on a handwritten page shows the default size (14), not 18 (v29.6).
+    iid = J("""(async () => { const V = await import('./js/vault.js'); const M = await import('./js/model.js');
+      return (await V.saveNote(M.newNote({ kind: 'ink', title: 'Box', titleAuto: false, region: 'career', inbox: false, pages: [M.newPage({})] }))).id; })()""")
+    page.goto(BASE + f'#/note/{iid}'); page.wait_for_selector('.ink-page canvas.ink-main'); page.wait_for_timeout(600)
+    page.locator('#iv-tools [data-tool=text]').click(); page.wait_for_timeout(150)
+    if page.locator('.popover').count(): page.keyboard.press('Escape')
+    r = J("(() => { const r = document.querySelector('.ink-page').getBoundingClientRect(); return [r.left, r.top, r.width]; })()")
+    page.mouse.click(r[0] + r[2] * 0.2, r[1] + 120); page.wait_for_selector('.tb-edit .ProseMirror'); page.wait_for_timeout(300)
+    page.keyboard.type('Box words'); page.wait_for_timeout(200)
+    shown = J("document.querySelector('#fb-size')?.textContent"); print('text box size shown:', shown)
+    assert shown == '14', 'the text box toolbar shows the default size'
+    page.keyboard.press('Shift+Home'); page.wait_for_timeout(100)
+    page.locator('[data-act=larger]').click(); page.wait_for_timeout(200)
+    print('after +:', J("document.querySelector('#fb-size')?.textContent")); assert J("document.querySelector('#fb-size')?.textContent") == '16'
+    page.locator('.tb-done').click(); page.wait_for_timeout(600)
 
     # ---- 3. The brush: copy bold red 20 px onto other words.
     nid3 = J("""(async () => { const V = await import('./js/vault.js'); const M = await import('./js/model.js');
