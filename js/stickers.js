@@ -88,36 +88,65 @@ export function stickerSVG(def, { w, h } = {}) {
 
 // ---- Label tags --------------------------------------------------------------
 
+// Label names are measured and drawn in Overpass bold. On a handwritten page
+// they are drawn on a canvas, which doesn't make the browser load the font,
+// so it may still be missing (the iPad then measured and drew names in a
+// stand-in font, and the tags looked uneven). It is loaded here; once it
+// arrives the measurements start again and 'sb-labelfont' asks pages to redraw.
+const LABEL_FONT = '700 12.5px Overpass';
+let fontAsked = false;
+function labelFontReady() {
+  const fonts = typeof document !== 'undefined' ? document.fonts : null;
+  if (!fonts?.check) return true;
+  if (fonts.check(LABEL_FONT)) return true;
+  if (!fontAsked) {
+    fontAsked = true;
+    fonts.load(LABEL_FONT).then(() => {
+      widthKey = '';
+      window.dispatchEvent(new Event('sb-labelfont'));
+    }).catch(() => {});
+  }
+  return false;
+}
 let measureCtx;
 function textWidth(text) {
+  labelFontReady();
   if (!measureCtx) measureCtx = document.createElement('canvas').getContext('2d');
-  measureCtx.font = '700 12.5px Overpass, sans-serif';
+  measureCtx.font = `${LABEL_FONT}, sans-serif`;
   return measureCtx.measureText(text).width;
 }
 const escXml = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
-// Every label tag has the same width (24 Nov 2026: tags sized to their
-// names looked uneven side by side): wide enough for the longest of your
-// labels' names, between 92 and 140 units. A name that still doesn't fit
-// gets smaller letters (down to 9), then "…".
+// Every label tag has the same width and the same letter size (24 and 25 Nov
+// 2026: tags sized to their names looked uneven side by side). The width
+// fits the longest of your labels' names, between 92 and 140 units; if that
+// name is still too long, all names get the same smaller letters (down to 9).
+// A name that doesn't fit even then ends in "…".
 const LABEL_FS = 12.5;
+const ROOM = (vw) => vw - 5 - 18 - 6; // between the hole and the right edge
 let widthKey = '';
 let widthAll = 92;
-function labelWidth() {
+let fsAll = LABEL_FS;
+function labelLayout() {
   const names = (state.config?.labels || []).map((l) => l.name || '');
   const key = names.join('\u0001');
   if (key !== widthKey) {
     widthKey = key;
-    widthAll = Math.round(Math.min(140, Math.max(92, ...names.map((n) => textWidth(n) + 42))));
+    const widest = Math.max(0, ...names.map((n) => textWidth(n)));
+    widthAll = Math.round(Math.min(140, Math.max(92, widest + 42)));
+    fsAll = widest > ROOM(widthAll) ? Math.max(9, (LABEL_FS * ROOM(widthAll)) / widest) : LABEL_FS;
   }
-  return widthAll;
+  return { W0: widthAll, fs: fsAll };
 }
-// The name as it fits a tag `vw` units wide: its letter size and text.
+// The name as it fits a tag `vw` units wide: its letter size and text. Your
+// labels all share one letter size; a tag of another width (one stuck on a
+// page before) gets the same size when the name fits, smaller when not.
 export function labelText(name, vw) {
-  const room = vw - 5 - 18 - 6;
-  const w = textWidth(name);
-  if (w <= room) return { fs: LABEL_FS, text: name };
-  const fs = Math.max(9, (LABEL_FS * room) / w);
+  const { fs: shared } = labelLayout();
+  const room = ROOM(vw);
+  const w = (textWidth(name) * shared) / LABEL_FS;
+  if (w <= room + 0.5) return { fs: shared, text: name };
+  const fs = Math.max(9, (shared * room) / w);
   let text = name;
   while (text.length > 1 && (textWidth(text) * fs) / LABEL_FS > room) text = text.slice(0, -1);
   return { fs, text: text === name ? name : `${text.trimEnd()}…` };
@@ -125,7 +154,7 @@ export function labelText(name, vw) {
 export function labelDef(label) {
   const name = label?.name || 'Label';
   const color = label?.color || '#6B7A85';
-  const W0 = labelWidth();
+  const { W0 } = labelLayout();
   const right = W0 - 5;
   const { fs, text } = labelText(name, W0);
   const svg = `<path d="M12 3 H${right - 5} a5 5 0 0 1 5 5 V24 a5 5 0 0 1 -5 5 H12 L2 16 Z" fill="${color}" stroke="#FFFFFF" stroke-width="3" stroke-linejoin="round"/><circle cx="12" cy="16" r="2.6" fill="#FFFFFF"/><text x="${(18 + right) / 2}" y="${16 + fs * 0.36}" font-family="Overpass, sans-serif" font-size="${+fs.toFixed(2)}" font-weight="700" fill="#FFFFFF" text-anchor="middle">${escXml(text)}</text>`;

@@ -32,6 +32,21 @@ def steps(page):
     # A label stuck on a handwritten page before keeps its own shape (drawn from its own size).
     J("""import('./js/editor/inkdraw.js').then(D => { const c = document.createElement('canvas'); c.width = 300; c.height = 80; D.drawLabelTag(c.getContext('2d'), { name: 'Idea', color: '#8C67B0' }, { x: 0, y: 0, w: 78, h: 46 }); })""")
 
+    # Same letter size for every label (v29.8).
+    fss = J("""Promise.all([import('./js/stickers.js'), import('./js/vault.js')]).then(([S, V]) => { const W0 = Number(S.labelDef(V.state.config.labels[0]).vb.split(' ')[2]); return V.state.config.labels.map(l => S.labelText(l.name, W0).fs); })""")
+    print('label letter sizes:', fss); assert len(set(fss)) == 1
+    # Labels stuck on a page before (each as wide as its name) now draw at the shared width (v29.8).
+    widths = J("""(async () => { const V = await import('./js/vault.js'); const D = await import('./js/editor/inkdraw.js');
+      const page = { id: 'p_test', paper: 'blank', color: 'white', h: 400 };
+      const data = { strokes: [], objects: [
+        { id: 'o1', type: 'label', label: 'idea', x: 100, y: 60, w: 78, h: 46 },
+        { id: 'o2', type: 'label', label: 'important', x: 100, y: 200, w: 117, h: 46 }], tomb: [] };
+      const c = await D.renderPageCanvas(page, data, 1000); const x = c.getContext('2d');
+      const run = (y) => { const d = x.getImageData(0, y, 1000, 1).data; let first = -1, last = -1;
+        for (let i = 0; i < 1000; i++) { const r = d[i * 4], g = d[i * 4 + 1], b = d[i * 4 + 2]; if (Math.max(r, g, b) - Math.min(r, g, b) > 40) { if (first < 0) first = i; last = i; } } return last - first; };
+      return [run(60 + 30), run(200 + 30)]; })()""")
+    print('older page labels drawn:', widths); assert abs(widths[0] - widths[1]) <= 2, 'older labels on a page are one width too'
+
     # ---- 2. Settings: Title, Heading and Subheading sizes and colours.
     page.goto(BASE + '#/settings'); page.wait_for_selector('#s-text')
     page.locator('#s-text-h').scroll_into_view_if_needed()

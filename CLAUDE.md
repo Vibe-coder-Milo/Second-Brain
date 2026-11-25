@@ -84,7 +84,7 @@ through a private GitHub repo. Everything is encrypted on the device.
   - models: transformers and onnxruntime (`ort/`) with the model files;
   - OCR: tesseract.
 - **Service worker** (`sw.js`):
-  - Bump `VERSION` (`sb-vN`; currently `sb-v29.7`; small follow-ups can be `.1`, `.2` as the owner asked) on every release.
+  - Bump `VERSION` (`sb-vN`; currently `sb-v29.8`; small follow-ups can be `.1`, `.2` as the owner asked) on every release.
   - Add every new JS/CSS file to `SHELL`, or it won't work offline.
   - The app shows an update bar (`js/appupdate.js`).
 - **Views:** `js/views/*.js` export `mount(main, params, ctx)`, returning
@@ -757,6 +757,23 @@ size marks (relative to TEXT_SIZE) to what is shown; − and + step from it
      that can't take it leaves the brush on.
    `t6s`. Note: `t6s`'s Safari-click emulation must reset after one tap, or
    it swallows every later click in the test.
+
+### 25 Nov 2026, later (`sb-v29.8`)
+
+**"Labels same length when editing a text box, not when viewing."** Causes
+and fixes (stickers.js, inkdraw.js, ink.js, notes.css):
+- Overpass bold wasn't loaded when the live page canvas drew labels (a
+  canvas doesn't make the browser fetch a font), so names were measured and
+  drawn in a stand-in font. `labelFontReady()` loads it; on arrival the
+  measurements reset and `sb-labelfont` makes `InkSurface` redraw.
+- One letter size for all labels too (`labelLayout()`: width and size from
+  the longest name), not only one width.
+- Labels stuck on pages before keep height, place and turn but draw at the
+  shared width (`drawLabelTag`), tap area to match (`sameLabelWidth` on
+  `setPage`/`replaceData`; saved with the next change).
+- In a text box being edited labels are 1.25 em tall (`.tb-rich
+  .label-chip`), as drawn on the page, so they don't change size on Done.
+`t6s`.
 
 ## Ideas noted, not requested
 

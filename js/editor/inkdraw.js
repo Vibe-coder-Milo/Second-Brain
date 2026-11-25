@@ -319,16 +319,19 @@ export async function fileImageReady(fileId) {
 // ---- Objects ---------------------------------------------------------------------
 
 export function drawLabelTag(ctx, label, o) {
-  // The tag keeps the shape it was placed with (labels stuck on before
-  // 24 Nov 2026 were sized to their names); the name fits inside it.
+  // Every tag has the shared width and letter size (stickers.js), also tags
+  // stuck on before 25 Nov 2026 (sized to their names): they keep their
+  // height, place and turn, and take the shared width from the left.
   const vh = 32;
-  const vw = o.w && o.h ? (o.w / o.h) * vh : labelDef(label).w / 1.45;
+  const d = labelDef(label);
+  const vw = Number(d.vb.split(' ')[2]);
+  const w = o.h ? (o.h * d.w) / d.h : o.w; // as the tap area (sameLabelWidth in ink.js)
   const { fs, text } = labelText(label?.name || 'Label', vw);
   ctx.save();
-  ctx.translate(o.x + o.w / 2, o.y + o.h / 2);
+  ctx.translate(o.x + w / 2, o.y + o.h / 2);
   if (o.rot) ctx.rotate(o.rot);
-  ctx.translate(-o.w / 2, -o.h / 2);
-  ctx.scale(o.w / vw, o.h / vh);
+  ctx.translate(-w / 2, -o.h / 2);
+  ctx.scale(w / vw, o.h / vh);
   const right = vw - 5;
   const path = new Path2D(`M12 3 H${right - 5} a5 5 0 0 1 5 5 V24 a5 5 0 0 1 -5 5 H12 L2 16 Z`);
   ctx.lineJoin = 'round';

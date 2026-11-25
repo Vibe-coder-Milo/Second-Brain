@@ -168,6 +168,9 @@ export class InkSurface {
     this.view = { x: 0, y: 0, w: 1, h: 1 };
     this.bind();
     this.ro = new ResizeObserver(() => this.layout());
+    // Labels are drawn in Overpass bold; redraw once it has loaded (stickers.js).
+    this.onLabelFont = () => { if (this.page && this.data) this.renderMain(); };
+    window.addEventListener('sb-labelfont', this.onLabelFont);
     this.ro.observe(this.scroll);
     // Dark mode switched on or off: redraw in the new colours.
     this.offTheme = onTheme(() => { if (this.page) this.layout(); });
@@ -190,7 +193,7 @@ export class InkSurface {
     this.endEdit();
     this.clearSelection();
     this.page = page;
-    this.data = { ...data, strokes: [...(data.strokes || [])], objects: [...(data.objects || [])], tomb: [...(data.tomb || [])] };
+    this.data = { ...data, strokes: [...(data.strokes || [])], objects: sameLabelWidth(data.objects), tomb: [...(data.tomb || [])] };
     this.undoStack = [];
     this.redoStack = [];
     this.layout();
@@ -198,7 +201,7 @@ export class InkSurface {
   }
   replaceData(data) {
     // A newer copy arrived from another device while this page is open.
-    this.data = { ...data, strokes: [...(data.strokes || [])], objects: [...(data.objects || [])], tomb: [...(data.tomb || [])] };
+    this.data = { ...data, strokes: [...(data.strokes || [])], objects: sameLabelWidth(data.objects), tomb: [...(data.tomb || [])] };
     this.render();
   }
 
@@ -1716,12 +1719,25 @@ export class InkSurface {
   destroy() {
     cancelAnimationFrame(this.laserRaf);
     this.offTheme?.();
+    window.removeEventListener('sb-labelfont', this.onLabelFont);
     this.scroll.removeEventListener('scroll', this.onScroll);
     this.endEdit();
     this.ro.disconnect();
     cancelAnimationFrame(this.raf);
     this.host.innerHTML = '';
   }
+}
+
+// Labels stuck on a page are drawn at the shared label width (drawLabelTag);
+// their tap area follows (a label placed before 25 Nov 2026 was as wide as its name).
+function sameLabelWidth(objects = []) {
+  return objects.map((o) => {
+    if (o.type !== 'label' || !o.h) return o;
+    const l = (state.config?.labels || []).find((x) => x.id === o.label) || { name: o.label };
+    const d = labelDef(l);
+    const w = Math.round((o.h * d.w) / d.h);
+    return Math.abs(w - (o.w || 0)) < 1 ? o : { ...o, w };
+  });
 }
 
 function strip(o) {
