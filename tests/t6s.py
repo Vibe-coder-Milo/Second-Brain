@@ -210,6 +210,17 @@ def steps(page):
     page.wait_for_timeout(1100)
     tb = J(f"{TD}.getJSON().content.flatMap(b => b.content || []).filter(t => t.text).map(t => [t.text, (t.marks || []).map(m => m.type)])"); print('today after the brush:', tb)
     assert ['beta', ['bold']] in tb, 'Today has the brush'
+    # Today's bar hides and comes back: Bold still works once per tap (v29.10; before, its button
+    # handlers piled up and Bold ran twice, undoing itself).
+    page.locator('.today-page h1, .page-title').first.click(); page.wait_for_timeout(400)
+    assert J("document.querySelector('#t-bar').hidden")
+    page.locator('#t-rich .ProseMirror').click(); page.wait_for_timeout(400)
+    page.keyboard.press('End'); page.keyboard.type(' gamma'); page.keyboard.press('Shift+Control+ArrowLeft'); page.wait_for_timeout(200)
+    gb = lambda: J(f"(() => {{ const e = {TD}; const {{ from, to }} = e.state.selection; return [e.state.doc.textBetween(from, to), e.isActive('bold')]; }})()")
+    before = gb()
+    page.locator('#t-bar [data-act=bold]').click(); page.wait_for_timeout(200)
+    after = gb(); print('gamma bold before/after one tap:', before, after)
+    assert before[0] == after[0] == 'gamma' and after[1] != before[1], 'one tap on Bold changes it once, after the bar hid and came back'
 
     # ---- 4c. The brush on a whiteboard: bold big red text onto other text, a sticky's colour onto a sticky (v29.7).
     nbid = J("""(async () => { const V = await import('./js/vault.js'); const M = await import('./js/model.js'); return (await V.saveNotebook(M.newNotebook({ title: 'Boards', region: 'career' }))).id; })()""")

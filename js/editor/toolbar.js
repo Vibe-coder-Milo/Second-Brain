@@ -194,6 +194,110 @@ const sizeOf = (editor, base, scale = 1) => {
 // A new size as shown, written as a mark.
 const sizeMark = (shown, scale = 1) => `${+(shown / (val(scale) || 1)).toFixed(2)}px`;
 
+// ---- Both toolbars --------------------------------------------------------------
+// Today's note has one bar (mountFormatBar); typed notes and text boxes on
+// handwritten pages have two rows (mountNoteBars). They look different but do
+// the same things, so the buttons' actions, keeping them up to date, the brush
+// and taking it all down live here once. Before 26 Nov 2026 each had its own
+// copy (a change had to be made twice), and Today's never removed its button
+// handlers: after the bar hid and came back, Bold ran twice and undid itself.
+//   bars: the elements holding the buttons.
+//   kind.styles: what the Style menu offers; kind.inserts(): the Insert menu;
+//   kind.record: Insert also offers Record audio; kind.shortNames: "Bullets"
+//   rather than "Bulleted list" on the Style button;
+//   kind.extra(act, button): buttons only one toolbar has (true = handled);
+//   kind.refresh(): what only one toolbar shows; kind.onColour: after a colour.
+function wireBars(bars, editor, opts, kind) {
+  const inBars = (sel) => bars.map((bar) => bar.querySelector(sel)).find(Boolean) || null;
+  const painter = formatPainter(editor, (on, locked) => {
+    const pb = inBars('[data-act=paint]');
+    pb?.setAttribute('aria-pressed', on ? 'true' : 'false');
+    pb?.classList.toggle('locked', locked);
+  }, opts.brush || {});
+
+  const refresh = () => {
+    const lists = kind.shortNames ? ['Bullets', 'Numbers'] : ['Bulleted list', 'Numbered list'];
+    const name = STYLES.slice(0, 3).find((s) => s.active(editor))?.name
+      || (editor.isActive('bulletList') ? lists[0] : editor.isActive('orderedList') ? lists[1] : editor.isActive('taskList') ? 'Checklist' : editor.isActive('callout') ? 'Callout' : editor.isActive('blockquote') ? 'Quote' : 'Body');
+    const st = inBars('#fb-style');
+    if (st) st.textContent = name;
+    const sz = inBars('#fb-size');
+    if (sz) sz.textContent = String(sizeOf(editor, opts.baseSize, opts.sizeScale));
+    const press = { bold: 'bold', italic: 'italic', underline: 'underline', strike: 'strike', bullets: 'bulletList', numbers: 'orderedList', checklist: 'taskList' };
+    for (const [act, mark] of Object.entries(press)) for (const bar of bars) bar.querySelector(`[data-act=${act}]`)?.setAttribute('aria-pressed', editor.isActive(mark) ? 'true' : 'false');
+    kind.refresh?.();
+  };
+
+  const insertMenu = (b) => {
+    const items = kind.inserts().map((x) => (x.id === 'table' && editor.isActive('table') ? { ...x, name: 'Table options' } : x));
+    const p = popover(b, `${html`<div class="pop-head">Insert</div>${items.map((x) => html`<button type="button" class="pop-item" data-ins="${x.id}">${raw(icons[x.icon]({ size: 20 }))}${x.name}</button>`)}${kind.record ? html`<div class="pop-head">More</div><button type="button" class="pop-item" data-ins="record">${raw(icons.mic({ size: 20 }))}Record audio</button>` : ''}`}`, { label: 'Insert', width: 260 });
+    p.el.querySelectorAll('[data-ins]').forEach((x) => { x.onclick = () => { p.close(); if (x.dataset.ins === 'record') opts.onRecord?.(); else runAction(editor, x.dataset.ins, b, opts); }; });
+  };
+
+  const onDown = (e) => { if (e.target.closest('button')) e.preventDefault(); };
+  const onClick = async (e) => {
+    const b = e.target.closest('button');
+    if (!b) return;
+    const act = b.dataset.act;
+    if (kind.extra && (await kind.extra(act, b))) { refresh(); return; }
+    if (!act) return;
+    opts.ensureEditing?.();
+    if (act === 'paint') { painter.tap(); return; }
+    const ch = () => editor.chain().focus();
+    const sized = (step, lo, hi) => ch().setFontSize(sizeMark(Math.min(hi, Math.max(lo, sizeOf(editor, opts.baseSize, opts.sizeScale) + step)), opts.sizeScale)).run();
+    switch (act) {
+      case 'style': {
+        const p = popover(b, `${styleMenuHtml(editor, kind.styles)}<p class="hint" style="padding:6px 10px 8px">Type / anywhere to open this menu</p>`, { label: 'Text styles', width: 290 });
+        p.el.querySelectorAll('[data-style]').forEach((x) => { x.onclick = () => { p.close(); runAction(editor, x.dataset.style, b, opts); }; });
+        break;
+      }
+      case 'insert': insertMenu(b); break;
+      case 'font': fontMenu(editor, b, opts); break;
+      case 'smaller': sized(-1, 8, 72); break;
+      case 'larger': sized(1, 8, 72); break;
+      case 'bold': ch().toggleBold().run(); break;
+      case 'italic': ch().toggleItalic().run(); break;
+      case 'underline': ch().toggleUnderline().run(); break;
+      case 'strike': ch().toggleStrike().run(); break;
+      case 'colour': colourMenu(editor, b, { ...opts, onPicked: kind.onColour }); break;
+      case 'bullets': ch().toggleBulletList().run(); break;
+      case 'numbers': ch().toggleOrderedList().run(); break;
+      case 'checklist': ch().toggleTaskList().run(); break;
+      case 'indent': R.indent(editor, 1); break;
+      case 'outdent': R.indent(editor, -1); break;
+      case 'align': {
+        const order = ['left', 'center', 'right'];
+        const cur = order.find((a) => editor.isActive({ textAlign: a })) || 'left';
+        ch().setTextAlign(order[(order.indexOf(cur) + 1) % 3]).run();
+        break;
+      }
+      case 'undo': ch().undo().run(); break;
+      case 'redo': ch().redo().run(); break;
+      case 'hidekb': editor.commands.blur(); opts.onHideKeyboard?.(); break;
+      default: await runAction(editor, act, b, opts);
+    }
+    refresh();
+  };
+  for (const bar of bars) {
+    bar.addEventListener('pointerdown', onDown);
+    bar.addEventListener('click', onClick);
+    tooltips(bar);
+  }
+  editor.on('selectionUpdate', refresh);
+  editor.on('transaction', refresh);
+  refresh();
+  return {
+    refresh,
+    destroy() {
+      painter.destroy();
+      editor.off('selectionUpdate', refresh);
+      editor.off('transaction', refresh);
+      for (const bar of bars) { bar.removeEventListener('pointerdown', onDown); bar.removeEventListener('click', onClick); bar.innerHTML = ''; }
+    },
+  };
+}
+
+// Today's note: one bar (above the keyboard on a phone).
 export function mountFormatBar(bar, editor, opts = {}) {
   const compact = !!opts.compact;
   const B = (act, icon, label, extra = '') => html`<button type="button" class="fb" data-act="${act}" aria-label="${label}" ${raw(extra)}>${raw(icons[icon]({ size: 20 }))}</button>`;
@@ -216,80 +320,16 @@ export function mountFormatBar(bar, editor, opts = {}) {
     <span class="fb-sep"></span>
     ${B('undo', 'undo', 'Undo')}${B('redo', 'redo', 'Redo')}
     ${opts.hideKeyboard ? B('hidekb', 'keyboardDown', 'Hide keyboard') : ''}`}`;
-
-  bar.addEventListener('pointerdown', (e) => { if (e.target.closest('button')) e.preventDefault(); });
-  tooltips(bar);
-  bar.addEventListener('click', async (e) => {
-    const b = e.target.closest('[data-act]');
-    if (!b) return;
-    const act = b.dataset.act;
-    const ch = () => editor.chain().focus();
-    switch (act) {
-      case 'style': {
-        const items = [...STYLES, ...(compact ? [] : [EXTRA[0]])];
-        const p = popover(b, `${styleMenuHtml(editor, items)}<p class="hint" style="padding:6px 10px 8px">Type / anywhere to open this menu</p>`, { label: 'Text styles', width: 290 });
-        p.el.querySelectorAll('[data-style]').forEach((x) => { x.onclick = () => { p.close(); runAction(editor, x.dataset.style, b, opts); }; });
-        break;
-      }
-      case 'insert': {
-        const items = extras(opts).map((x) => (x.id === 'table' && editor.isActive('table') ? { ...x, name: 'Table options' } : x));
-        const p = popover(b, `${html`<div class="pop-head">Insert</div>${items.map((x) => html`<button type="button" class="pop-item" data-ins="${x.id}">${raw(icons[x.icon]({ size: 20 }))}${x.name}</button>`)}`}`, { label: 'Insert', width: 260 });
-        p.el.querySelectorAll('[data-ins]').forEach((x) => { x.onclick = () => { p.close(); runAction(editor, x.dataset.ins, b, opts); }; });
-        break;
-      }
-      case 'font': fontMenu(editor, b, opts); break;
-      case 'smaller': ch().setFontSize(`${Math.max(8, sizeOf(editor, opts.baseSize) - 1)}px`).run(); break;
-      case 'larger': ch().setFontSize(`${Math.min(72, sizeOf(editor, opts.baseSize) + 1)}px`).run(); break;
-      case 'bold': ch().toggleBold().run(); break;
-      case 'italic': ch().toggleItalic().run(); break;
-      case 'underline': ch().toggleUnderline().run(); break;
-      case 'strike': ch().toggleStrike().run(); break;
-      case 'paint': painter.tap(); return;
-      case 'colour': colourMenu(editor, b); break;
-      case 'bullets': ch().toggleBulletList().run(); break;
-      case 'numbers': ch().toggleOrderedList().run(); break;
-      case 'checklist': ch().toggleTaskList().run(); break;
-      case 'indent': R.indent(editor, 1); break;
-      case 'outdent': R.indent(editor, -1); break;
-      case 'align': {
-        const order = ['left', 'center', 'right'];
-        const cur = order.find((a) => editor.isActive({ textAlign: a })) || 'left';
-        ch().setTextAlign(order[(order.indexOf(cur) + 1) % 3]).run();
-        break;
-      }
-      case 'undo': ch().undo().run(); break;
-      case 'redo': ch().redo().run(); break;
-      case 'hidekb': editor.commands.blur(); opts.onHideKeyboard?.(); break;
-      default: await runAction(editor, act, b, opts);
-    }
-    refresh();
+  return wireBars([bar], editor, opts, {
+    styles: [...STYLES, ...(compact ? [] : [EXTRA[0]])],
+    inserts: () => extras(opts),
+    refresh() {
+      const col = bar.querySelector('#fb-col');
+      if (col) col.style.background = editor.getAttributes('textStyle').color || 'currentColor';
+      const ins = bar.querySelector('[data-act=insert] span');
+      if (ins) ins.textContent = editor.isActive('table') ? 'Table' : 'Insert';
+    },
   });
-
-  const refresh = () => {
-    const name = STYLES.slice(0, 3).find((s) => s.active(editor))?.name
-      || (editor.isActive('bulletList') ? 'Bulleted list' : editor.isActive('orderedList') ? 'Numbered list' : editor.isActive('taskList') ? 'Checklist' : editor.isActive('callout') ? 'Callout' : editor.isActive('blockquote') ? 'Quote' : 'Body');
-    const st = bar.querySelector('#fb-style');
-    if (st) st.textContent = name;
-    const sz = bar.querySelector('#fb-size');
-    if (sz) sz.textContent = String(sizeOf(editor, opts.baseSize));
-    const col = bar.querySelector('#fb-col');
-    if (col) col.style.background = editor.getAttributes('textStyle').color || 'currentColor';
-    const press = { bold: 'bold', italic: 'italic', underline: 'underline', strike: 'strike', bullets: 'bulletList', numbers: 'orderedList', checklist: 'taskList' };
-    for (const [act, mark] of Object.entries(press)) bar.querySelector(`[data-act=${act}]`)?.setAttribute('aria-pressed', editor.isActive(mark) ? 'true' : 'false');
-    const tb = bar.querySelector('[data-act=table]');
-    if (tb) tb.setAttribute('aria-label', editor.isActive('table') ? 'Table options' : 'Insert table');
-    const ins = bar.querySelector('[data-act=insert] span');
-    if (ins) ins.textContent = editor.isActive('table') ? 'Table' : 'Insert';
-  };
-  editor.on('selectionUpdate', refresh);
-  editor.on('transaction', refresh);
-  refresh();
-  const painter = formatPainter(editor, (on, locked) => {
-    const pb = bar.querySelector('[data-act=paint]');
-    pb?.setAttribute('aria-pressed', on ? 'true' : 'false');
-    pb?.classList.toggle('locked', locked);
-  });
-  return { refresh, destroy() { painter.destroy(); editor.off('selectionUpdate', refresh); editor.off('transaction', refresh); } };
 }
 
 // ---- Copy formatting (the brush) -------------------------------------------------
@@ -472,6 +512,7 @@ export function mountNoteBars(tools, props, editor, opts = {}) {
     <div class="tg">${T('paint', 'brush', 'Copy formatting: tap, then select words to give them the same look (double-tap to keep it on)', true)}${wide ? '' : html`${T('italic', 'italic', 'Italic', true)}${T('underline', 'underline', 'Underline', true)}`}${T('strike', 'strike', 'Strikethrough', true)}${wide ? '' : T('numbers', 'numbers', 'Numbered list', true)}${T('outdent', 'outdent', 'Indent less')}${T('indent', 'indent', 'Indent more')}${T('align', 'align', 'Alignment')}</div>
     ${opts.hideKeyboard ? html`<div class="tg">${T('hidekb', 'keyboardDown', 'Hide keyboard')}</div>` : ''}`}`;
   props.hidden = false;
+  let api = null;
   // Default, then the colours you used last, then the full picker.
   const drawQuick = () => {
     const box = props.querySelector('.colours');
@@ -481,104 +522,37 @@ export function mountNoteBars(tools, props, editor, opts = {}) {
     const shown = [...box.querySelectorAll('[data-tcol]')].map((x) => x.dataset.tcol).filter(Boolean);
     if (shown.length && want.every((c) => shown.includes(c))) return;
     box.innerHTML = `${html`<button type="button" class="ink-swatch" data-tcol="" style="--c:var(--ink)" aria-label="Default colour"></button>${want.map((c) => html`<button type="button" class="ink-swatch" data-tcol="${c}" style="--c:${dark ? opts.tone(c) : c}" aria-label="${colourName(c)}"></button>`)}<button type="button" class="ink-swatch more" data-act="colour" aria-label="More colours and highlight"></button>`}`;
-    refresh?.();
+    api?.refresh();
   };
-  let refresh = null;
-  drawQuick();
-  const painter = formatPainter(editor, (on, locked) => {
-    const pb = props.querySelector('[data-act=paint]');
-    pb?.setAttribute('aria-pressed', on ? 'true' : 'false');
-    pb?.classList.toggle('locked', locked);
-  }, opts.brush || {});
-
-  const onDown = (e) => { if (e.target.closest('button')) e.preventDefault(); };
-  const onClick = async (e) => {
-    const b = e.target.closest('button');
-    if (!b) return;
-    const act = b.dataset.act;
-    if (act === 'record') { opts.onRecord?.(); return; }
-    if (act === 'paint') { opts.ensureEditing?.(); painter.tap(); return; }
-    if (act === 'undo' || act === 'redo') { opts.ensureEditing?.(); editor.chain().focus()[act]().run(); refresh(); return; }
-    opts.ensureEditing?.();
-    const ch = () => editor.chain().focus();
-    if (b.dataset.tcol !== undefined) {
+  api = wireBars([tools, props], editor, opts, {
+    styles: STYLES,
+    shortNames: true,
+    inserts: () => extras(opts).filter((x) => x.id !== 'label'),
+    record: !wide && !!opts.onRecord,
+    onColour: drawQuick,
+    // Record audio, and the quick colour swatches.
+    async extra(act, b) {
+      if (act === 'record') { opts.onRecord?.(); return true; }
+      if (b.dataset.tcol === undefined) return false;
+      opts.ensureEditing?.();
       const c = b.dataset.tcol;
-      (c ? ch().setColor(c) : ch().unsetColor()).run();
+      (c ? editor.chain().focus().setColor(c) : editor.chain().focus().unsetColor()).run();
       if (c) rememberColour(c, 'text').then(drawQuick);
-      refresh();
-      return;
-    }
-    switch (act) {
-      case 'style': {
-        const p = popover(b, `${styleMenuHtml(editor, STYLES)}<p class="hint" style="padding:6px 10px 8px">Type / anywhere to open this menu</p>`, { label: 'Text styles', width: 290 });
-        p.el.querySelectorAll('[data-style]').forEach((x) => { x.onclick = () => { p.close(); runAction(editor, x.dataset.style, b, opts); }; });
-        break;
-      }
-      case 'insert': {
-        const items = extras(opts).filter((x) => x.id !== 'label').map((x) => (x.id === 'table' && editor.isActive('table') ? { ...x, name: 'Table options' } : x));
-        const rec = !wide && opts.onRecord;
-        const p = popover(b, `${html`<div class="pop-head">Insert</div>${items.map((x) => html`<button type="button" class="pop-item" data-ins="${x.id}">${raw(icons[x.icon]({ size: 20 }))}${x.name}</button>`)}${rec ? html`<div class="pop-head">More</div><button type="button" class="pop-item" data-ins="record">${raw(icons.mic({ size: 20 }))}Record audio</button>` : ''}`}`, { label: 'Insert', width: 260 });
-        p.el.querySelectorAll('[data-ins]').forEach((x) => { x.onclick = () => { p.close(); if (x.dataset.ins === 'record') opts.onRecord?.(); else runAction(editor, x.dataset.ins, b, opts); }; });
-        break;
-      }
-      case 'font': fontMenu(editor, b, opts); break;
-      case 'smaller': ch().setFontSize(sizeMark(Math.max(8, sizeOf(editor, opts.baseSize, opts.sizeScale) - 1), opts.sizeScale)).run(); break;
-      case 'larger': ch().setFontSize(sizeMark(Math.min(72, sizeOf(editor, opts.baseSize, opts.sizeScale) + 1), opts.sizeScale)).run(); break;
-      case 'bold': ch().toggleBold().run(); break;
-      case 'italic': ch().toggleItalic().run(); break;
-      case 'underline': ch().toggleUnderline().run(); break;
-      case 'strike': ch().toggleStrike().run(); break;
-      case 'colour': colourMenu(editor, b, { ...opts, onPicked: drawQuick }); break;
-      case 'bullets': ch().toggleBulletList().run(); break;
-      case 'numbers': ch().toggleOrderedList().run(); break;
-      case 'checklist': ch().toggleTaskList().run(); break;
-      case 'indent': R.indent(editor, 1); break;
-      case 'outdent': R.indent(editor, -1); break;
-      case 'align': {
-        const order = ['left', 'center', 'right'];
-        const cur = order.find((a) => editor.isActive({ textAlign: a })) || 'left';
-        ch().setTextAlign(order[(order.indexOf(cur) + 1) % 3]).run();
-        break;
-      }
-      case 'hidekb': editor.commands.blur(); opts.onHideKeyboard?.(); break;
-      default: if (act) await runAction(editor, act, b, opts);
-    }
-    refresh();
-  };
-  for (const bar of [tools, props]) {
-    bar.addEventListener('pointerdown', onDown);
-    bar.addEventListener('click', onClick);
-    tooltips(bar);
-  }
-
-  refresh = () => {
-    const name = STYLES.slice(0, 3).find((s) => s.active(editor))?.name
-      || (editor.isActive('bulletList') ? 'Bullets' : editor.isActive('orderedList') ? 'Numbers' : editor.isActive('taskList') ? 'Checklist' : editor.isActive('callout') ? 'Callout' : editor.isActive('blockquote') ? 'Quote' : 'Body');
-    const st = tools.querySelector('#fb-style');
-    if (st) st.textContent = name;
-    const sz = props.querySelector('#fb-size');
-    if (sz) sz.textContent = String(sizeOf(editor, opts.baseSize, opts.sizeScale));
-    const fn = props.querySelector('#fb-font');
-    if (fn) fn.textContent = FONTS.find((f) => f.id === (editor.getAttributes('textStyle').fontFamily || opts.noteFont?.() || NOTE_FONT))?.name || NOTE_FONT;
-    const press = { bold: 'bold', italic: 'italic', underline: 'underline', strike: 'strike', bullets: 'bulletList', numbers: 'orderedList', checklist: 'taskList' };
-    for (const [act, mark] of Object.entries(press)) for (const bar of [tools, props]) bar.querySelector(`[data-act=${act}]`)?.setAttribute('aria-pressed', editor.isActive(mark) ? 'true' : 'false');
-    const col = editor.getAttributes('textStyle').color || '';
-    props.querySelectorAll('[data-tcol]').forEach((x) => x.setAttribute('aria-pressed', x.dataset.tcol.toLowerCase() === col.toLowerCase() ? 'true' : 'false'));
-    const ins = tools.querySelector('[data-act=insert]');
-    if (ins) ins.setAttribute('aria-label', editor.isActive('table') ? 'Insert, or change this table' : 'Insert: table, image, sticker, post-it, due date, link');
-  };
-  editor.on('selectionUpdate', refresh);
-  editor.on('transaction', refresh);
-  refresh();
-  return {
-    refresh,
-    setRecording(on) { tools.querySelector('[data-act=record]')?.setAttribute('aria-pressed', on ? 'true' : 'false'); },
-    destroy() {
-      painter.destroy();
-      editor.off('selectionUpdate', refresh);
-      editor.off('transaction', refresh);
-      for (const bar of [tools, props]) { bar.removeEventListener('pointerdown', onDown); bar.removeEventListener('click', onClick); bar.innerHTML = ''; }
+      return true;
     },
+    refresh() {
+      const fn = props.querySelector('#fb-font');
+      if (fn) fn.textContent = FONTS.find((f) => f.id === (editor.getAttributes('textStyle').fontFamily || opts.noteFont?.() || NOTE_FONT))?.name || NOTE_FONT;
+      const col = editor.getAttributes('textStyle').color || '';
+      props.querySelectorAll('[data-tcol]').forEach((x) => x.setAttribute('aria-pressed', x.dataset.tcol.toLowerCase() === col.toLowerCase() ? 'true' : 'false'));
+      const ins = tools.querySelector('[data-act=insert]');
+      if (ins) ins.setAttribute('aria-label', editor.isActive('table') ? 'Insert, or change this table' : 'Insert: table, image, sticker, post-it, due date, link');
+    },
+  });
+  drawQuick();
+  return {
+    ...api,
+    setRecording(on) { tools.querySelector('[data-act=record]')?.setAttribute('aria-pressed', on ? 'true' : 'false'); },
   };
 }
 

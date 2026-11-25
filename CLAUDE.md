@@ -84,7 +84,7 @@ through a private GitHub repo. Everything is encrypted on the device.
   - models: transformers and onnxruntime (`ort/`) with the model files;
   - OCR: tesseract.
 - **Service worker** (`sw.js`):
-  - Bump `VERSION` (`sb-vN`; currently `sb-v29.9`; small follow-ups can be `.1`, `.2` as the owner asked) on every release.
+  - Bump `VERSION` (`sb-vN`; currently `sb-v29.10`; `appupdate.newerFirst` sorts 29.10 after 29.9; small follow-ups can be `.1`, `.2` as the owner asked) on every release.
   - Add every new JS/CSS file to `SHELL`, or it won't work offline.
   - The app shows an update bar (`js/appupdate.js`).
 - **Views:** `js/views/*.js` export `mount(main, params, ctx)`, returning
@@ -803,8 +803,19 @@ Fixed from the review (`t6s` covers each):
 Still open from the review (owner not asked yet): settings merge per group
 (two devices editing different labels: one list wins); short passphrases
 accepted; a crafted Claude reply can add suggested links to sealed notes;
-replay of older encrypted records by someone with the token; the two
-formatting-toolbar copies in toolbar.js.
+replay of older encrypted records by someone with the token.
+
+### 26 Nov 2026, later (`sb-v29.10`)
+
+**One toolbar core** (`wireBars` in toolbar.js): Today's bar
+(`mountFormatBar`) and the two rows of typed notes and text boxes
+(`mountNoteBars`) keep their own layouts but share the button actions,
+refreshing, the brush and teardown. `kind` gives what differs (style list,
+Insert items, Record, short list names, quick colour swatches via `extra`,
+extra refresh). Found while merging: Today's bar never removed its handlers,
+and `today.js` remounts it on the same `#t-bar` each time the note gets
+focus, so after one hide and return every toggle (Bold...) ran twice and
+undid itself; `destroy` now removes them. `t6s`.
 
 ## Ideas noted, not requested
 

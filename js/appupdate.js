@@ -52,11 +52,15 @@ export async function checkForUpdate() {
   return !!(reg.installing || reg.waiting) || waitingUpdate;
 }
 
+// "29.10" is newer than "29.9": compare the numbers on each side of the dot.
+const parts = (v) => v.split('.').map(Number);
+const newerFirst = (a, b) => { const [a1, a2 = 0] = parts(a); const [b1, b2 = 0] = parts(b); return b1 - a1 || b2 - a2; };
+
 // The version this device is running, from the service worker's cache name.
 export async function appVersion() {
   try {
     const keys = await caches.keys();
-    const v = keys.map((k) => /^sb-v(\d+(?:\.\d+)?)$/.exec(k)).filter(Boolean).map((m) => m[1]).sort((a, b) => Number(b) - Number(a))[0];
+    const v = keys.map((k) => /^sb-v(\d+(?:\.\d+)?)$/.exec(k)).filter(Boolean).map((m) => m[1]).sort(newerFirst)[0];
     if (v) return `Version ${v}`;
   } catch { /* no caches here */ }
   try {
