@@ -183,9 +183,22 @@ def steps(page):
     blk = J(f"{ED}.getJSON().content.find(b => (b.content || []).some(t => (t.text || '').includes('Heading by slash')))"); print('after one tap:', blk)
     assert blk['type'] == 'heading' and blk['attrs']['level'] == 2 and blk['content'][0]['text'] == 'Heading by slash', 'one tap is enough'
     assert not page.locator('.popover').count()
+    # A menu the pick opens takes the very next tap (v29.9: only that tap's own click is dropped).
+    page.keyboard.press('End'); page.keyboard.press('Enter'); page.keyboard.type('/label'); page.wait_for_selector('.popover .style-menu [data-style=label]')
+    page.locator('.popover [data-style=label]').tap(); page.wait_for_timeout(120)
+    page.wait_for_selector('.popover [data-label], .popover [data-l]', timeout=3000)
+    page.locator('.popover [data-label], .popover [data-l]').first.tap(); page.wait_for_timeout(400)
+    chips = J(f"(() => {{ let n = 0; {ED}.state.doc.descendants(x => {{ if (x.type.name === 'labelChip') n++; }}); return n; }})()"); print('label chips after a quick second tap:', chips)
+    assert chips >= 1, 'the quick tap on the label picker counted'
+    # The brush left on in a typed note doesn't come on by itself in Today (v29.9).
+    page.locator('[data-act=paint]').first.click(); page.wait_for_timeout(100)
+    assert J("document.querySelector('[data-act=paint]').getAttribute('aria-pressed')") == 'true'
 
     # ---- 4b. The brush on Today's note (v29.7).
     page.goto(BASE + '#/today'); page.wait_for_selector('#t-rich .ProseMirror'); page.wait_for_timeout(400)
+    page.locator('#t-rich .ProseMirror').click(); page.wait_for_timeout(300)
+    assert J("document.querySelector('#t-bar [data-act=paint]').getAttribute('aria-pressed')") == 'false', 'the brush did not follow into Today'
+    page.keyboard.press('Escape'); page.wait_for_timeout(200)
     TD = "document.querySelector('#t-rich .ProseMirror').editor"
     page.locator('#t-rich .ProseMirror').click(); page.wait_for_timeout(300)
     page.keyboard.type('Alpha beta'); page.wait_for_timeout(200)
@@ -228,6 +241,31 @@ def steps(page):
     tap('.bo-sticky', 1)
     bgs = J("[...document.querySelectorAll('.bo-sticky')].map(e => getComputedStyle(e).backgroundColor)"); print('stickies:', bgs)
     assert bgs[0] == bgs[1], 'the other sticky took the colour'
+
+    # ---- 6. A changed passphrase lock file from GitHub is held until it proves itself (v29.9).
+    PASS2 = 'a brand new passphrase here'
+    r6 = J("""async ([pass, pass2]) => { const V = await import('./js/vault.js'); const C = await import('./js/crypto.js'); const out = {};
+      const good = V.state.keyring;
+      // A fake: a different key behind a passphrase someone else chose.
+      const fake = await C.newWrappedKey(pass2);
+      await V.remoteKeyring({ ...good, main: fake.wrapped });
+      V.state.keys.m = null; V.state.status = 'locked';
+      try { await V.unlock(pass2); out.fakeOpened = true; } catch { out.fakeOpened = false; }
+      await V.unlock(pass); out.realStillWorks = V.state.status === 'unlocked';
+      out.fakeDropped = !(await (await import('./js/db.js')).meta.get('keyringPending'));
+      // A genuine change on another device: the same key behind a new passphrase.
+      const main2 = await C.rewrapKey(V.state.keyring.main, pass, pass2);
+      await V.remoteKeyring({ ...V.state.keyring, main: main2 });
+      V.state.keys.m = null; V.state.status = 'locked';
+      await V.unlock(pass2); out.newWorks = V.state.status === 'unlocked';
+      V.state.keys.m = null; V.state.status = 'locked';
+      try { await V.unlock(pass); out.oldAfter = true; } catch { out.oldAfter = false; }
+      await V.unlock(pass2);
+      // A lock file with a weak work factor is refused.
+      try { await C.unwrapKey({ ...V.state.keyring.main, iterations: 1 }, pass2); out.weak = 'opened'; } catch (e) { out.weak = e.code; }
+      return out; }""", [PASS, PASS2])
+    print('lock file checks:', r6)
+    assert r6 == {'fakeOpened': False, 'realStillWorks': True, 'fakeDropped': True, 'newWorks': True, 'oldAfter': False, 'weak': 'WRONG_PASSPHRASE'}
 
     # ---- 5. Settings changed on two devices: merged setting by setting.
     out = J("""import('./js/model.js').then(M => {

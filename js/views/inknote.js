@@ -1583,6 +1583,8 @@ export function mount(el, params, ctx) {
       surface?.endEdit();
       flush().then(() => discardIfEmpty());
       fmt?.destroy();
+      // A brush held for the next text box doesn't follow you out of the note.
+      import('../editor/toolbar.js').then((T) => T.dropHeldBrush()).catch(() => {});
       stack?.destroy();
       stack = null;
       surface?.destroy();

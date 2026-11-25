@@ -32,7 +32,15 @@ async function wrapRaw(raw, passphrase) {
 }
 
 async function unwrapRaw(wrapped, passphrase) {
-  const kek = await deriveKek(passphrase, b64ToBytes(wrapped.salt), wrapped.iterations);
+  // The work factor comes from the lock file, which travels through GitHub:
+  // refuse one weaker than the app has ever used, or absurdly slow.
+  const it = Number(wrapped?.iterations);
+  if (!(it >= KDF_ITERATIONS && it <= 10 * KDF_ITERATIONS)) {
+    const e = new Error('That passphrase doesn’t match.');
+    e.code = 'WRONG_PASSPHRASE';
+    throw e;
+  }
+  const kek = await deriveKek(passphrase, b64ToBytes(wrapped.salt), it);
   try {
     return new Uint8Array(await subtle.decrypt({ name: 'AES-GCM', iv: b64ToBytes(wrapped.iv) }, kek, b64ToBytes(wrapped.ct)));
   } catch {

@@ -260,7 +260,8 @@ export function mount(el, params, ctx) {
     if (!editor || bar) return;
     b.hidden = false;
     document.body.classList.add('editing');
-    bar = T.mountFormatBar(b, editor, { compact: false, hideKeyboard: true, onHideKeyboard: hideBar });
+    // The size box shows the day's note's size (from the default when it was made).
+    bar = T.mountFormatBar(b, editor, { compact: false, hideKeyboard: true, onHideKeyboard: hideBar, baseSize: () => textFor(dailyNote(day), state.config).size });
     suggest = T.attachSuggest(editor, {});
     unfloat = T.floatBar(b);
   }

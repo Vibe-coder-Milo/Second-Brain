@@ -238,8 +238,8 @@ export function mountFormatBar(bar, editor, opts = {}) {
         break;
       }
       case 'font': fontMenu(editor, b, opts); break;
-      case 'smaller': ch().setFontSize(`${Math.max(8, sizeOf(editor) - 1)}px`).run(); break;
-      case 'larger': ch().setFontSize(`${Math.min(72, sizeOf(editor) + 1)}px`).run(); break;
+      case 'smaller': ch().setFontSize(`${Math.max(8, sizeOf(editor, opts.baseSize) - 1)}px`).run(); break;
+      case 'larger': ch().setFontSize(`${Math.min(72, sizeOf(editor, opts.baseSize) + 1)}px`).run(); break;
       case 'bold': ch().toggleBold().run(); break;
       case 'italic': ch().toggleItalic().run(); break;
       case 'underline': ch().toggleUnderline().run(); break;
@@ -271,7 +271,7 @@ export function mountFormatBar(bar, editor, opts = {}) {
     const st = bar.querySelector('#fb-style');
     if (st) st.textContent = name;
     const sz = bar.querySelector('#fb-size');
-    if (sz) sz.textContent = String(sizeOf(editor));
+    if (sz) sz.textContent = String(sizeOf(editor, opts.baseSize));
     const col = bar.querySelector('#fb-col');
     if (col) col.style.background = editor.getAttributes('textStyle').color || 'currentColor';
     const press = { bold: 'bold', italic: 'italic', underline: 'underline', strike: 'strike', bullets: 'bulletList', numbers: 'orderedList', checklist: 'taskList' };
@@ -346,12 +346,15 @@ function paintLook(editor, look, range = null) {
   return true;
 }
 
-// The look picked up stays "held" for a short while after its editor closes,
-// so the brush carries across: from one text box on a handwritten page to the
-// next one you tap (the whole box takes the look), or from a typed note to
-// Today's note or a text box. Tapping the brush again, or 30 s, drops it.
+// Text boxes on a handwritten page: the look picked up in one box stays
+// "held" for a short while after the box closes, so tapping another box gives
+// it the look (the whole box). Only text boxes hold and take a look: before
+// 26 Nov 2026 any typed note or Today opened soon after came up with the brush
+// on, and words selected there (even to copy them) were reformatted. Tapping
+// the brush again, 15 s, or leaving the note drops it.
 let held = null; // { look, locked, until }
-const HOLD_MS = 30000;
+const HOLD_MS = 15000;
+export const dropHeldBrush = () => { held = null; };
 
 // Brush state for one editor; `onChange(on, locked)` updates the button.
 // opts.boxLook() / opts.applyBox(look): a text box's own font, colour and
@@ -368,17 +371,20 @@ export function formatPainter(editor, onChange, opts = {}) {
   const set = (l, lock = false) => {
     look = l;
     locked = !!l && lock;
-    held = l ? { look: l, locked, until: Date.now() + HOLD_MS } : null;
+    if (opts.whole) held = l ? { look: l, locked, until: Date.now() + HOLD_MS } : null;
     dom()?.classList.toggle('painting', !!l);
     onChange?.(!!l, locked);
   };
+  // `range`: the whole box (a box tapped while the brush is held). Only then
+  // does the box itself take the font, colour and size; brushing some words
+  // changes just those words.
   const paint = (range) => {
     paintLook(editor, look, range);
-    if (look.box && opts.applyBox) opts.applyBox(look.box);
+    if (range && look.box && opts.applyBox) opts.applyBox(look.box);
   };
   const tryPaint = () => {
     clearTimeout(timer);
-    if (!look || pointer || !dom()) return;
+    if (!look || pointer || !dom() || !editor.isEditable) return;
     const { from, to, empty } = editor.state.selection;
     if (empty || (from === look.at[0] && to === look.at[1])) return;
     paint();
@@ -400,18 +406,15 @@ export function formatPainter(editor, onChange, opts = {}) {
   document.addEventListener('pointerup', onUp, true);
   document.addEventListener('pointercancel', onUp, true);
   document.addEventListener('keydown', onKey);
-  // A look held from another editor: a text box takes it whole at once; other
-  // editors keep the brush on for the next words you select.
-  const carried = held && held.until > Date.now() ? held : null;
+  // A look held from another text box: this box takes it whole at once.
+  const carried = opts.whole && held && held.until > Date.now() ? held : null;
   if (carried) {
     setTimeout(() => {
       if (!dom() || held !== carried) return;
       look = { ...carried.look, at: [-1, -1] };
-      if (opts.whole) {
-        paint({ from: 0, to: editor.state.doc.content.size });
-        set(carried.locked ? look : null, carried.locked);
-        toast(carried.locked ? 'Formatted. The brush is still on.' : 'Formatted.');
-      } else set(look, carried.locked);
+      paint({ from: 0, to: editor.state.doc.content.size });
+      set(carried.locked ? look : null, carried.locked);
+      toast(carried.locked ? 'Formatted. The brush is still on.' : 'Formatted.');
     }, 0);
   }
   let lastTap = 0;
@@ -598,11 +601,17 @@ export function pinTop(elm) {
 
 // After a pick made when the finger lifts, the browser still sends a click to
 // whatever is under it now (the note, once the menu is gone): drop that one.
-function swallowClick() {
-  const stop = (e) => { e.stopPropagation(); e.preventDefault(); off(); };
+// Only the click from that same tap (same spot, within 400 ms): a new tap
+// soon after, say on a menu the pick opened, must still work.
+function swallowClick(x, y) {
+  const stop = (e) => {
+    off();
+    if (Math.hypot(e.clientX - x, e.clientY - y) > 24) return;
+    e.stopPropagation(); e.preventDefault();
+  };
   const off = () => { document.removeEventListener('click', stop, true); clearTimeout(t); };
   document.addEventListener('click', stop, true);
-  const t = setTimeout(off, 700);
+  const t = setTimeout(off, 400);
 }
 
 export function attachSuggest(editor, opts = {}) {
@@ -679,11 +688,11 @@ export function attachSuggest(editor, opts = {}) {
       const d = down;
       down = null;
       if (!d || Math.hypot(e.clientX - d.x, e.clientY - d.y) > 12) return;
-      const i = pickIndex(document.elementFromPoint(e.clientX, e.clientY)) ?? -1;
+      const i = pickIndex(document.elementFromPoint(e.clientX, e.clientY));
       const at = i >= 0 ? i : d.i;
       if (at < 0) return;
       e.preventDefault();
-      swallowClick();
+      swallowClick(e.clientX, e.clientY);
       choose(at);
     });
     el.addEventListener('click', (e) => { const i = pickIndex(e.target); if (i >= 0) choose(i); });

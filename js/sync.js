@@ -4,7 +4,7 @@
 // Each sync is one commit, so the repo history doubles as version history.
 
 import { meta, records, files } from './db.js';
-import { state, emit, applyRemoteRecord, forgetNote, decryptEnv, saveNote, saveNotebook, CONFIG_ID, replaceConfig, forgetPageCache, decodePageBytes, encodePageBytes } from './vault.js';
+import { state, emit, applyRemoteRecord, forgetNote, decryptEnv, saveNote, saveNotebook, CONFIG_ID, replaceConfig, remoteKeyring as takeRemoteKeyring, forgetPageCache, decodePageBytes, encodePageBytes } from './vault.js';
 import * as C from './crypto.js';
 import { textToB64, b64ToText, bytesToB64, b64ToBytes, debounce } from './util.js';
 // (bytesToB64 / b64ToBytes carry encrypted file payloads.)
@@ -267,11 +267,10 @@ async function attemptSync(gh) {
       throw err;
     }
     if (!keyringDirty) {
-      // Another device changed a passphrase or set up sealed notes.
-      state.keyring = rk;
-      await meta.set('keyring', rk);
+      // Another device changed a passphrase or set up sealed notes. A new
+      // passphrase isn't trusted until it opens this vault (vault.remoteKeyring).
+      await takeRemoteKeyring(rk);
       await meta.set('keyringSha', remoteKeyring.sha);
-      emit({ type: 'sealed' });
     }
   }
   let pushKeyring = keyringDirty || !remoteKeyring;

@@ -145,15 +145,57 @@ function requestPersistence() {
 }
 
 export async function unlock(passphrase) {
-  state.keys.m = await C.unwrapKey(state.keyring.main, passphrase);
+  state.keys.m = await keyFromPassphrase(passphrase);
   await opened();
+}
+
+// A passphrase lock file that came from GitHub with a different passphrase
+// (changed on another device) waits here until it is proven: it must unlock
+// with the passphrase typed AND open this vault's own settings. Before
+// 26 Nov 2026 it replaced this device's at once, so someone holding the
+// GitHub token could swap in a fake one and lock every device out.
+async function keyFromPassphrase(passphrase) {
+  const pending = await meta.get('keyringPending');
+  if (pending?.main && pending.vaultId === state.keyring.vaultId) {
+    let key = null;
+    try { key = await C.unwrapKey(pending.main, passphrase); } catch { /* not the new passphrase: try this device's */ }
+    if (key) {
+      if (await opensVault(key)) {
+        state.keyring = { ...state.keyring, ...pending };
+        await meta.set('keyring', state.keyring);
+        await meta.del('keyringPending');
+        return key;
+      }
+      await meta.del('keyringPending'); // it opens, but not this vault: a fake, drop it
+    }
+  }
+  return C.unwrapKey(state.keyring.main, passphrase);
+}
+// Does this key open this vault's settings? (A brand-new vault has none yet.)
+async function opensVault(key) {
+  const cfg = await records.get(CONFIG_ID);
+  if (!cfg?.env || cfg.deleted) return true;
+  try { await C.decryptJSON(key, CONFIG_ID, cfg.env); return true; } catch { return false; }
+}
+// Sync: another device's lock file. A new main passphrase waits (see
+// keyFromPassphrase); sealed notes set up elsewhere are taken at once, and the
+// sealed lock this device had is kept in case the new one doesn't open.
+export async function remoteKeyring(rk) {
+  const cur = state.keyring;
+  const sameMain = JSON.stringify(rk.main) === JSON.stringify(cur.main);
+  if (!sameMain) await meta.set('keyringPending', { vaultId: rk.vaultId, main: rk.main, updatedAt: rk.updatedAt });
+  if (JSON.stringify(rk.sealed || null) !== JSON.stringify(cur.sealed || null) && rk.sealed) {
+    if (cur.sealed) await meta.set('sealedPrev', cur.sealed);
+    state.keyring = { ...cur, sealed: rk.sealed };
+    await meta.set('keyring', state.keyring);
+  }
+  emit({ type: 'sealed' });
 }
 
 // Unlock with a data key from elsewhere (Touch ID / Face ID). It must open
 // this vault's settings before it's used.
 export async function unlockWithKey(key) {
-  const cfg = await records.get(CONFIG_ID);
-  if (cfg?.env && !cfg.deleted) await C.decryptJSON(key, CONFIG_ID, cfg.env);
+  if (!(await opensVault(key))) throw new Error('That didn’t match. Use your passphrase.');
   state.keys.m = key;
   await opened();
 }
@@ -646,6 +688,22 @@ export function revokeFileURLs() {
 
 // ---- Sealed notes ----------------------------------------------------------
 
+// The sealed key: from the sealed lock file, or, if that doesn't open with
+// this passphrase (a lock file from GitHub that may be fake), from the one
+// this device had before (see remoteKeyring).
+async function sealedKey(passphrase) {
+  try { return await C.unwrapKey(state.keyring.sealed, passphrase); } catch (e) {
+    const prev = await meta.get('sealedPrev');
+    if (!prev) throw e;
+    const key = await C.unwrapKey(prev, passphrase);
+    state.keyring = { ...state.keyring, sealed: prev };
+    await meta.set('keyring', state.keyring);
+    await meta.set('keyringDirty', true); // put the working one back on GitHub
+    await meta.del('sealedPrev');
+    return key;
+  }
+}
+
 export const sealedState = () => (!state.keyring?.sealed ? 'none' : state.keys.s ? 'open' : 'locked');
 
 export async function setupSealed(passphrase) {
@@ -660,7 +718,7 @@ export async function setupSealed(passphrase) {
 
 export async function unlockSealed(passphrase) {
   if (!state.keyring?.sealed) throw new Error('Sealed notes aren’t set up yet.');
-  state.keys.s = await C.unwrapKey(state.keyring.sealed, passphrase);
+  state.keys.s = await sealedKey(passphrase);
   for (const r of await records.all()) {
     if (r.deleted || r.env?.k !== 's') continue;
     try { place(r.id, await C.decryptJSON(state.keys.s, r.id, r.env)); } catch { /* skip */ }
@@ -702,10 +760,9 @@ export async function restoreBackup(text, passphrase) {
   let data;
   try { data = JSON.parse(text); } catch { throw new Error('That file isn’t a Second brain backup.'); }
   if (data?.format !== 'second-brain-backup' || !data.keyring?.main) throw new Error('That file isn’t a Second brain backup.');
-  await C.unwrapKey(data.keyring.main, passphrase); // verify before writing anything
+  await C.unwrapKey(data.keyring.main, passphrase); // verify before writing anything (adoptKeyring checks again)
   await records.putMany(data.records.map((r) => ({ id: r.id, env: r.env, rev: 1, dirty: true, deleted: false, remoteSha: null })));
   await files.putMany(data.files.map((f) => ({ id: f.id, k: f.k, type: f.type, data: b64ToBytes(f.data), rev: 1, dirty: true, deleted: false, remoteSha: null })));
-  await meta.set('keyringDirty', true);
   await adoptKeyring(data.keyring, passphrase);
   await meta.set('keyringDirty', true);
 }

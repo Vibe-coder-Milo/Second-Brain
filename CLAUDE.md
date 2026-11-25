@@ -84,7 +84,7 @@ through a private GitHub repo. Everything is encrypted on the device.
   - models: transformers and onnxruntime (`ort/`) with the model files;
   - OCR: tesseract.
 - **Service worker** (`sw.js`):
-  - Bump `VERSION` (`sb-vN`; currently `sb-v29.8`; small follow-ups can be `.1`, `.2` as the owner asked) on every release.
+  - Bump `VERSION` (`sb-vN`; currently `sb-v29.9`; small follow-ups can be `.1`, `.2` as the owner asked) on every release.
   - Add every new JS/CSS file to `SHELL`, or it won't work offline.
   - The app shows an update bar (`js/appupdate.js`).
 - **Views:** `js/views/*.js` export `mount(main, params, ctx)`, returning
@@ -774,6 +774,37 @@ and fixes (stickers.js, inkdraw.js, ink.js, notes.css):
 - In a text box being edited labels are 1.25 em tall (`.tb-rich
   .label-chip`), as drawn on the page, so they don't change size on Done.
 `t6s`.
+
+### 26 Nov 2026 (`sb-v29.9`, after a review the owner asked for)
+
+Fixed from the review (`t6s` covers each):
+1. **Brush only carries between text boxes**: `held` is set and taken only
+   by painters with `opts.whole` (text boxes), for 15 s, dropped when the
+   handwritten note closes (`dropHeldBrush`). Before, a typed note or Today
+   opened soon after came up with the brush on and reformatted words
+   selected there. `tryPaint` also skips a read-only editor.
+2. **Brushing words in a text box changes only those words**: the box's own
+   font/colour/size (`applyBox`) only on a whole-box paint.
+3. **Whiteboard brush** only reaches text, sticky, shape, arrow, stroke.
+4. **`swallowClick(x, y)`** drops only the click of the same tap (24 px,
+   400 ms): a menu the "/" pick opened takes the next tap.
+5. Today's size box shows the day's note size (`baseSize` from `textFor`).
+6. Typed-note label chips redraw on `sb-labelfont`.
+7. **Passphrase lock file from GitHub** (`vault.remoteKeyring`, called by
+   sync): a new main wrap waits in meta `keyringPending` and is adopted only
+   when a passphrase unlock opens it AND it decrypts this vault's settings
+   (`keyFromPassphrase`, `opensVault`); a wrap that opens but isn't this
+   vault's is dropped. Sealed wraps from elsewhere are taken, the previous
+   one kept in `sealedPrev` as a fallback in `unlockSealed`. Before, someone
+   with the GitHub token could swap the lock file and lock every device out.
+   Touch ID unlock is unaffected (it holds the key itself); the pending one
+   is tried at the next passphrase unlock. `unwrapRaw` refuses a work factor
+   below 600,000 or above 6,000,000.
+Still open from the review (owner not asked yet): settings merge per group
+(two devices editing different labels: one list wins); short passphrases
+accepted; a crafted Claude reply can add suggested links to sealed notes;
+replay of older encrypted records by someone with the token; the two
+formatting-toolbar copies in toolbar.js.
 
 ## Ideas noted, not requested
 

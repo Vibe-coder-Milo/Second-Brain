@@ -192,7 +192,15 @@ const LabelChip = Node.create({
         dom.dataset.label = n.attrs.label;
       };
       paint(node);
-      return { dom, update(n) { if (n.type.name !== 'labelChip') return false; paint(n); return true; } };
+      // Redrawn once the label font has loaded, so every chip matches (stickers.js).
+      let cur = node;
+      const again = () => paint(cur);
+      window.addEventListener('sb-labelfont', again);
+      return {
+        dom,
+        update(n) { if (n.type.name !== 'labelChip') return false; cur = n; paint(n); return true; },
+        destroy() { window.removeEventListener('sb-labelfont', again); },
+      };
     };
   },
 });

@@ -18,7 +18,7 @@ import { appVersion, checkForUpdate } from '../appupdate.js';
 
 // Default text: font, then size and colour for body text and for Title,
 // Heading and Subheading (synced to every device; only for notes made from now on).
-const colourName = (c) => TEXT_DEFAULT_COLORS.find(([, x]) => x === c)?.[0] || 'Usual ink';
+const textColourName = (c) => TEXT_DEFAULT_COLORS.find(([, x]) => x === c)?.[0] || 'Usual ink';
 function textPrefsHtml() {
   const t = state.config.text || {};
   const size = t.size || TEXT_SIZE;
@@ -46,7 +46,7 @@ function textPrefsHtml() {
           <option value="" ${!own ? raw('selected') : ''}>Usual (${headSize({ size }, lv)})</option>
           ${HEAD_SIZES.map((n) => html`<option value="${n}" ${own === n ? raw('selected') : ''}>${n}</option>`)}
         </select>
-        <button type="button" class="btn btn-sm head-col" data-head-colour="${lv}" aria-label="${HEAD_NAMES[lv]} colour: ${col ? colourName(col) : 'same as body text'}"><span class="swatch ${col ? '' : 'usual'}" style="${col ? `background:${col}` : ''}" aria-hidden="true"></span>${col ? colourName(col) : 'Same as body'}</button></div>`;
+        <button type="button" class="btn btn-sm head-col" data-head-colour="${lv}" aria-label="${HEAD_NAMES[lv]} colour: ${col ? textColourName(col) : 'same as body text'}"><span class="swatch ${col ? '' : 'usual'}" style="${col ? `background:${col}` : ''}" aria-hidden="true"></span>${col ? textColourName(col) : 'Same as body'}</button></div>`;
     })}</div>
     <div class="rich text-sample" id="s-text-sample" style="font-family:${t.font ? fontCss(t.font) : 'var(--serif)'}"><h1>Title</h1><h2>Heading</h2><h3>Subheading</h3><p>This is how your typed text will look.</p></div>`);
 }

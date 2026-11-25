@@ -1402,7 +1402,9 @@ export function mount(el, params, ctx) {
   // key now, or null when it can't take the look (then the brush stays on).
   function paintBoardLook(key) {
     const target = key.startsWith('s:') ? { type: 'stroke', id: key.slice(2) } : obj(key);
-    if (!target) return key;
+    if (!target) return null;
+    // Frames, pictures and note cards have no ink to take a look.
+    if (!['text', 'sticky', 'shape', 'arrow', 'stroke'].includes(target.type)) { toast('The brush works on text, shapes, arrows, pen strokes and stickies.'); return null; }
     const fromSticky = look.type === 'sticky';
     const toSticky = target.type === 'sticky';
     // A sticky's colour is a paper colour, not an ink: it only goes to other stickies.

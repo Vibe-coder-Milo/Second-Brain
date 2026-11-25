@@ -420,15 +420,14 @@ export function textFor(n, config) {
 export function withNewText(config, patch, { notesSince = null } = {}) {
   const old = normText(config.text);
   const next = normText({ ...old, ...patch });
-  const same = sameText;
-  if (same(old, next)) return { text: next, textPast: config.textPast || [] };
+  if (sameText(old, next)) return { text: next, textPast: config.textPast || [] };
   const now = Date.now();
   let past = [...(config.textPast || [])];
   const last = past[past.length - 1];
   if (last && notesSince && !notesSince(last.until)) {
     // No note was made under the current default: it never needs keeping.
     past[past.length - 1] = { ...last, until: now };
-    if (same(last, next)) past.pop(); // back to the one before: notes after `last.until` all use it
+    if (sameText(last, next)) past.pop(); // back to the one before: notes after `last.until` all use it
   } else past.push({ until: now, ...old });
   return { text: next, textPast: past };
 }
