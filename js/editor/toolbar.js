@@ -205,6 +205,7 @@ export function mountFormatBar(bar, editor, opts = {}) {
     <span class="fb-sep"></span>
     ${B('bold', 'bold', 'Bold', 'aria-pressed="false"')}${B('italic', 'italic', 'Italic', 'aria-pressed="false"')}${B('underline', 'underline', 'Underline', 'aria-pressed="false"')}
     ${compact ? '' : B('strike', 'strike', 'Strikethrough', 'aria-pressed="false"')}
+    ${B('paint', 'brush', 'Copy formatting: tap, then select words to give them the same look (double-tap to keep it on)', 'aria-pressed="false"')}
     <button type="button" class="fb" data-act="colour" aria-label="Text colour and highlight"><span class="fb-a">A<span id="fb-col"></span></span></button>
     <span class="fb-sep"></span>
     ${B('bullets', 'bullets', 'Bulleted list', 'aria-pressed="false"')}${B('numbers', 'numbers', 'Numbered list', 'aria-pressed="false"')}${B('checklist', 'checklist', 'Checklist', 'aria-pressed="false"')}
@@ -237,12 +238,13 @@ export function mountFormatBar(bar, editor, opts = {}) {
         break;
       }
       case 'font': fontMenu(editor, b, opts); break;
-      case 'smaller': ch().setFontSize(`${Math.max(12, sizeOf(editor) - 2)}px`).run(); break;
-      case 'larger': ch().setFontSize(`${Math.min(48, sizeOf(editor) + 2)}px`).run(); break;
+      case 'smaller': ch().setFontSize(`${Math.max(8, sizeOf(editor) - 1)}px`).run(); break;
+      case 'larger': ch().setFontSize(`${Math.min(72, sizeOf(editor) + 1)}px`).run(); break;
       case 'bold': ch().toggleBold().run(); break;
       case 'italic': ch().toggleItalic().run(); break;
       case 'underline': ch().toggleUnderline().run(); break;
       case 'strike': ch().toggleStrike().run(); break;
+      case 'paint': painter.tap(); return;
       case 'colour': colourMenu(editor, b); break;
       case 'bullets': ch().toggleBulletList().run(); break;
       case 'numbers': ch().toggleOrderedList().run(); break;
@@ -282,7 +284,12 @@ export function mountFormatBar(bar, editor, opts = {}) {
   editor.on('selectionUpdate', refresh);
   editor.on('transaction', refresh);
   refresh();
-  return { refresh, destroy() { editor.off('selectionUpdate', refresh); editor.off('transaction', refresh); } };
+  const painter = formatPainter(editor, (on, locked) => {
+    const pb = bar.querySelector('[data-act=paint]');
+    pb?.setAttribute('aria-pressed', on ? 'true' : 'false');
+    pb?.classList.toggle('locked', locked);
+  });
+  return { refresh, destroy() { painter.destroy(); editor.off('selectionUpdate', refresh); editor.off('transaction', refresh); } };
 }
 
 // ---- Copy formatting (the brush) -------------------------------------------------
@@ -310,11 +317,15 @@ function pickUpLook(editor) {
   return { marks, line, at: [from, to] };
 }
 
-function paintLook(editor, look) {
+function paintLook(editor, look, range = null) {
   const { state } = editor;
-  const { from, to } = state.selection;
-  if (from === to) return false;
+  const { from, to } = range || state.selection;
   const tr = state.tr;
+  if (from === to) {
+    // Nothing to paint (an empty text box): what you type next takes the look.
+    if (range) { editor.view.dispatch(tr.setStoredMarks(look.marks)); return true; }
+    return false;
+  }
   for (const name of LOOK_MARKS) { const t = state.schema.marks[name]; if (t) tr.removeMark(from, to, t); }
   for (const m of look.marks) tr.addMark(from, to, m);
   if (look.line) {
@@ -335,8 +346,18 @@ function paintLook(editor, look) {
   return true;
 }
 
+// The look picked up stays "held" for a short while after its editor closes,
+// so the brush carries across: from one text box on a handwritten page to the
+// next one you tap (the whole box takes the look), or from a typed note to
+// Today's note or a text box. Tapping the brush again, or 30 s, drops it.
+let held = null; // { look, locked, until }
+const HOLD_MS = 30000;
+
 // Brush state for one editor; `onChange(on, locked)` updates the button.
-export function formatPainter(editor, onChange) {
+// opts.boxLook() / opts.applyBox(look): a text box's own font, colour and
+// size (they live on the box, not in the words). opts.whole: an editor that
+// opens while a look is held takes it in full (text boxes).
+export function formatPainter(editor, onChange, opts = {}) {
   let look = null;
   let locked = false;
   let pointer = false;
@@ -344,13 +365,23 @@ export function formatPainter(editor, onChange) {
   // The editor's page element, or null once the editor is gone (its view then throws).
   const dom = () => { try { return editor.isDestroyed ? null : editor.view.dom; } catch { return null; } };
   const host = dom();
-  const set = (l, lock = false) => { look = l; locked = !!l && lock; dom()?.classList.toggle('painting', !!l); onChange?.(!!l, locked); };
+  const set = (l, lock = false) => {
+    look = l;
+    locked = !!l && lock;
+    held = l ? { look: l, locked, until: Date.now() + HOLD_MS } : null;
+    dom()?.classList.toggle('painting', !!l);
+    onChange?.(!!l, locked);
+  };
+  const paint = (range) => {
+    paintLook(editor, look, range);
+    if (look.box && opts.applyBox) opts.applyBox(look.box);
+  };
   const tryPaint = () => {
     clearTimeout(timer);
     if (!look || pointer || !dom()) return;
     const { from, to, empty } = editor.state.selection;
     if (empty || (from === look.at[0] && to === look.at[1])) return;
-    paintLook(editor, look);
+    paint();
     look.at = [from, to];
     if (!locked) set(null);
   };
@@ -369,6 +400,20 @@ export function formatPainter(editor, onChange) {
   document.addEventListener('pointerup', onUp, true);
   document.addEventListener('pointercancel', onUp, true);
   document.addEventListener('keydown', onKey);
+  // A look held from another editor: a text box takes it whole at once; other
+  // editors keep the brush on for the next words you select.
+  const carried = held && held.until > Date.now() ? held : null;
+  if (carried) {
+    setTimeout(() => {
+      if (!dom() || held !== carried) return;
+      look = { ...carried.look, at: [-1, -1] };
+      if (opts.whole) {
+        paint({ from: 0, to: editor.state.doc.content.size });
+        set(carried.locked ? look : null, carried.locked);
+        toast(carried.locked ? 'Formatted. The brush is still on.' : 'Formatted.');
+      } else set(look, carried.locked);
+    }, 0);
+  }
   let lastTap = 0;
   return {
     // The brush button: one tap picks up the look for one use, a second tap
@@ -377,7 +422,12 @@ export function formatPainter(editor, onChange) {
       const now = Date.now();
       if (look && now - lastTap < 450 && !locked) { set(look, true); toast('Brush stays on. Tap it again to stop.'); }
       else if (look) set(null);
-      else { set(pickUpLook(editor)); toast('Now select the words to format.'); }
+      else {
+        const l = pickUpLook(editor);
+        if (opts.boxLook) l.box = opts.boxLook();
+        set(l);
+        toast(opts.whole ? 'Now select words, or tap another text box.' : 'Now select the words to format.');
+      }
       lastTap = now;
     },
     get on() { return !!look; },
@@ -436,7 +486,7 @@ export function mountNoteBars(tools, props, editor, opts = {}) {
     const pb = props.querySelector('[data-act=paint]');
     pb?.setAttribute('aria-pressed', on ? 'true' : 'false');
     pb?.classList.toggle('locked', locked);
-  });
+  }, opts.brush || {});
 
   const onDown = (e) => { if (e.target.closest('button')) e.preventDefault(); };
   const onClick = async (e) => {
@@ -469,8 +519,8 @@ export function mountNoteBars(tools, props, editor, opts = {}) {
         break;
       }
       case 'font': fontMenu(editor, b, opts); break;
-      case 'smaller': ch().setFontSize(sizeMark(Math.max(12, sizeOf(editor, opts.baseSize, opts.sizeScale) - 2), opts.sizeScale)).run(); break;
-      case 'larger': ch().setFontSize(sizeMark(Math.min(48, sizeOf(editor, opts.baseSize, opts.sizeScale) + 2), opts.sizeScale)).run(); break;
+      case 'smaller': ch().setFontSize(sizeMark(Math.max(8, sizeOf(editor, opts.baseSize, opts.sizeScale) - 1), opts.sizeScale)).run(); break;
+      case 'larger': ch().setFontSize(sizeMark(Math.min(72, sizeOf(editor, opts.baseSize, opts.sizeScale) + 1), opts.sizeScale)).run(); break;
       case 'bold': ch().toggleBold().run(); break;
       case 'italic': ch().toggleItalic().run(); break;
       case 'underline': ch().toggleUnderline().run(); break;

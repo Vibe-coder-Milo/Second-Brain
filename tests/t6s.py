@@ -1,4 +1,4 @@
-"""24 Nov 2026 (sb-v29.5, v29.6): labels are all the same width; the brush copies
+"""24 to 25 Nov 2026 (sb-v29.5 to v29.7): labels are all the same width; the brush copies
 formatting; one tap picks from the "/" menu even when the editor updates
 under the finger (the iPad hides its keyboard on that tap); Settings gives
 Title, Heading and Subheading their own size and colour (new notes only, on
@@ -94,8 +94,32 @@ def steps(page):
     assert shown == '14', 'the text box toolbar shows the default size'
     page.keyboard.press('Shift+Home'); page.wait_for_timeout(100)
     page.locator('[data-act=larger]').click(); page.wait_for_timeout(200)
-    print('after +:', J("document.querySelector('#fb-size')?.textContent")); assert J("document.querySelector('#fb-size')?.textContent") == '16'
+    print('after +:', J("document.querySelector('#fb-size')?.textContent")); assert J("document.querySelector('#fb-size')?.textContent") == '15', '+ goes up by 1 (v29.7)'
+    page.locator('[data-act=smaller]').click(); page.locator('[data-act=smaller]').click(); page.wait_for_timeout(200)
+    assert J("document.querySelector('#fb-size')?.textContent") == '13', '− goes down by 1'
+    page.locator('#iv-tools [data-act=bold]').click(); page.wait_for_timeout(100)
     page.locator('.tb-done').click(); page.wait_for_timeout(600)
+    # The brush carries from one text box to another (v29.7): tap the brush in a
+    # box, then tap another box; the whole box takes the look.
+    page.mouse.click(r[0] + r[2] * 0.2, r[1] + 420); page.wait_for_selector('.tb-edit .ProseMirror'); page.wait_for_timeout(300)
+    page.keyboard.type('Plain box'); page.locator('.tb-done').click(); page.wait_for_timeout(600)
+    # Tap the middle of each box where it is on the page (boxes are small on a phone).
+    def box_at(word):
+        o = J(f"import('./js/vault.js').then(async V => {{ const n = V.state.notes.get('{iid}'); const d = await V.loadPage(n.pages[0].id); const o = d.objects.find(o => o.type === 'text' && JSON.stringify(o.doc).includes('{word}')); return [o.x, o.y, o.w, o.size || 20]; }})")
+        k = r[2] / 1000
+        rr = J("(() => { const r = document.querySelector('.ink-page').getBoundingClientRect(); return [r.left, r.top]; })()")
+        return rr[0] + (o[0] + min(o[2], 120) / 2) * k, rr[1] + (o[1] + o[3] * 0.7) * k
+    page.mouse.click(*box_at('Box words')); page.wait_for_selector('.tb-edit .ProseMirror'); page.wait_for_timeout(300)
+    assert 'Box words' in J("document.querySelector('.tb-edit .ProseMirror').textContent")
+    page.locator('[data-act=paint]').click(); page.wait_for_timeout(100)
+    page.mouse.click(*box_at('Plain box')); page.wait_for_timeout(600)
+    assert 'Plain box' in J("document.querySelector('.tb-edit .ProseMirror')?.textContent || ''"), 'the other box opened'
+    page.locator('.tb-done').click(); page.wait_for_timeout(900)
+    boxes = J(f"import('./js/vault.js').then(async V => {{ const n = V.state.notes.get('{iid}'); const d = await V.loadPage(n.pages[0].id); return d.objects.filter(o => o.type === 'text').map(o => [JSON.stringify(o.doc).includes('Plain') ? 'plain' : 'styled', (JSON.stringify(o.doc).match(/\"type\":\"(bold|textStyle)\"/g) || []).sort(), JSON.stringify(o.doc).match(/fontSize\":\"([0-9.]+)px/)?.[1] || null]); }})")
+    print('boxes after the brush:', boxes)
+    plain = [b for b in boxes if b[0] == 'plain'][0]; styled = [b for b in boxes if b[0] == 'styled'][0]
+    assert any('bold' in x for x in plain[1]) and plain[2] == styled[2], 'the second box took the bold and the size'
+    assert J("document.querySelector('[data-act=paint]')?.getAttribute('aria-pressed') || 'false'") == 'false', 'one use, then put down'
 
     # ---- 3. The brush: copy bold red 20 px onto other words.
     nid3 = J("""(async () => { const V = await import('./js/vault.js'); const M = await import('./js/model.js');
@@ -139,11 +163,56 @@ def steps(page):
     # Like iPad Safari: a click is dropped when the button touched has been redrawn since the finger landed.
     J(f"""(() => {{ let touched = null; const pop = document.querySelector('.popover');
       pop.addEventListener('pointerdown', (ev) => {{ touched = ev.target.closest('button'); const e = {ED}; e.view.dispatch(e.state.tr.setMeta('poke', 1)); }}, true);
-      document.addEventListener('click', (ev) => {{ if (touched && !touched.isConnected) {{ ev.stopImmediatePropagation(); ev.preventDefault(); }} }}, true); }})()""")
+      document.addEventListener('click', (ev) => {{ const t = touched; touched = null; if (t && !t.isConnected) {{ ev.stopImmediatePropagation(); ev.preventDefault(); }} }}, true); }})()""")
     page.locator('.popover [data-style=heading]').tap(); page.wait_for_timeout(400)
     blk = J(f"{ED}.getJSON().content.find(b => (b.content || []).some(t => (t.text || '').includes('Heading by slash')))"); print('after one tap:', blk)
     assert blk['type'] == 'heading' and blk['attrs']['level'] == 2 and blk['content'][0]['text'] == 'Heading by slash', 'one tap is enough'
     assert not page.locator('.popover').count()
+
+    # ---- 4b. The brush on Today's note (v29.7).
+    page.goto(BASE + '#/today'); page.wait_for_selector('#t-rich .ProseMirror'); page.wait_for_timeout(400)
+    TD = "document.querySelector('#t-rich .ProseMirror').editor"
+    page.locator('#t-rich .ProseMirror').click(); page.wait_for_timeout(300)
+    page.keyboard.type('Alpha beta'); page.wait_for_timeout(200)
+    page.keyboard.press('Home'); page.keyboard.press('Shift+Control+ArrowRight'); page.wait_for_timeout(100)
+    page.locator('#t-bar [data-act=bold]').click(); page.wait_for_timeout(100)
+    page.locator('#t-bar [data-act=paint]').click(); page.wait_for_timeout(100)
+    assert J("document.querySelector('#t-bar [data-act=paint]').getAttribute('aria-pressed')") == 'true'
+    page.keyboard.press('End'); page.keyboard.press('Shift+Control+ArrowLeft')
+    page.wait_for_timeout(1100)
+    tb = J(f"{TD}.getJSON().content.flatMap(b => b.content || []).filter(t => t.text).map(t => [t.text, (t.marks || []).map(m => m.type)])"); print('today after the brush:', tb)
+    assert ['beta', ['bold']] in tb, 'Today has the brush'
+
+    # ---- 4c. The brush on a whiteboard: bold big red text onto other text, a sticky's colour onto a sticky (v29.7).
+    nbid = J("""(async () => { const V = await import('./js/vault.js'); const M = await import('./js/model.js'); return (await V.saveNotebook(M.newNotebook({ title: 'Boards', region: 'career' }))).id; })()""")
+    page.goto(BASE + f'#/notebook/{nbid}'); page.wait_for_timeout(500)
+    page.locator('.nb-new [data-newnote=board]').click(); page.wait_for_selector('.bd-stage'); page.wait_for_timeout(500)
+    st = page.locator('#bd-stage').bounding_box()
+    def place(tool, fx, fy, words):
+        page.locator(f'button[data-tool={tool}]').click(); page.mouse.click(st['x'] + st['width'] * fx, st['y'] + st['height'] * fy)
+        page.wait_for_selector(f'.bo-{tool} .bt[contenteditable]'); page.keyboard.type(words); page.keyboard.press('Escape'); page.wait_for_timeout(250)
+    place('text', 0.2, 0.25, 'Source words'); place('text', 0.2, 0.6, 'Target words')
+    place('sticky', 0.6, 0.25, 'Pink one'); place('sticky', 0.6, 0.6, 'Plain one')
+    page.locator('button[data-tool=select]').click(); page.wait_for_timeout(100)
+    def tap(sel_, i):
+        b = page.locator(sel_).nth(i).bounding_box(); page.mouse.click(b['x'] + 8, b['y'] + b['height'] / 2); page.wait_for_timeout(200)
+    tap('.bo-text', 0)
+    page.locator('[data-sb=bold]').click(); page.wait_for_timeout(100)
+    page.locator('[data-sbcol]').nth(2).click(); page.wait_for_timeout(100)
+    page.locator('[data-sb=tsize]').click(); page.wait_for_timeout(100)
+    src = J("(() => { const e = document.querySelectorAll('.bo-text')[0]; const c = getComputedStyle(e.querySelector('.bt')); return [c.fontWeight, getComputedStyle(e).color, c.fontSize]; })()")
+    page.locator('[data-sb=brush]').click(); page.wait_for_timeout(100)
+    assert J("document.querySelector('[data-sb=brush]').getAttribute('aria-pressed')") == 'true'
+    tap('.bo-text', 1)
+    dst = J("(() => { const e = document.querySelectorAll('.bo-text')[1]; const c = getComputedStyle(e.querySelector('.bt')); return [c.fontWeight, getComputedStyle(e).color, c.fontSize]; })()")
+    print('whiteboard text:', src, dst); assert src == dst, 'the other text took the look'
+    page.screenshot(path=f'{OUT}/s-board-{tag}.png')
+    tap('.bo-sticky', 0)
+    page.locator('.selbar [data-sbcol], [data-sbcol]').nth(1).click(); page.wait_for_timeout(100)
+    page.locator('[data-sb=brush]').click(); page.wait_for_timeout(100)
+    tap('.bo-sticky', 1)
+    bgs = J("[...document.querySelectorAll('.bo-sticky')].map(e => getComputedStyle(e).backgroundColor)"); print('stickies:', bgs)
+    assert bgs[0] == bgs[1], 'the other sticky took the colour'
 
     # ---- 5. Settings changed on two devices: merged setting by setting.
     out = J("""import('./js/model.js').then(M => {

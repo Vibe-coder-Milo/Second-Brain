@@ -69,7 +69,7 @@ python3 t5r.py phone         # one test directly (needs the server: python3 serv
 | t6r | Typed notes (15 Nov): tapping text to edit keeps it in place and a margin tap lands on its line; Indent more / less and Tab for ordinary lines (and in PDF drawing); paper colour in Endless; the note reopens where you were reading after a reload, in Scroll down and Next page |
 | t6q | Mark up a document: the sheet, Word / PowerPoint / picture / PDF-with-bookmarks imports, several at once, unsupported files, cancel leaves nothing behind, Contents in handwritten notes (sections, You're here, survives adding pages), search finds document words |
 | t6d | Highlights: words under neat and sloppy highlights (PDF, handwriting, typed), colours, remove a slip, lasso "Add to highlights" |
-| t6s | Labels all one width; the brush copies formatting (once, or kept on); one tap picks from the / menu even when it redraws under the finger; Title/Heading/Subheading size and colour from Settings (new notes, dark mode, PDF); settings changed on two devices merge per setting |
+| t6s | Labels all one width; text size steps of 1; the brush copies formatting (once, or kept on) in typed notes, Today, from one handwritten text box to another and on whiteboards; one tap picks from the / menu even when it redraws under the finger; Title/Heading/Subheading size and colour from Settings (new notes, dark mode, PDF); settings changed on two devices merge per setting |
 
 Helpers: `dbg.py` (`run(steps, vp, mob)` creates a vault and runs steps; `SB_BASE` points it at another copy of the app),
 `mockgh.py` (in-memory GitHub Git Data API), `calib.py`, `hershey_ink.py`

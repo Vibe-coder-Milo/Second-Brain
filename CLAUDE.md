@@ -84,7 +84,7 @@ through a private GitHub repo. Everything is encrypted on the device.
   - models: transformers and onnxruntime (`ort/`) with the model files;
   - OCR: tesseract.
 - **Service worker** (`sw.js`):
-  - Bump `VERSION` (`sb-vN`; currently `sb-v29.6`; small follow-ups can be `.1`, `.2` as the owner asked) on every release.
+  - Bump `VERSION` (`sb-vN`; currently `sb-v29.7`; small follow-ups can be `.1`, `.2` as the owner asked) on every release.
   - Add every new JS/CSS file to `SHELL`, or it won't work offline.
   - The app shows an update bar (`js/appupdate.js`).
 - **Views:** `js/views/*.js` export `mount(main, params, ctx)`, returning
@@ -735,6 +735,28 @@ always said 18 (the text itself was drawn at the default). Now `baseSize` is
 the box's own size in typed terms and `sizeScale` = that / TEXT_SIZE converts
 size marks (relative to TEXT_SIZE) to what is shown; − and + step from it
 (`sizeOf`/`sizeMark` in toolbar.js). `t6s`.
+
+### 25 Nov 2026 (`sb-v29.7`)
+
+1. **Text size − / + by 1** (was 2), from 8 to 72, in typed notes, Today
+   and text boxes (`toolbar.js`). `t6s`.
+2. **Brush everywhere** ("only in typed notes"):
+   - Today's note: brush in `mountFormatBar`.
+   - Carrying across editors: the look stays `held` (module-level in
+     toolbar.js) for 30 s after its editor closes. A painter made with
+     `opts.whole` (text boxes, via `mountNoteBars(..., { brush })`) takes a
+     held look on the whole box when it opens (empty box: stored marks);
+     other editors open with the brush on. Text boxes also carry their own
+     font/colour/size (`boxLook`/`applyBox` in inknote.js; sets `editGeom`
+     so Done saves it, one undo step). So: brush in box A, tap box B.
+   - Whiteboards (`board.js`): brush button in the selection bar for one
+     text/sticky/shape/arrow/stroke (`pickBoardLook`); the next item tapped
+     with the select tool takes colour (+ text size/bold, shape fill, arrow
+     dash for the same kind; sticky colours only between stickies;
+     strokes via `recolour`). Double-tap keeps it on; Escape stops; an item
+     that can't take it leaves the brush on.
+   `t6s`. Note: `t6s`'s Safari-click emulation must reset after one tap, or
+   it swallows every later click in the test.
 
 ## Ideas noted, not requested
 

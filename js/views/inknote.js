@@ -896,6 +896,24 @@ export function mount(el, params, ctx) {
       noteFont: () => surface?.editing?.font || BOX_FONT,
       sealed: () => !!note()?.sealed,
       onHideKeyboard: () => surface?.endEdit(),
+      // The brush carries a text box's own font, colour and size, and a box
+      // opened while the brush is on takes the look whole (tap brush, tap box).
+      brush: {
+        whole: true,
+        boxLook: () => { const o = surface?.editing; return o ? { font: o.font || null, color: o.color || null, size: o.size || BOX_SIZE } : null; },
+        applyBox: (b) => {
+          const o = surface?.editing;
+          if (!o || o.type !== 'text') return;
+          // One undo step, and saved on Done even if the words didn't change.
+          if (!o.fresh && !surface.editGeom) surface.snapshot();
+          surface.editGeom = true;
+          o.font = b.font || undefined; o.color = b.color || undefined; o.size = b.size;
+          if (!o.font) delete o.font;
+          if (!o.color) delete o.color;
+          surface.positionEditor();
+          fmt?.refresh();
+        },
+      },
     });
     suggest = T.attachSuggest(ed, { noteId: () => id });
   }

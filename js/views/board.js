@@ -50,6 +50,10 @@ export function mount(el, params, ctx) {
   const dts = state.config?.text?.size || TEXT_SIZE;
   const opts = { pen: 'ballpoint', ink: '#1B2A38', hl: '#F7D046', size: 1, shape: 'rect', fill: false, sticky: 'yellow', text: dts <= 16 ? 's' : dts >= 24 ? 'l' : 'm', ...(state.device?.board || {}) };
   let sel = new Set(); // object ids, and 's:<id>' for pen strokes
+  // The brush (copy formatting): the look picked up from one item, given to
+  // the next item tapped. { from, type, color, size, bold, fill, dash, locked }
+  let look = null;
+  let lookTap = 0;
   let editing = null; // { id, fresh }
   const undo = [];
   const redo = [];
@@ -515,6 +519,8 @@ export function mount(el, params, ctx) {
     if (one && ['sticky', 'text', 'shape'].includes(one.type)) parts.push(T('edit', 'Edit text'));
     if (one?.type === 'frame') parts.push(T('edit', 'Rename'));
     if (items.length > 1 && !types.has('frame')) parts.push(T('wrap', 'Frame them'));
+    const brushable = one && ['text', 'sticky', 'shape', 'arrow', 'stroke'].includes(one.type) && !(one.type === 'stroke' && stroke(one.id)?.t === 'hl');
+    if (brushable || look) parts.push(T('brush', look ? 'Stop copying formatting' : 'Copy formatting: tap, then tap another item to give it the same look (double-tap to keep it on)', 'brush', !!look));
     parts.push(T('dup', 'Duplicate', 'copy'));
     if (!types.has('stroke') || items.length > 1) parts.push(T('front', 'Bring to front', 'front'));
     parts.push(T('delete', 'Delete', 'trash'));
@@ -843,6 +849,17 @@ export function mount(el, params, ctx) {
     }
     // Select tool
     const hit = hitAt(wx, wy, e.target);
+    if (hit && look && hit !== look.from && !(e.shiftKey || e.metaKey || e.ctrlKey)) {
+      const key = paintBoardLook(hit);
+      if (key) toast(look.locked ? 'Formatted. The brush is still on.' : 'Formatted.');
+      else { gesture = null; return; } // it couldn't take the look: the brush stays on
+      if (!look.locked) look = null;
+      sel = new Set([key]);
+      renderSel();
+      drawSelbar();
+      gesture = null;
+      return;
+    }
     if (hit) {
       const was = sel.has(hit);
       if (e.shiftKey || e.metaKey || e.ctrlKey) {
@@ -1320,6 +1337,15 @@ export function mount(el, params, ctx) {
       checkpoint(); one.note = v; touch(one); changed();
       return;
     }
+    if (act === 'brush') {
+      const now = Date.now();
+      if (look && now - lookTap < 450 && !look.locked) { look.locked = true; toast('Brush stays on. Tap it again to stop.'); }
+      else if (look) look = null;
+      else if (one) { look = pickBoardLook(one); toast('Now tap the item to format.'); }
+      lookTap = now;
+      drawSelbar();
+      return;
+    }
     if (act === 'edit' && one) { beginEdit(one.id); return; }
     if (act === 'tsize' && one) {
       const i = B.TEXT_SIZES.findIndex((s) => s.id === (one.size || 'm'));
@@ -1364,6 +1390,40 @@ export function mount(el, params, ctx) {
     const inp = $('#bd-ask', p.el);
     setTimeout(() => { inp.focus(); inp.select(); }, 30);
     p.el.querySelector('form').onsubmit = (e) => { e.preventDefault(); const v = inp.value.trim(); p.close(); if (v !== value) done(v); };
+  }
+
+  // The look of one item: its colour, and what else its kind has (text: size
+  // and bold; shapes: filled; arrows: dashed). Pen strokes give their colour.
+  function pickBoardLook(one) {
+    if (one.type === 'stroke') return { from: `s:${one.id}`, type: 'stroke', color: stroke(one.id)?.c || null };
+    return { from: one.id, type: one.type, color: one.color || null, size: one.size, bold: !!one.bold, fill: !!one.fill, dash: !!one.dash };
+  }
+  // Give the look to the item tapped (key: object id or 's:<id>'); returns its
+  // key now, or null when it can't take the look (then the brush stays on).
+  function paintBoardLook(key) {
+    const target = key.startsWith('s:') ? { type: 'stroke', id: key.slice(2) } : obj(key);
+    if (!target) return key;
+    const fromSticky = look.type === 'sticky';
+    const toSticky = target.type === 'sticky';
+    // A sticky's colour is a paper colour, not an ink: it only goes to other stickies.
+    if (fromSticky !== toSticky) { toast(fromSticky ? 'A sticky’s colour goes to other stickies.' : 'Pick something with ink: text, a shape, an arrow or a pen stroke.'); return null; }
+    if (target.type === 'stroke') {
+      if (!look.color || stroke(target.id)?.t === 'hl') return null;
+      // Recolouring gives the stroke a new id; it swaps it in `sel`.
+      sel = new Set([key]);
+      recolour([target], look.color);
+      return [...sel][0] || key;
+    }
+    checkpoint();
+    if (look.color) target.color = look.color; else if (!toSticky) delete target.color;
+    if (look.type === target.type) {
+      if (target.type === 'text') { target.size = look.size || 'm'; target.bold = look.bold; }
+      if (target.type === 'shape') target.fill = look.fill;
+      if (target.type === 'arrow') target.dash = look.dash;
+    }
+    touch(target);
+    changed();
+    return key;
   }
 
   function recolour(items, c) {
@@ -1447,6 +1507,7 @@ export function mount(el, params, ctx) {
     if (mod) return;
     if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); removeSelection(); return; }
     if (e.key === 'Escape') {
+      if (look) { look = null; drawSelbar(); return; }
       if (tool !== 'select') setTool('select');
       else if (sel.size) { sel.clear(); renderSel(); renderSvg(); }
       return;
